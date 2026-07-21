@@ -1,0 +1,101 @@
+# Niki — Local Development Infrastructure
+# Start with: docker compose -f docker/docker-compose.yml up -d
+# Stop with:  docker compose -f docker/docker-compose.yml down
+
+version: "3.9"
+
+services:
+  # --- Redis — Short-term memory & session state ---
+  redis:
+    image: redis:7-alpine
+    container_name: niki-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - niki-network
+
+  # --- ChromaDB — Vector store ---
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: niki-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - niki-network
+
+  # --- Neo4j — Cognitive graph ---
+  neo4j:
+    image: neo4j:5-community
+    container_name: niki-neo4j
+    ports:
+      - "7474:7474"   # HTTP
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    environment:
+      - NEO4J_AUTH=neo4j/nikidev123
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_memory_heap_initial__size=256m
+      - NEO4J_dbms_memory_heap_max__size=512m
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "nikidev123", "RETURN 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - niki-network
+
+  # --- PostgreSQL — Relational data ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: niki-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      - POSTGRES_USER=niki
+      - POSTGRES_PASSWORD=nikidev123
+      - POSTGRES_DB=niki
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U niki -d niki"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - niki-network
+
+volumes:
+  redis_data:
+  chroma_data:
+  neo4j_data:
+  neo4j_logs:
+  postgres_data:
+
+networks:
+  niki-network:
+    driver: bridge
