@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from niki.api.auth import router as auth_router
 from niki.api.emotion import router as emotion_router
 from niki.api.encyclopedia import router as encyclopedia_router
 from niki.api.health import router as health_router
@@ -33,7 +34,9 @@ api_router.include_router(emotion_router)
 # Chat orchestrator (#6 — composite intent end-to-end pipeline)
 api_router.include_router(chat_router)
 
+# Parent authentication (#7 — real-name + face + consent + deletion)
+api_router.include_router(auth_router)
+
 # Future routers will be added here:
 # api_router.include_router(parent_router)     # Parent dashboard endpoints
-# api_router.include_router(auth_router)       # Authentication endpoints
 # api_router.include_router(admin_router)      # Admin & pipeline management
