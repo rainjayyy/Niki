@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from niki.api.emotion import router as emotion_router
 from niki.api.encyclopedia import router as encyclopedia_router
 from niki.api.health import router as health_router
 from niki.api.routing import router as routing_router
@@ -26,6 +27,9 @@ api_router.include_router(encyclopedia_router)
 
 # Tutoring Agent (#4 vertical slice)
 api_router.include_router(tutoring_router)
+
+# Emotion Agent (#5 vertical slice)
+api_router.include_router(emotion_router)
 
 # Future routers will be added here:
 # api_router.include_router(parent_router)     # Parent dashboard endpoints
