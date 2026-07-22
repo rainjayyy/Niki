@@ -54,7 +54,7 @@ async def health_check() -> HealthResponse:
     return HealthResponse(
         status=overall,
         version=settings.api_version,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(),
         components=components,
     )
 
@@ -86,12 +86,14 @@ async def _check(
             result = await coro
         else:
             result = coro
-        return HealthStatus(
-            component=name,
-            status=result["status"] if isinstance(result, dict) else "unknown",
-            latency_ms=result.get("latency_ms") if isinstance(result, dict) else None,
-            error=result.get("error") if isinstance(result, dict) else None,
-        )
+        if isinstance(result, dict) and result.get("status") in ("healthy", "degraded", "unhealthy"):
+            return HealthStatus(
+                component=name,
+                status=result["status"],
+                latency_ms=result.get("latency_ms"),
+                error=result.get("error"),
+            )
+        return HealthStatus(component=name, status="unhealthy", error="Health check returned no status")
     except Exception as exc:
         return HealthStatus(component=name, status="unhealthy", error=str(exc))
 

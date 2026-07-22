@@ -33,14 +33,16 @@ class ChromaClient:
         collection = chroma.get_collection("conversations")
     """
 
-    _client: chromadb.HttpClient | None = None
+    # NOTE: chromadb >= 1.0 exposes HttpClient as a factory function, not a class,
+    # so we type the singleton as `object` since chromadb does not publish a stable type.
+    _client: object | None = None
 
     @classmethod
-    def get_client(cls) -> chromadb.HttpClient:
+    def get_client(cls) -> object:
         """Get or create the ChromaDB HTTP client.
 
         Returns:
-            An initialized chromadb.HttpClient.
+            An initialized chromadb HttpClient.
 
         Raises:
             VectorStoreError: If connection fails.
@@ -56,7 +58,7 @@ class ChromaClient:
         )
 
         try:
-            cls._client = chromadb.HttpClient(
+            cls._client = chromadb.HttpClient(  # type: ignore[assignment]
                 host=settings.chroma_host,
                 port=settings.chroma_port,
             )

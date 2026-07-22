@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "niki"
 version = "0.1.0"
@@ -61,8 +65,12 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
-    "types-redis>=4.7.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["niki*"]
+exclude = ["tests*"]
 
 [tool.ruff]
 target-version = "py311"
@@ -135,7 +143,3 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "class .*\bProtocol\b",
 ]
-
-[build-system]
-requires = ["setuptools>=75.0", "wheel"]
-build-backend = "setuptools.build_meta"
