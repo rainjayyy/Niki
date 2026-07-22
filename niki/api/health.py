@@ -27,7 +27,7 @@ async def health_check() -> HealthResponse:
     # Check all components concurrently
     results = await asyncio.gather(
         _check("redis", RedisClient.health_check()),
-        _check("chromadb", _sync_to_async_health(ChromaClient.health_check)),
+        _check("chromadb", _run_sync_check(ChromaClient.health_check)),
         _check("neo4j", Neo4jClient.health_check()),
         _check("postgresql", PostgresClient.health_check()),
         _check("deepseek", _check_llm_health("DeepSeek-V4")),
@@ -80,10 +80,12 @@ async def _check(
     name: str,
     coro: object,
 ) -> HealthStatus:
-    """Run a health check coroutine and return a HealthStatus."""
+    """Run a health check coroutine or awaitable and return a HealthStatus."""
     try:
-        if asyncio.iscoroutine(coro):
+        if asyncio.iscoroutine(coro) or asyncio.isfuture(coro):
             result = await coro
+        elif callable(coro):
+            result = await asyncio.to_thread(coro)
         else:
             result = coro
         if isinstance(result, dict) and result.get("status") in ("healthy", "degraded", "unhealthy"):
@@ -98,12 +100,9 @@ async def _check(
         return HealthStatus(component=name, status="unhealthy", error=str(exc))
 
 
-def _sync_to_async_health(check_fn: object) -> dict[str, object]:
-    """Wrap a synchronous health check for use in asyncio.gather."""
-    import asyncio
-
-    loop = asyncio.get_running_loop()
-    return loop.run_in_executor(None, check_fn)
+def _run_sync_check(check_fn: object) -> object:
+    """Wrap a sync health-check function so _check will dispatch it to a thread."""
+    return check_fn
 
 
 async def _check_llm_health(provider: str) -> dict[str, object]:

@@ -12,6 +12,7 @@ import time
 from typing import Any
 
 import chromadb
+import httpx
 import structlog
 
 from niki.config.settings import get_settings
@@ -89,17 +90,24 @@ class ChromaClient:
 
     @classmethod
     def health_check(cls) -> dict[str, Any]:
-        """Check ChromaDB connectivity.
+        """Check ChromaDB connectivity via a lightweight HTTP heartbeat.
+
+        Uses the /api/v2/heartbeat endpoint directly to avoid the heavier
+        chromadb client telemetry calls. Returns a dict with status and latency.
 
         Returns:
             Dict with 'status' and 'latency_ms' keys.
         """
+        settings = get_settings()
+        url = f"http://{settings.chroma_host}:{settings.chroma_port}/api/v2/heartbeat"
         try:
-            client = cls.get_client()
             start = time.monotonic()
-            client.list_collections()
+            with httpx.Client(timeout=5.0) as http:
+                resp = http.get(url)
             latency = (time.monotonic() - start) * 1000
-            return {"status": "healthy", "latency_ms": round(latency, 2)}
+            if resp.status_code == 200:
+                return {"status": "healthy", "latency_ms": round(latency, 2)}
+            return {"status": "unhealthy", "latency_ms": None, "error": f"HTTP {resp.status_code}"}
         except Exception as exc:
             return {"status": "unhealthy", "latency_ms": None, "error": str(exc)}
 

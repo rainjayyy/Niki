@@ -2,8 +2,6 @@
 # Start with: docker compose -f docker/docker-compose.yml up -d
 # Stop with:  docker compose -f docker/docker-compose.yml down
 
-version: "3.9"
-
 services:
   # --- Redis — Short-term memory & session state ---
   redis:
@@ -11,6 +9,8 @@ services:
     container_name: niki-redis
     ports:
       - "6379:6379"
+
+      
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
@@ -35,7 +35,7 @@ services:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
       interval: 10s
       timeout: 5s
       retries: 5
