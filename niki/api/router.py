@@ -7,6 +7,7 @@ from niki.api.health import router as health_router
 from niki.api.routing import router as routing_router
 from niki.api.safety import chat_router
 from niki.api.safety import router as safety_router
+from niki.api.tutoring import router as tutoring_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -22,6 +23,9 @@ api_router.include_router(routing_router)
 
 # Encyclopedia Agent (#3 vertical slice)
 api_router.include_router(encyclopedia_router)
+
+# Tutoring Agent (#4 vertical slice)
+api_router.include_router(tutoring_router)
 
 # Future routers will be added here:
 # api_router.include_router(parent_router)     # Parent dashboard endpoints
