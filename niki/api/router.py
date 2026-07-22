@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from niki.api.encyclopedia import router as encyclopedia_router
 from niki.api.health import router as health_router
 from niki.api.routing import router as routing_router
 from niki.api.safety import chat_router
@@ -18,6 +19,9 @@ api_router.include_router(chat_router)
 
 # Routing pipeline (#2 vertical slice)
 api_router.include_router(routing_router)
+
+# Encyclopedia Agent (#3 vertical slice)
+api_router.include_router(encyclopedia_router)
 
 # Future routers will be added here:
 # api_router.include_router(parent_router)     # Parent dashboard endpoints
