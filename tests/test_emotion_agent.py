@@ -248,40 +248,42 @@ class TestProactiveCare:
         assert agent.should_run_proactive_care() is False
         assert agent.run_proactive_care() is None
 
-    def test_no_care_when_normal(self, baseline: EmotionBaseline) -> None:
+    def test_no_care_when_normal(self) -> None:
+        fresh_baseline = EmotionBaseline()
+        today = datetime(2026, 7, 22)
         agent = EmotionAgent(
             llm=_StubLLM(),
-            baseline=baseline,
+            baseline=fresh_baseline,
             persona="gentle",
             child_age=7,
+            today_date=today,
         )
-        today = datetime(2026, 7, 22)
         # Populate baseline with 7 normal days
         for i in range(7):
             d = (today - timedelta(days=i + 1)).date().isoformat()
-            baseline.add(EmotionRecord(date=d, valence=0.1, intensity=3))
+            fresh_baseline.add(EmotionRecord(date=d, valence=0.1, intensity=3))
         # Today's mean is normal
-        baseline.add(EmotionRecord(date=today.date().isoformat(), valence=0.1, intensity=3))
+        fresh_baseline.add(EmotionRecord(date=today.date().isoformat(), valence=0.1, intensity=3))
         care = agent.run_proactive_care()
         assert care is None
 
-    def test_care_triggered_on_anomaly(self, baseline: EmotionBaseline) -> None:
+    def test_care_triggered_on_anomaly(self) -> None:
+        fresh_baseline = EmotionBaseline()
+        today = datetime(2026, 7, 22)
         agent = EmotionAgent(
             llm=_StubLLM(),
-            baseline=baseline,
+            baseline=fresh_baseline,
             persona="gentle",
             child_age=7,
+            today_date=today,
         )
-        today = datetime(2026, 7, 22)
-        # 7 normal days, then a big drop
-        for i in range(7):
+        # 7 days WITH variance so z-score can compute
+        # Use mixed valence values to create baseline std > 0
+        for i, v in enumerate([0.1, -0.1, 0.2, -0.2, 0.15, -0.05, 0.1]):
             d = (today - timedelta(days=i + 1)).date().isoformat()
-            baseline.add(EmotionRecord(date=d, valence=0.0, intensity=3))
-        # Add variance so z-score can compute
-        baseline.add(EmotionRecord(date=(today - timedelta(days=8)).date().isoformat(), valence=0.3, intensity=3))
-        baseline.add(EmotionRecord(date=(today - timedelta(days=9)).date().isoformat(), valence=-0.3, intensity=3))
-        # Today: very negative
-        baseline.add(EmotionRecord(date=today.date().isoformat(), valence=-1.5, intensity=5))
+            fresh_baseline.add(EmotionRecord(date=d, valence=v, intensity=3))
+        # Today: very negative (large deviation from baseline mean ~0.03)
+        fresh_baseline.add(EmotionRecord(date=today.date().isoformat(), valence=-1.5, intensity=5))
         care = agent.run_proactive_care()
         assert care is not None
         assert care.anomaly.is_anomaly is True

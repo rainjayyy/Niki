@@ -532,9 +532,6 @@ class EmotionAgent(BaseAgent):
 
         Returns False during calibration (PRD #51).
         """
-        if self._baseline.is_in_calibration(self._today_date):
-            return False
-        # In production, also check current hour == 20
         return not self._baseline.is_in_calibration(self._today_date)
 
     def run_proactive_care(self) -> ProactiveCare | None:
