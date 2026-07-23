@@ -14,6 +14,7 @@ from niki.api.resilience import router as resilience_router
 from niki.api.routing import router as routing_router
 from niki.api.safety import router as safety_router
 from niki.api.session import router as session_router
+from niki.api.tools import router as tools_router
 from niki.api.treehole import router as treehole_router
 from niki.api.tutoring import router as tutoring_router
 
@@ -60,6 +61,9 @@ api_router.include_router(session_router)
 
 # Content policy (#13 — family blacklist + age grading)
 api_router.include_router(content_policy_router)
+
+# Tool permission matrix (#14 — per-agent tool access control, PRD #54)
+api_router.include_router(tools_router)
 
 # Future routers will be added here:
 # api_router.include_router(admin_router)      # Admin & pipeline management
