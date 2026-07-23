@@ -18,45 +18,36 @@ from niki.agents.tutoring import (
     Round,
     TutoringAgent,
 )
+from niki.api._stub_llm import _StubLLM
+from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
 router = APIRouter(prefix="/tutoring", tags=["tutoring"])
 
-
-# A deterministic "LLM" stub for tests + dev: returns the hard-coded prompt
-# (so the agent never accidentally gives a direct answer via LLM).
-class _StubLLM:
-    """Stub LLM that returns the guided-discovery prompt as-is.
-
-    Critical: in the real system, the LLM might try to "leak" the answer
-    in rounds 1-3. Our defense-in-depth check (in TutoringAgent) catches
-    that and replaces the response with the hard-coded prompt. The stub
-    here makes the agent's behavior fully deterministic for tests.
-    """
-
-    async def chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.6,
-        max_tokens: int = 256,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        # Find the guided prompt in the user message
-        user_msg = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        # Extract the prompt after the marker
-        if "「" in user_msg and "」" in user_msg:
-            prompt = user_msg.split("「", 1)[1].split("」", 1)[0]
-        else:
-            prompt = "我们一起看看这道题~"
-        return {"content": prompt}
+# ISS-02: shared input gateway for direct agent endpoints
+_input_gateway = InputSafetyGateway()
 
 
-# Module-level singleton
+# Module-level singletons
 _agent = TutoringAgent(
     llm=_StubLLM(),
     persona="gentle",
     child_age=7,
 )
+
+# ISS-08: agent cache keyed by child_age
+_agent_cache: dict[int, TutoringAgent] = {}
+
+
+def _get_agent(child_age: int) -> TutoringAgent:
+    """Return a per-child_age Tutoring agent (cached)."""
+    if child_age not in _agent_cache:
+        _agent_cache[child_age] = TutoringAgent(
+            llm=_StubLLM(),
+            persona="gentle",
+            child_age=child_age,
+        )
+    return _agent_cache[child_age]
 
 
 @router.post("/ask")
@@ -70,22 +61,41 @@ async def ask_tutor(payload: dict) -> dict:
           "subtype": "pure_calculation" (optional),
           "session_id": "..." (optional, for state continuity)
         }
+
+    ISS-02: run through InputSafetyGateway first.
     """
     problem = payload.get("problem", "")
     child_age = int(payload.get("child_age", 7))
     subtype = payload.get("subtype")
 
-    if child_age != _agent.child_age:
-        _agent.child_age = child_age
-        _agent._age_group = _agent._resolve_age_group(child_age)
-        _agent._output_gateway = _agent._output_gateway.__class__(child_age=child_age)
+    # ISS-02: safety gate
+    safety_verdict = await _input_gateway.check(problem)
+    if safety_verdict.is_blocked:
+        return {
+            "text": "嗯…这个问题Niki还没想好怎么回答呢~",
+            "intent": None,
+            "emotion": "neutral",
+            "metadata": {"blocked": True, "reason": safety_verdict.matched_category},
+        }
+    if safety_verdict.is_escalation:
+        return {
+            "text": safety_verdict.sanitized_text or "Niki在这里~",
+            "intent": "tutoring",
+            "emotion": "caring",
+            "metadata": {
+                "parent_alert_required": True,
+                "escalation": True,
+            },
+        }
 
+    # ISS-08: use per-child_age agent to avoid concurrent trampling.
+    agent = _get_agent(child_age)
     child_input = ChildInput(text=problem, session_id="tutoring")
     context: dict[str, Any] = {}
     if subtype:
         context["subtype"] = subtype
 
-    output = await _agent.invoke(child_input, context=context)
+    output = await agent.invoke(child_input, context=context)
 
     return {
         "text": output.text,

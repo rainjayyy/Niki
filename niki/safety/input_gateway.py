@@ -117,7 +117,8 @@ class InputSafetyGateway:
             )
 
         # 2. Other sensitive categories → BLOCK
-        for category in ("sexual", "drugs"):
+        # PRD: 5 categories — profanity, violence, sexual, drugs, (self-handled above)
+        for category in ("profanity", "violence", "sexual", "drugs"):
             matches = self._scan_category(text_clean, category)
             if matches:
                 logger.warning(

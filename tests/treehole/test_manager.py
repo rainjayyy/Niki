@@ -1,6 +1,5 @@
 """Tests for the treehole manager."""
 
-
 import pytest
 
 from niki.treehole.encryption import TreeholeEncryption
@@ -13,9 +12,7 @@ def manager() -> TreeholeManager:
 
 
 class TestTreeholeManager:
-    async def test_engage_returns_summary_and_encrypted(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_engage_returns_summary_and_encrypted(self, manager: TreeholeManager) -> None:
         summary, encrypted = await manager.engage(
             child_id="child-1",
             original_text="我有一个秘密",
@@ -30,9 +27,7 @@ class TestTreeholeManager:
         assert "encrypted" in encrypted
         assert encrypted["child_id"] == "child-1"
 
-    async def test_engage_does_not_store_original_text(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_engage_does_not_store_original_text(self, manager: TreeholeManager) -> None:
         """PRD #62: original text must NEVER be stored."""
         secret_text = "我偷偷告诉你一个秘密"
         await manager.engage(
@@ -48,9 +43,7 @@ class TestTreeholeManager:
         for s in manager.store.summaries:
             assert secret_text not in str(s.to_dict())
 
-    async def test_engage_schedules_7_day_purge(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_engage_schedules_7_day_purge(self, manager: TreeholeManager) -> None:
         await manager.engage(
             child_id="c1",
             original_text="secret",
@@ -72,9 +65,7 @@ class TestTreeholeManager:
         summaries = await manager.list_summaries()
         assert len(summaries) == 1
         # Decrypt
-        summary = await manager.decrypt_summary(
-            manager.store.encrypted_payloads[0]
-        )
+        summary = await manager.decrypt_summary(manager.store.encrypted_payloads[0])
         assert summary.source == "treehole"
         assert summary.emotion_valence == "positive"
         assert summary.emotion_intensity == 5
@@ -108,8 +99,12 @@ class TestTreeholeManager:
         assert "original" not in d
         # The summary only contains structured fields
         assert set(d.keys()) == {
-            "timestamp", "source", "emotion_valence",
-            "emotion_intensity", "emotion_category", "z_score_deviation",
+            "timestamp",
+            "source",
+            "emotion_valence",
+            "emotion_intensity",
+            "emotion_category",
+            "z_score_deviation",
         }
 
 

@@ -299,12 +299,22 @@ class AccountLifecycle:
         - Cognitive graph nodes (Neo4j)
         - Emotion baseline (Redis)
         - Consent records (Crypto-shred)
+
+        ISS-04: ConsentManager records MUST actually be erased on
+        account deletion — the prior implementation only popped the
+        account dict and left all `self._consent._records` intact,
+        violating the 30-day deletion promise.
         """
         # Remove account + progress
         self._accounts.pop(parent_id, None)
         self._progress.pop(parent_id, None)
-        # Remove consent records (best-effort)
-        # In production: would iterate self._consent._records
+        # ISS-04: actually purge consent records for this parent
+        if self._consent is not None and hasattr(self._consent, "_records"):
+            self._consent._records = {
+                rid: rec
+                for rid, rec in self._consent._records.items()
+                if rec.parent_id != parent_id
+            }
 
     # ---- Lookup ----
 

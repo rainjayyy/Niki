@@ -1,6 +1,5 @@
 """Tests for the multi-agent router."""
 
-
 from niki.routing.classifier import (
     Intent,
     IntentCategory,
@@ -50,16 +49,12 @@ class TestRouterSingle:
 
     def test_encyclopedia_only_routes_to_encyclopedia(self) -> None:
         router = AgentRouter()
-        decision = router.route(
-            _result(Intent(IntentCategory.ENCYCLOPEDIA, 0.85))
-        )
+        decision = router.route(_result(Intent(IntentCategory.ENCYCLOPEDIA, 0.85)))
         assert decision.primary_agent == AgentName.ENCYCLOPEDIA
 
     def test_emotional_only_routes_to_emotional(self) -> None:
         router = AgentRouter()
-        decision = router.route(
-            _result(Intent(IntentCategory.EMOTIONAL, 0.95))
-        )
+        decision = router.route(_result(Intent(IntentCategory.EMOTIONAL, 0.95)))
         assert decision.primary_agent == AgentName.EMOTIONAL
 
 

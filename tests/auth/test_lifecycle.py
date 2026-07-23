@@ -64,9 +64,7 @@ class TestSignupStart:
 
 
 class TestFullSignupFlow:
-    async def test_all_steps_completed_marks_verified(
-        self, lifecycle: AccountLifecycle
-    ) -> None:
+    async def test_all_steps_completed_marks_verified(self, lifecycle: AccountLifecycle) -> None:
         account, _ = await lifecycle.start_signup(
             name="张三",
             id_number="110101199003078811",
@@ -93,9 +91,7 @@ class TestFullSignupFlow:
         assert updated.is_verified is True
         assert updated.verified_at is not None
 
-    async def test_real_name_failure_blocks_progress(
-        self, lifecycle: AccountLifecycle
-    ) -> None:
+    async def test_real_name_failure_blocks_progress(self, lifecycle: AccountLifecycle) -> None:
         account, progress = await lifecycle.start_signup(
             name="张三",
             id_number="110101199003078811",
@@ -112,9 +108,7 @@ class TestFullSignupFlow:
         assert real_name_step.completed is False
         assert real_name_step.error is not None
 
-    async def test_face_failure_blocks_progress(
-        self, lifecycle: AccountLifecycle
-    ) -> None:
+    async def test_face_failure_blocks_progress(self, lifecycle: AccountLifecycle) -> None:
         account, progress = await lifecycle.start_signup(
             name="张三",
             id_number="110101199003078811",
@@ -135,9 +129,7 @@ class TestFullSignupFlow:
 
 
 class TestDeletionFlow:
-    async def test_request_deletion_marks_pending(
-        self, lifecycle: AccountLifecycle
-    ) -> None:
+    async def test_request_deletion_marks_pending(self, lifecycle: AccountLifecycle) -> None:
         account, _ = await lifecycle.start_signup(
             name="张三",
             id_number="110101199003078811",
@@ -147,9 +139,7 @@ class TestDeletionFlow:
         assert updated.status == AccountStatus.DELETION_PENDING
         assert updated.deletion_requested_at is not None
 
-    async def test_double_request_raises(
-        self, lifecycle: AccountLifecycle
-    ) -> None:
+    async def test_double_request_raises(self, lifecycle: AccountLifecycle) -> None:
         account, _ = await lifecycle.start_signup(
             name="张三",
             id_number="110101199003078811",
@@ -160,9 +150,7 @@ class TestDeletionFlow:
             await lifecycle.request_deletion(account.id)
         assert exc_info.value.code == "ALREADY_PENDING"
 
-    async def test_complete_deletion_erases_account(
-        self, lifecycle: AccountLifecycle
-    ) -> None:
+    async def test_complete_deletion_erases_account(self, lifecycle: AccountLifecycle) -> None:
         account, _ = await lifecycle.start_signup(
             name="张三",
             id_number="110101199003078811",

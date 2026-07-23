@@ -73,9 +73,7 @@ class TestWeeklyReport:
         )
         assert len(report.action_suggestions) >= 1
 
-    async def test_fuzzy_negatives_use_action_language(
-        self, service: DashboardService
-    ) -> None:
+    async def test_fuzzy_negatives_use_action_language(self, service: DashboardService) -> None:
         baseline = EmotionBaseline()
         today = datetime(2026, 7, 22)
         # Mostly negative baseline
@@ -84,8 +82,16 @@ class TestWeeklyReport:
             baseline.add(EmotionRecord(date=d, valence=-0.5, intensity=4))
         baseline.add(EmotionRecord(date=today.date().isoformat(), valence=-1.0, intensity=5))
         # Add variance so check_anomaly has nonzero std
-        baseline.add(EmotionRecord(date=(today - timedelta(days=8)).date().isoformat(), valence=-0.3, intensity=4))
-        baseline.add(EmotionRecord(date=(today - timedelta(days=9)).date().isoformat(), valence=-0.7, intensity=4))
+        baseline.add(
+            EmotionRecord(
+                date=(today - timedelta(days=8)).date().isoformat(), valence=-0.3, intensity=4
+            )
+        )
+        baseline.add(
+            EmotionRecord(
+                date=(today - timedelta(days=9)).date().isoformat(), valence=-0.7, intensity=4
+            )
+        )
         report = service.generate_weekly_report(
             child_id="child-001",
             baseline=baseline,
@@ -94,9 +100,7 @@ class TestWeeklyReport:
         if report.fuzzy_negatives:
             assert any("聊完" in fn or "😊" in fn for fn in report.fuzzy_negatives)
 
-    async def test_improving_trend(
-        self, service: DashboardService
-    ) -> None:
+    async def test_improving_trend(self, service: DashboardService) -> None:
         baseline = EmotionBaseline()
         today = datetime(2026, 7, 22)
         # Previous week: bad
@@ -162,9 +166,7 @@ class TestLearningWhitepaper:
         assert paper.new_knowledge_explored == []
         assert paper.new_vocabulary == []
 
-    async def test_aggregates_knowledge_queries(
-        self, service: DashboardService
-    ) -> None:
+    async def test_aggregates_knowledge_queries(self, service: DashboardService) -> None:
         for q in ["恐龙", "月亮", "天空"]:
             service.record_knowledge_query(
                 child_id="child-001",
@@ -175,9 +177,7 @@ class TestLearningWhitepaper:
         assert "恐龙" in paper.new_knowledge_explored
         assert "月亮" in paper.new_knowledge_explored
 
-    async def test_hard_problems_includes_safety_valve(
-        self, service: DashboardService
-    ) -> None:
+    async def test_hard_problems_includes_safety_valve(self, service: DashboardService) -> None:
         service.record_safety_valve(
             child_id="child-001",
             problem_summary="数学应用题",
@@ -185,9 +185,7 @@ class TestLearningWhitepaper:
         paper = service.generate_learning_whitepaper("child-001")
         assert "数学应用题" in paper.hard_problems_attempted
 
-    async def test_action_suggestions_present(
-        self, service: DashboardService
-    ) -> None:
+    async def test_action_suggestions_present(self, service: DashboardService) -> None:
         service.record_knowledge_query(
             child_id="child-001",
             question="恐龙",
@@ -198,9 +196,7 @@ class TestLearningWhitepaper:
         # Should have a positive suggestion
         assert any("🌟" in s or "💡" in s for s in paper.action_suggestions)
 
-    async def test_counts_questions_and_solved(
-        self, service: DashboardService
-    ) -> None:
+    async def test_counts_questions_and_solved(self, service: DashboardService) -> None:
         for q in ["a", "b", "c"]:
             service.record_knowledge_query(
                 child_id="child-001",
@@ -270,6 +266,7 @@ class TestAlerts:
 class TestDashboardDataClasses:
     def test_weekly_trend_to_dict(self) -> None:
         from niki.dashboard.report import WeeklyTrend
+
         trend = WeeklyTrend(
             start_date="2026-07-15",
             end_date="2026-07-22",
@@ -284,6 +281,7 @@ class TestDashboardDataClasses:
 
     def test_safety_valve_to_dict(self) -> None:
         from niki.dashboard.alerts import SafetyValveAlert
+
         alert = SafetyValveAlert(
             id="a-001",
             child_id="c-001",
@@ -297,6 +295,7 @@ class TestDashboardDataClasses:
 
     def test_high_risk_to_dict(self) -> None:
         from niki.dashboard.alerts import HighRiskAlert
+
         alert = HighRiskAlert(
             id="a-002",
             child_id="c-001",

@@ -46,40 +46,40 @@ class TreeholePurger:
         now = now or datetime.utcnow()
         cutoff = now - timedelta(days=self.retention_days)
 
-        # Find expired records
-        to_purge: list[str] = []  # timestamps
-        for summary in store.summaries:
+        # Find expired records (ISS-03: capture INDEX, not just timestamp,
+        # so we can synchronously drop the parallel encrypted_payload entry)
+        expired_indices: list[int] = []
+        for idx, summary in enumerate(store.summaries):
             ts = datetime.fromisoformat(summary.timestamp)
             if ts < cutoff:
-                to_purge.append(summary.timestamp)
+                expired_indices.append(idx)
 
-        if not to_purge:
+        if not expired_indices:
             return 0
 
-        # Purge from all 3 lists
-        to_purge_set = set(to_purge)
+        expired_set = set(expired_indices)
+        # Purge from all 3 lists (ISS-03: use index-based removal so
+        # encrypted_payloads and summaries stay aligned).
         store.summaries[:] = [
-            s for s in store.summaries if s.timestamp not in to_purge_set
+            s for i, s in enumerate(store.summaries) if i not in expired_set
         ]
-        # Note: encrypted_payloads and pending_purge use parallel indices
-        # Filter them too
         store.encrypted_payloads[:] = [
-            ep for ep in store.encrypted_payloads
-            if not any(
-                ts in ep.get("encrypted", "") or ts in str(ep)
-                for ts in to_purge
-            )
+            ep
+            for i, ep in enumerate(store.encrypted_payloads)
+            if i not in expired_set
         ]
         store.pending_purge[:] = [
-            ts for ts in store.pending_purge if ts not in to_purge_set
+            ts
+            for i, ts in enumerate(store.pending_purge)
+            if i not in expired_set
         ]
 
         logger.info(
             "treehole.purged_expired",
-            count=len(to_purge),
+            count=len(expired_indices),
             cutoff=cutoff.isoformat(),
         )
-        return len(to_purge)
+        return len(expired_indices)
 
     async def purge_all(
         self,

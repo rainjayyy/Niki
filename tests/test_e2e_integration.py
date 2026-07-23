@@ -146,9 +146,7 @@ class TestAuthDashboardIntegration:
 
 
 class TestTreeholeResilienceIntegration:
-    def test_treehole_does_not_leak_to_long_term(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_treehole_does_not_leak_to_long_term(self, fresh_client: TestClient) -> None:
         """Treehole-mode original text should NEVER appear in long-term memory."""
         secret = f"unique_secret_{uuid.uuid4().hex}"
 
@@ -191,9 +189,7 @@ class TestTreeholeResilienceIntegration:
 
 
 class TestSessionChatIntegration:
-    def test_session_starts_with_chat(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_session_starts_with_chat(self, fresh_client: TestClient) -> None:
         """Starting a session + then chatting works in sequence."""
         child_id = _unique_id()
 
@@ -215,9 +211,7 @@ class TestSessionChatIntegration:
         )
         assert resp.status_code == 200
 
-    def test_session_end_works_after_chat(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_session_end_works_after_chat(self, fresh_client: TestClient) -> None:
         """Session can be ended after a chat."""
         child_id = _unique_id()
 
@@ -240,9 +234,7 @@ class TestSessionChatIntegration:
 
 
 class TestContentPolicyChatIntegration:
-    def test_blacklisted_topic_gets_downgrade_decision(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_blacklisted_topic_gets_downgrade_decision(self, fresh_client: TestClient) -> None:
         """Topic blacklist from family + chat text should produce a downgrade."""
         family_id = _unique_id()
 
@@ -273,9 +265,7 @@ class TestContentPolicyChatIntegration:
 
 
 class TestHealthEndpoint:
-    def test_health_endpoint_reports_all_components(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_health_endpoint_reports_all_components(self, fresh_client: TestClient) -> None:
         """The /health endpoint should report all 6 components."""
         resp = fresh_client.get("/api/v1/health")
         assert resp.status_code == 200
@@ -296,9 +286,7 @@ class TestHealthEndpoint:
 
 
 class TestStateIsolation:
-    def test_treehole_does_not_affect_long_term(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_treehole_does_not_affect_long_term(self, fresh_client: TestClient) -> None:
         """Treehole engagement should not affect long-term memory search."""
         child_id = _unique_id()
 
@@ -333,9 +321,7 @@ class TestStateIsolation:
         for record in data["records"]:
             assert "秘密" not in record["content"]
 
-    def test_blacklist_does_not_affect_safety(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_blacklist_does_not_affect_safety(self, fresh_client: TestClient) -> None:
         """Adding a family blacklist topic should not affect global safety."""
         family_id = _unique_id()
 
@@ -359,9 +345,7 @@ class TestStateIsolation:
 
 
 class TestRoutingAgentDispatch:
-    def test_routing_endpoint_routes_correctly(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_routing_endpoint_routes_correctly(self, fresh_client: TestClient) -> None:
         resp = fresh_client.post(
             "/api/v1/routing/route",
             json={"text": "我今天好难过"},
@@ -370,9 +354,7 @@ class TestRoutingAgentDispatch:
         # Emotional agent should be primary
         assert data["primary_agent"] in ("emotional_agent", "tutoring_agent")
 
-    def test_persona_endpoint_supports_all_personas(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_persona_endpoint_supports_all_personas(self, fresh_client: TestClient) -> None:
         """All 3 personas are exposed."""
         resp = fresh_client.get("/api/v1/routing/personas")
         data = resp.json()
@@ -386,9 +368,7 @@ class TestRoutingAgentDispatch:
 
 
 class TestMemoryChatIntegration:
-    def test_conversation_memory_then_chat(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_conversation_memory_then_chat(self, fresh_client: TestClient) -> None:
         """Add conversation memory → next chat should work."""
         session_id = f"test-{uuid.uuid4().hex[:16]}"
 
@@ -406,9 +386,7 @@ class TestMemoryChatIntegration:
         resp = fresh_client.get(f"/api/v1/memory/short-term/{session_id}")
         assert resp.json()["count"] == 2
 
-    def test_long_term_search_finds_relevant_records(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_long_term_search_finds_relevant_records(self, fresh_client: TestClient) -> None:
         """Long-term search returns matching records."""
         child_id = _unique_id()
 
@@ -438,9 +416,7 @@ class TestMemoryChatIntegration:
 
 
 class TestRealisticRequestFlow:
-    def test_realistic_7_year_old_chat_session(
-        self, fresh_client: TestClient
-    ) -> None:
+    def test_realistic_7_year_old_chat_session(self, fresh_client: TestClient) -> None:
         """Simulate a realistic 7-year-old's chat session end-to-end."""
         child_id = _unique_id()
 
@@ -463,7 +439,8 @@ class TestRealisticRequestFlow:
         # Either encyclopedia (encyclopedia keyword "什么") or
         # tutoring (math keyword "恐龙"  -- unlikely). Just verify routed.
         assert resp.json()["primary_agent"] in (
-            "encyclopedia_agent", "emotional_agent",
+            "encyclopedia_agent",
+            "emotional_agent",
         )
 
         # 3. Record activity

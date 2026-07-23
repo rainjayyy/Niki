@@ -215,13 +215,16 @@ class TestEmotionAgentEndToEnd:
         output = await agent.invoke(ChildInput(text="我非常非常难过！！", session_id="t7"))
         assert output.metadata["intensity"] >= 4
 
-    async def test_baseline_updated_after_expression(self, agent: EmotionAgent, baseline: EmotionBaseline) -> None:
+    async def test_baseline_updated_after_expression(
+        self, agent: EmotionAgent, baseline: EmotionBaseline
+    ) -> None:
         await agent.invoke(ChildInput(text="我难过", session_id="t8"))
         # Should have added a record
         assert len(baseline.records()) == 1
 
     async def test_fear_word_rewrite_applied(self) -> None:
         """If the LLM returns fear words, the safety gateway rewrites them."""
+
         class LLMWithFearWord:
             async def chat(self, *args, **kwargs):  # noqa: ANN002, ANN003
                 return {"content": "我看到怪物了，我也很难过"}

@@ -83,9 +83,7 @@ class TestToolMatrixHelpers:
 
 class TestToolMatrixMutation:
     def test_set_permission(self, matrix: ToolMatrix) -> None:
-        matrix.set_permission(
-            ToolName.SEARCH_API, {"tutoring_agent"}
-        )
+        matrix.set_permission(ToolName.SEARCH_API, {"tutoring_agent"})
         assert matrix.can_access("tutoring_agent", ToolName.SEARCH_API)
         assert not matrix.can_access("encyclopedia_agent", ToolName.SEARCH_API)
 
@@ -143,7 +141,7 @@ class TestToolAccessChecker:
 
     def test_denied_attempts(self, checker: ToolAccessChecker) -> None:
         checker.check("encyclopedia_agent", ToolName.SEARCH_API)  # Allowed
-        checker.check("tutoring_agent", ToolName.SEARCH_API)    # Denied
+        checker.check("tutoring_agent", ToolName.SEARCH_API)  # Denied
         checker.check("tutoring_agent", ToolName.WEATHER_QUERY)  # Denied
         denied = checker.get_denied_attempts()
         assert len(denied) == 2

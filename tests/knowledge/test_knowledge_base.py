@@ -1,6 +1,5 @@
 """Tests for the 3-level knowledge base."""
 
-
 import pytest
 
 from niki.knowledge.knowledge_base import (

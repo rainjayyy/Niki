@@ -49,7 +49,14 @@ class StepStatus(StrEnum):
 
 @dataclass
 class PipelineStepResult:
-    """Result of a single pipeline step."""
+    """Result of a single pipeline step.
+
+    ISS-05: `status` is the FINAL status of the step (SUCCESS or
+    DEAD_LETTER). The `attempts` count captures how many times the
+    step was attempted (including retries). To audit transient
+    FAILED → FAILED → DEAD_LETTER transitions, look at the
+    `attempt_history` list.
+    """
 
     step_name: str
     status: StepStatus
@@ -59,6 +66,7 @@ class PipelineStepResult:
     error: str | None = None
     attempts: int = 0
     items_processed: int = 0
+    attempt_history: list[StepStatus] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -70,6 +78,7 @@ class PipelineStepResult:
             "error": self.error,
             "attempts": self.attempts,
             "items_processed": self.items_processed,
+            "attempt_history": [s.value for s in self.attempt_history],
         }
 
 
@@ -259,7 +268,10 @@ class NightlyPipeline:
 
         for attempt in range(1, self._max_retries + 1):
             result.attempts = attempt
-            result.status = StepStatus.RUNNING
+            # Only set RUNNING on the first attempt.
+            if attempt == 1:
+                result.status = StepStatus.RUNNING
+                result.attempt_history.append(StepStatus.RUNNING)
             try:
                 start = datetime.utcnow()
                 items = await step.fn({})
@@ -268,6 +280,7 @@ class NightlyPipeline:
                 result.duration_ms = (end - start).total_seconds() * 1000
                 result.completed_at = end
                 result.status = StepStatus.SUCCESS
+                result.attempt_history.append(StepStatus.SUCCESS)
                 return result
             except Exception as exc:
                 logger.warning(
@@ -277,12 +290,19 @@ class NightlyPipeline:
                     error=str(exc),
                 )
                 if attempt < self._max_retries:
+                    # ISS-05: each failed attempt (before exhausting retries)
+                    # is a transient FAILED, not yet a DEAD_LETTER.
+                    result.error = str(exc)
+                    result.completed_at = datetime.utcnow()
+                    result.status = StepStatus.FAILED
+                    result.attempt_history.append(StepStatus.FAILED)
                     backoff = self.BACKOFF_BASE_S * (2 ** (attempt - 1))
                     await asyncio.sleep(backoff)
                 else:
                     result.error = str(exc)
                     result.completed_at = datetime.utcnow()
                     result.status = StepStatus.DEAD_LETTER
+                    result.attempt_history.append(StepStatus.DEAD_LETTER)
 
         return result
 
@@ -308,10 +328,13 @@ class NightlyPipeline:
                     }
                 if step_result.status == StepStatus.SUCCESS:
                     step_status[step_result.step_name]["success"] += 1
-                elif step_result.status == StepStatus.FAILED:
-                    step_status[step_result.step_name]["failed"] += 1
                 elif step_result.status == StepStatus.DEAD_LETTER:
                     step_status[step_result.step_name]["dead_letter"] += 1
+                # ISS-05: count transient retries (FAILED before DEAD_LETTER)
+                # separately from the final dead-letter
+                for st in step_result.attempt_history:
+                    if st == StepStatus.FAILED:
+                        step_status[step_result.step_name]["failed"] += 1
 
         return {
             "lookback_days": lookback_days,

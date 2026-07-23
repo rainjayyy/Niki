@@ -1,6 +1,5 @@
 """End-to-end API tests for the tool permission endpoints."""
 
-
 from fastapi.testclient import TestClient
 
 

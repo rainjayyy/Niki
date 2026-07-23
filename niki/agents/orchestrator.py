@@ -160,6 +160,8 @@ class ChatOrchestrator:
         self._kb = KnowledgeBase()
         self._fact_checker = FactChecker(self._kb)
         self._emotion_baseline = EmotionBaseline()
+        # ISS-12: lock for thread-safe _update_age/_update_persona
+        self._lock = asyncio.Lock()
 
         # Re-create the encyclopedia agent with stub LLM
         self._stub_llm = _StubDeepSeek()
@@ -203,9 +205,9 @@ class ChatOrchestrator:
             A ChatResult with final text + diagnostics.
         """
         if child_age is not None and child_age != self.child_age:
-            self._update_age(child_age)
+            await self._update_age(child_age)
         if persona is not None and persona != self.persona:
-            self._update_persona(persona)
+            await self._update_persona(persona)
 
         stages: list[ChatStage] = []
 
@@ -349,9 +351,10 @@ class ChatOrchestrator:
             logger.error("chat.invoke_failed", agent=agent.value, error=str(exc))
             return None
 
-    def _update_age(self, age: int) -> None:
-        """Reconfigure all agents for a new child age."""
-        self.child_age = age
+    async def _update_age(self, age: int) -> None:
+        """Reconfigure all agents for a new child age (thread-safe)."""
+        async with self._lock:
+            self.child_age = age
         self._output_gateway = OutputSafetyGateway(child_age=age)
         self._encyclopedia_agent.child_age = age
         self._encyclopedia_agent._age_group = self._encyclopedia_agent._resolve_age_group(age)
@@ -362,9 +365,10 @@ class ChatOrchestrator:
         self._emotion_agent._age_group = self._emotion_agent._resolve_age_group(age)
         self._emotion_agent._output_gateway = OutputSafetyGateway(child_age=age)
 
-    def _update_persona(self, persona: str) -> None:
-        """Reconfigure all agents for a new persona."""
-        self.persona = persona
+    async def _update_persona(self, persona: str) -> None:
+        """Reconfigure all agents for a new persona (thread-safe)."""
+        async with self._lock:
+            self.persona = persona
         self._persona_injector.set_default(Persona(persona))
         self._encyclopedia_agent.persona = persona
         self._tutoring_agent.persona = persona

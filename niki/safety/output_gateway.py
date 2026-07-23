@@ -145,8 +145,11 @@ class OutputSafetyGateway:
 
         # 2. Fear-word rewriting
         for word, replacement in FEAR_WORDS.items():
-            # Case-insensitive replace for English, exact for Chinese
-            pattern = re.escape(word)
+            # ISS-10: avoid reusing the name  for both the
+            # privacy regexes (above) and this per-word escape below.
+            # Note: only English branch needs regex escape; Chinese is
+            # handled by simple substring replacement.
+            word_pattern = re.escape(word)
             if any("一" <= c <= "鿿" for c in word):
                 # Chinese: match exactly
                 if word in current:
@@ -154,7 +157,7 @@ class OutputSafetyGateway:
                     current = current.replace(word, replacement)
             else:
                 # English: case-insensitive
-                replaced = re.sub(pattern, replacement, current, flags=re.IGNORECASE)
+                replaced = re.sub(word_pattern, replacement, current, flags=re.IGNORECASE)
                 if replaced != current:
                     rewrites.append((word, replacement))
                     current = replaced

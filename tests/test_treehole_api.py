@@ -123,8 +123,12 @@ def test_summary_structure_has_no_text_field(client: TestClient) -> None:
     assert "content" not in summary
     # Only structured fields
     expected_fields = {
-        "timestamp", "source", "emotion_valence",
-        "emotion_intensity", "emotion_category", "z_score_deviation",
+        "timestamp",
+        "source",
+        "emotion_valence",
+        "emotion_intensity",
+        "emotion_category",
+        "z_score_deviation",
     }
     assert set(summary.keys()) == expected_fields
 

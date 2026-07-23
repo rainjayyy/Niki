@@ -123,9 +123,7 @@ class TestOutputGatewaySentenceLength:
         assert v.sentences_over_limit == 0
 
     def test_3_to_5_flags_long_sentence(self, gateway_3_5: OutputSafetyGateway) -> None:
-        v = gateway_3_5.check(
-            "今天天气真的非常好所以我们一起去公园玩沙子玩游戏吧"
-        )
+        v = gateway_3_5.check("今天天气真的非常好所以我们一起去公园玩沙子玩游戏吧")
         assert v.sentences_over_limit >= 1
 
     def test_9_to_12_allows_long_sentences(self, gateway_9_12: OutputSafetyGateway) -> None:

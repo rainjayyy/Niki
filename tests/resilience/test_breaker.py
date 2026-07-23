@@ -48,9 +48,7 @@ class TestBeforeCall:
         assert decision.allowed is False
         assert decision.state == CircuitState.OPEN
 
-    async def test_open_allows_probe_after_cooldown(
-        self, breaker: CircuitBreaker
-    ) -> None:
+    async def test_open_allows_probe_after_cooldown(self, breaker: CircuitBreaker) -> None:
         breaker.force_open()
         # Wait for cooldown to elapse
         await asyncio.sleep(2.1)
@@ -127,35 +125,27 @@ class TestStateTransitions:
             await breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
 
-    async def test_open_to_half_open_after_cooldown(
-        self, breaker: CircuitBreaker
-    ) -> None:
+    async def test_open_to_half_open_after_cooldown(self, breaker: CircuitBreaker) -> None:
         breaker.force_open()
         await asyncio.sleep(2.1)
         await breaker.before_call()  # This transitions to half-open
         assert breaker.state == CircuitState.HALF_OPEN
 
-    async def test_half_open_to_closed_on_probe_success(
-        self, breaker: CircuitBreaker
-    ) -> None:
+    async def test_half_open_to_closed_on_probe_success(self, breaker: CircuitBreaker) -> None:
         breaker.force_open()
         await asyncio.sleep(2.1)
         await breaker.before_call()  # Transitions to half-open
         await breaker.record_success()
         assert breaker.state == CircuitState.CLOSED
 
-    async def test_half_open_to_open_on_probe_failure(
-        self, breaker: CircuitBreaker
-    ) -> None:
+    async def test_half_open_to_open_on_probe_failure(self, breaker: CircuitBreaker) -> None:
         breaker.force_open()
         await asyncio.sleep(2.1)
         await breaker.before_call()  # Transitions to half-open
         await breaker.record_failure("probe failed")
         assert breaker.state == CircuitState.OPEN
 
-    async def test_probe_failure_doubles_cooldown(
-        self, breaker: CircuitBreaker
-    ) -> None:
+    async def test_probe_failure_doubles_cooldown(self, breaker: CircuitBreaker) -> None:
         """PRD: cooldown doubles on each probe failure, capped at 10 min."""
         breaker.force_open()
         # First probe → fail → double cooldown
@@ -227,9 +217,7 @@ class TestStats:
 
 class TestDecisionDataclass:
     def test_decision_to_dict(self) -> None:
-        decision = BreakerDecision(
-            allowed=True, state=CircuitState.HALF_OPEN, is_probe=True
-        )
+        decision = BreakerDecision(allowed=True, state=CircuitState.HALF_OPEN, is_probe=True)
         d = {
             "allowed": decision.allowed,
             "state": decision.state.value,

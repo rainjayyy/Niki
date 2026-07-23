@@ -1,6 +1,5 @@
 """Tests for the circuit-breaker-aware LLM client."""
 
-
 import pytest
 
 from niki.resilience import (
@@ -59,24 +58,18 @@ class TestCircuitBreakerAwareClient:
             ),
         )
 
-    async def test_closed_circuit_uses_primary(
-        self, client: CircuitBreakerAwareClient
-    ) -> None:
+    async def test_closed_circuit_uses_primary(self, client: CircuitBreakerAwareClient) -> None:
         result = await client.chat(messages=[{"role": "user", "content": "hi"}])
         assert result["content"] == "primary success"
         assert client.breaker.state == CircuitState.CLOSED
 
-    async def test_failing_primary_falls_back(
-        self, client: CircuitBreakerAwareClient
-    ) -> None:
+    async def test_failing_primary_falls_back(self, client: CircuitBreakerAwareClient) -> None:
         # Swap in a failing primary
         client.primary = _FailingPrimary()
         result = await client.chat(messages=[{"role": "user", "content": "hi"}])
         assert result["content"] == "fallback success"
 
-    async def test_failing_primary_records_failure(
-        self, client: CircuitBreakerAwareClient
-    ) -> None:
+    async def test_failing_primary_records_failure(self, client: CircuitBreakerAwareClient) -> None:
         client.primary = _FailingPrimary()
         await client.chat(messages=[{"role": "user", "content": "hi"}])
         assert client.breaker.get_stats().consecutive_failures == 1
@@ -90,9 +83,7 @@ class TestCircuitBreakerAwareClient:
         await client.chat(messages=[{"role": "user", "content": "hi"}])
         assert client.breaker.state == CircuitState.OPEN
 
-    async def test_after_trip_fallback_used(
-        self, client: CircuitBreakerAwareClient
-    ) -> None:
+    async def test_after_trip_fallback_used(self, client: CircuitBreakerAwareClient) -> None:
         client.primary = _FailingPrimary()
         # Trip the breaker
         await client.chat(messages=[{"role": "user", "content": "hi"}])
@@ -169,6 +160,7 @@ class TestProbeBehavior:
         assert breaker.state == CircuitState.OPEN
         # Wait for cooldown
         import asyncio
+
         await asyncio.sleep(0.6)
         # Switch to working primary
         client.primary = _WorkingPrimary()

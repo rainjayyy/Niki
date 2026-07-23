@@ -30,9 +30,7 @@ class TestDegradationNotifier:
         await notifier.notify_active("c")
         assert notifier.state.notification_count == 3
 
-    async def test_notify_recovered_resets_state(
-        self, notifier: DegradationNotifier
-    ) -> None:
+    async def test_notify_recovered_resets_state(self, notifier: DegradationNotifier) -> None:
         await notifier.notify_active("a")
         await notifier.notify_recovered()
         assert notifier.is_active() is False
@@ -57,4 +55,4 @@ class TestDegradationNotifier:
 class TestDegradationMessage:
     def test_message_is_chinese(self) -> None:
         # PRD: message should be in Chinese (parent-facing)
-        assert any('一' <= c <= '鿿' for c in DEGRADATION_MESSAGE)
+        assert any("一" <= c <= "鿿" for c in DEGRADATION_MESSAGE)

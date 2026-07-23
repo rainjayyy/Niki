@@ -1,6 +1,5 @@
 """Tests for the age grader."""
 
-
 from niki.content_policy.grader import (
     AgeGrader,
     ContentAge,
@@ -101,6 +100,7 @@ class TestAgeGraderSuggestSimpler:
         if simpler is not None:
             # The suggested concept should have a lower min age
             from niki.content_policy.grader import CONCEPT_MIN_AGE
+
             assert int(CONCEPT_MIN_AGE[simpler]) < int(ContentAge.TEEN)
 
     def test_suggest_simpler_no_simpler(self) -> None:

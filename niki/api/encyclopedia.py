@@ -11,16 +11,16 @@ paraphrase of the L1 hit content.
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter
 
 from niki.agents.encyclopedia import EncyclopediaAgent
+from niki.api._stub_llm import _EncyclopediaStub
 from niki.knowledge.fact_checker import FactChecker
 from niki.knowledge.knowledge_base import (
     DEFAULT_L1_ENTRIES,
     KnowledgeBase,
 )
+from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
 router = APIRouter(prefix="/encyclopedia", tags=["encyclopedia"])
@@ -28,37 +28,13 @@ router = APIRouter(prefix="/encyclopedia", tags=["encyclopedia"])
 # Module-level singletons
 _kb = KnowledgeBase()
 _fact_checker = FactChecker(_kb)
-
-
-# A deterministic "LLM" stub for tests / dev: paraphrases the top hit.
-class _StubLLM:
-    """Returns a child-friendly paraphrase of the top KB hit.
-
-    Deterministic — same input + same KB → same output. This is so
-    tests can rely on stable text without real LLM calls.
-    """
-
-    async def chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.5,
-        max_tokens: int = 512,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        # Find the user message (last one) and extract KB context
-        user_msg = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        # Pull content from the "参考资料" block
-        ref_block = user_msg.split("参考资料：", 1)[1] if "参考资料：" in user_msg else user_msg
-
-        # Return the first full L1 hit content (no truncation — keeps the
-        # important keywords for the fact-checker to find).
-        if ref_block.strip():
-            return {"content": ref_block.strip()}
-        return {"content": "嗯，Niki对这个也不太确定呢~"}
+# ISS-02: a shared input gateway so self-harm / blacklisted topics
+# trigger parent alert even when calling the agent directly (not via /chat).
+_input_gateway = InputSafetyGateway()
 
 
 _agent = EncyclopediaAgent(
-    llm=_StubLLM(),
+    llm=_EncyclopediaStub(),
     knowledge_base=_kb,
     fact_checker=_fact_checker,
     persona="gentle",
@@ -66,23 +42,62 @@ _agent = EncyclopediaAgent(
 )
 
 
+# ISS-08: agent cache keyed by child_age so concurrent requests
+# with different ages don't trample each other.
+_agent_cache: dict[int, EncyclopediaAgent] = {}
+
+
+def _get_agent(child_age: int) -> EncyclopediaAgent:
+    """Return a per-child_age agent instance (cached)."""
+    if child_age not in _agent_cache:
+        _agent_cache[child_age] = EncyclopediaAgent(
+            llm=_EncyclopediaStub(),
+            knowledge_base=_kb,
+            fact_checker=_fact_checker,
+            persona="gentle",
+            child_age=child_age,
+        )
+    return _agent_cache[child_age]
+
+
 @router.post("/ask")
 async def ask_question(payload: dict) -> dict:
     """Ask an encyclopedia question.
 
     Request body: {"question": "...", "child_age": 7}
+
+    ISS-02: run the text through InputSafetyGateway first so that
+    self-harm / blacklisted topics trigger the same parent alert
+    as the orchestrator path.
     """
     question = payload.get("question", "")
     child_age = int(payload.get("child_age", 7))
 
-    # Reconfigure agent for this age if needed
-    if child_age != _agent.child_age:
-        _agent.child_age = child_age
-        _agent._age_group = _agent._resolve_age_group(child_age)
-        _agent._output_gateway = _agent._output_gateway.__class__(child_age=child_age)
+    # ISS-02: safety gate before agent dispatch
+    safety_verdict = await _input_gateway.check(question)
+    if safety_verdict.is_blocked:
+        return {
+            "text": "嗯…这个问题Niki还没想好怎么回答呢~",
+            "intent": None,
+            "emotion": "neutral",
+            "metadata": {"blocked": True, "reason": safety_verdict.matched_category},
+        }
+    if safety_verdict.is_escalation:
+        return {
+            "text": safety_verdict.sanitized_text or "Niki在这里~",
+            "intent": "encyclopedia",
+            "emotion": "caring",
+            "metadata": {
+                "parent_alert_required": True,
+                "escalation": True,
+            },
+        }
 
+    # ISS-08: use per-child_age cache to avoid concurrent requests
+    # with different ages stepping on each other.
+    agent = _get_agent(child_age)
     child_input = ChildInput(text=question, session_id="encyclopedia")
-    output = await _agent.invoke(child_input)
+    output = await agent.invoke(child_input)
 
     return {
         "text": output.text,

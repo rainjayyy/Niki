@@ -71,7 +71,9 @@ class TestFactCheckerLLMJudge:
     async def test_llm_judge_supported(self) -> None:
         class StubJudge:
             async def chat(self, *args, **kwargs):  # noqa: ANN002, ANN003
-                return {"content": '{"supported": true, "confidence": 0.92, "reason": "matches evidence"}'}
+                return {
+                    "content": '{"supported": true, "confidence": 0.92, "reason": "matches evidence"}'
+                }
 
         kb = KnowledgeBase()
         checker = FactChecker(kb, llm_judge=StubJudge(), threshold=0.5)
@@ -85,7 +87,9 @@ class TestFactCheckerLLMJudge:
     async def test_llm_judge_unsupported(self) -> None:
         class StubJudge:
             async def chat(self, *args, **kwargs):  # noqa: ANN002, ANN003
-                return {"content": '{"supported": false, "confidence": 0.95, "reason": "no support"}'}
+                return {
+                    "content": '{"supported": false, "confidence": 0.95, "reason": "no support"}'
+                }
 
         kb = KnowledgeBase()
         checker = FactChecker(kb, llm_judge=StubJudge(), threshold=0.5)

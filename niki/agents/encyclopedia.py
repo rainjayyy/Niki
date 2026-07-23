@@ -234,6 +234,8 @@ class EncyclopediaAgent(BaseAgent):
                 metadata={
                     "fact_check_failed": True,
                     "fact_check_reason": fact_check.reason,
+                    # Always include sources for consistent shape
+                    "sources": list({h.source.value for h in hits}),
                 },
             )
 

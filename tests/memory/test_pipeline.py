@@ -20,9 +20,7 @@ def pipeline() -> NightlyPipeline:
 
 
 class TestPipelineExecution:
-    async def test_run_all_steps_succeed(
-        self, pipeline: NightlyPipeline
-    ) -> None:
+    async def test_run_all_steps_succeed(self, pipeline: NightlyPipeline) -> None:
         run = await pipeline.run()
         assert run.status == PipelineStatus.SUCCESS
         assert len(run.steps) >= 5
@@ -37,9 +35,7 @@ class TestPipelineExecution:
         assert "update_emotion_window" in step_names
         assert "calculate_baseline" in step_names
 
-    async def test_step_results_have_status(
-        self, pipeline: NightlyPipeline
-    ) -> None:
+    async def test_step_results_have_status(self, pipeline: NightlyPipeline) -> None:
         run = await pipeline.run()
         for step in run.steps:
             assert step.status == StepStatus.SUCCESS
@@ -64,9 +60,7 @@ class TestPipelineRetries:
         assert broken_result.attempts == 2
         assert "forced failure" in broken_result.error
 
-    async def test_partial_run_when_some_fail(
-        self, pipeline: NightlyPipeline
-    ) -> None:
+    async def test_partial_run_when_some_fail(self, pipeline: NightlyPipeline) -> None:
         # Add one failing step in the middle
         async def always_fail(_ctx):
             raise RuntimeError("oh no")
@@ -121,5 +115,6 @@ class TestPipelineHealth:
         p._steps = [PipelineStep(name="disabled", fn=noop, enabled=False)]
         # Run via event loop in a test
         import asyncio
+
         run = asyncio.run(p.run())
         assert all(s.step_name != "disabled" for s in run.steps)

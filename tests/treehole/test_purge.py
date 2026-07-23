@@ -52,9 +52,7 @@ class TestTreeholePurger:
         assert count == 3
         assert len(store_with_old_records.summaries) == 2
 
-    async def test_purge_expired_no_old_records(
-        self, purger: TreeholePurger
-    ) -> None:
+    async def test_purge_expired_no_old_records(self, purger: TreeholePurger) -> None:
         store = TreeholeStore()
         now = datetime(2026, 7, 22)
         # Add a single recent record
@@ -80,9 +78,7 @@ class TestTreeholePurger:
         assert len(store_with_old_records.encrypted_payloads) == 0
         assert len(store_with_old_records.pending_purge) == 0
 
-    async def test_purge_all_empty_store(
-        self, purger: TreeholePurger
-    ) -> None:
+    async def test_purge_all_empty_store(self, purger: TreeholePurger) -> None:
         store = TreeholeStore()
         count = await purger.purge_all(store)
         assert count == 0

@@ -336,7 +336,9 @@ class DashboardService:
         week_end: datetime,
     ) -> WeeklyTrend:
         """Build the day-by-day valence trend for the week."""
-        daily: dict[str, float] = {}
+        # ISS-06: was typed as `dict[str, float]` but used as a
+        # list-valued accumulator. Fix the annotation.
+        daily: dict[str, list[float]] = {}
         for record in baseline.records():
             record_date = datetime.fromisoformat(record.date)
             if week_start <= record_date <= week_end:
@@ -344,7 +346,7 @@ class DashboardService:
                 if date_str not in daily:
                     daily[date_str] = []
                 # Accumulate per-day (multiple records per day → average)
-                daily[date_str].append(record.valence)  # type: ignore[index]
+                daily[date_str].append(record.valence)
 
         # Average per day
         daily_avg = {d: sum(vs) / len(vs) for d, vs in daily.items()}

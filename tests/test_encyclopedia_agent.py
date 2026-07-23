@@ -176,4 +176,8 @@ class TestEncyclopediaAgentSafetyIntegration:
         output = await agent.invoke(ChildInput(text="恐龙", session_id="safety"))
         # Fear words should be rewritten
         assert "怪物" not in output.text
-        assert "奇怪的小动物" in output.text or "不见" in output.text or output.metadata.get("was_rewritten")
+        assert (
+            "奇怪的小动物" in output.text
+            or "不见" in output.text
+            or output.metadata.get("was_rewritten")
+        )

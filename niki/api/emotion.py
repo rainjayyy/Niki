@@ -9,38 +9,27 @@ Demonstration endpoints for the #5 vertical slice:
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter
 
-from niki.agents.emotion import (
-    EmotionAgent,
-    EmotionBaseline,
-    EmotionRecord,
-)
+from niki.agents.emotion import EmotionAgent, EmotionBaseline, EmotionRecord
+from niki.api._stub_llm import _StubLLM
+from niki.dashboard.service import DashboardService
+from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
 router = APIRouter(prefix="/emotion", tags=["emotion"])
 
+# ISS-02: a shared input gateway so self-harm / blacklisted topics
+# trigger parent alert even when calling the agent directly (not via /chat).
+_input_gateway = InputSafetyGateway()
 
-# A deterministic "LLM" stub for tests + dev.
-class _StubLLM:
-    """Stub LLM that returns the canned empathy template (no real call)."""
 
-    async def chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.5,
-        max_tokens: int = 256,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        # In real life, this would be a DeepSeek-V4 reply.
-        return {"content": "Niki听到你了~"}
 
 
 # Module-level singletons
+_dashboard = DashboardService()
 _baseline = EmotionBaseline()
-_agent = EmotionAgent(
+_orchestrator = EmotionAgent(
     llm=_StubLLM(),
     baseline=_baseline,
     persona="gentle",
@@ -53,17 +42,44 @@ async def express_emotion(payload: dict) -> dict:
     """Child shares an emotional expression.
 
     Request body: {"text": "...", "child_age": 7}
+
+    ISS-02: run the text through InputSafetyGateway first so that
+    self-harm / blacklisted topics trigger the same parent alert
+    as the orchestrator path.
     """
     text = payload.get("text", "")
     child_age = int(payload.get("child_age", 7))
 
-    if child_age != _agent.child_age:
-        _agent.child_age = child_age
-        _agent._age_group = _agent._resolve_age_group(child_age)
-        _agent._output_gateway = _agent._output_gateway.__class__(child_age=child_age)
+    # ISS-02: safety gate before agent dispatch
+    safety_verdict = await _input_gateway.check(text)
+    if safety_verdict.is_blocked:
+        return {
+            "text": "嗯…这个问题Niki还没想好怎么回答呢~",
+            "intent": None,
+            "emotion": "neutral",
+            "metadata": {"blocked": True, "reason": safety_verdict.matched_category},
+        }
+    if safety_verdict.is_escalation:
+        return {
+            "text": safety_verdict.sanitized_text or "Niki在这里~",
+            "intent": "emotional",
+            "emotion": "caring",
+            "metadata": {
+                "parent_alert_required": True,
+                "escalation": True,
+            },
+        }
 
+    # ISS-08: use a per-call fresh agent so concurrent requests with
+    # different child_ages don't mutate the singleton state.
+    fresh_agent = EmotionAgent(
+        llm=_StubLLM(),
+        baseline=_baseline,
+        persona="gentle",
+        child_age=child_age,
+    )
     child_input = ChildInput(text=text, session_id="emotion")
-    output = await _agent.invoke(child_input)
+    output = await fresh_agent.invoke(child_input)
 
     return {
         "text": output.text,
@@ -75,7 +91,7 @@ async def express_emotion(payload: dict) -> dict:
 
 @router.get("/baseline")
 async def get_baseline() -> dict:
-    """View the current 7-day baseline statistics."""
+    """Get baseline statistics."""
     stats = _baseline.window_stats()
     return {
         "window_days": stats.window_days,
@@ -99,7 +115,7 @@ async def get_baseline() -> dict:
 @router.post("/proactive-care")
 async def proactive_care_check() -> dict:
     """Run the 8pm proactive-care check (PRD #12)."""
-    care = _agent.run_proactive_care()
+    care = _orchestrator.run_proactive_care()
     if care is None:
         return {
             "should_care": False,
@@ -122,7 +138,7 @@ async def proactive_care_check() -> dict:
 @router.get("/good-night")
 async def good_night() -> dict:
     """Short good-night greeting (PRD #16)."""
-    output = _agent.good_night()
+    output = _orchestrator.good_night()
     return {
         "text": output.text,
         "metadata": output.metadata,
@@ -140,3 +156,26 @@ async def add_baseline_record(payload: dict) -> dict:
     )
     _baseline.add(record)
     return {"status": "added", "record_count": len(_baseline.records())}
+
+
+@router.post("/events/tutoring")
+async def record_tutoring_event(payload: dict) -> dict:
+    """Record a tutoring event (for whitepaper generation)."""
+    _dashboard.record_tutoring_event(
+        child_id=payload["child_id"],
+        problem=payload["problem"],
+        solved=bool(payload.get("solved", False)),
+        safety_valve=bool(payload.get("safety_valve", False)),
+    )
+    return {"status": "recorded"}
+
+
+@router.post("/events/knowledge")
+async def record_knowledge_query(payload: dict) -> dict:
+    """Record a knowledge-base query."""
+    _dashboard.record_knowledge_query(
+        child_id=payload["child_id"],
+        question=payload["question"],
+        topic=payload.get("topic", ""),
+    )
+    return {"status": "recorded"}

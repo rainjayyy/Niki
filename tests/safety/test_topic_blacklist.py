@@ -1,6 +1,5 @@
 """Tests for the topic blacklist (PRD #41)."""
 
-
 from niki.safety.topic_blacklist import TopicBlacklist
 
 

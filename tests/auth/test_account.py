@@ -1,6 +1,5 @@
 """Tests for parent account model + validation."""
 
-
 from niki.auth.account import (
     AccountStatus,
     AuthError,

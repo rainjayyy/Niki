@@ -64,6 +64,7 @@ class TestEncryption:
 
     def test_decrypt_too_short_raises(self, encryption: TreeholeEncryption) -> None:
         import base64
+
         short = base64.b64encode(b"short").decode()
         with pytest.raises(ValueError, match="missing nonce"):
             encryption.decrypt(short)
@@ -72,6 +73,7 @@ class TestEncryption:
         ct = encryption.encrypt("test")
         # Should be valid base64
         import base64
+
         base64.b64decode(ct)  # Should not raise
 
     def test_key_from_env(self) -> None:

@@ -429,7 +429,9 @@ class EmotionAgent(BaseAgent):
             # If privacy violation, return a safe response
             response_text = "Niki觉得这个问题我们可以聊点别的呀~"
         else:
-            response_text = verdict.sanitized_text
+            # ISS-09: guard against None sanitized_text (rewrite without
+            # replacement) by falling back to the original draft.
+            response_text = verdict.sanitized_text or response_text
 
         logger.info(
             "emotion.process",

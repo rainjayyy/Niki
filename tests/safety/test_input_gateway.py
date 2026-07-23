@@ -79,6 +79,37 @@ class TestInputGatewayBlock:
         assert v.is_blocked
         assert v.matched_category == "drugs"
 
+    async def test_profanity_blocks(self, permissive_gateway: InputSafetyGateway) -> None:
+        """ISS-01: profanity must be detected and blocked."""
+        v = await permissive_gateway.check("you are a fuck")
+        assert v.is_blocked
+        assert v.matched_category == "profanity"
+
+    async def test_profanity_chinese_blocks(self, permissive_gateway: InputSafetyGateway) -> None:
+        v = await permissive_gateway.check("你他妈的")
+        assert v.is_blocked
+        assert v.matched_category == "profanity"
+
+    async def test_violence_blocks(self, permissive_gateway: InputSafetyGateway) -> None:
+        """ISS-01: violence must be detected and blocked."""
+        v = await permissive_gateway.check("I want to kill them")
+        assert v.is_blocked
+        assert v.matched_category == "violence"
+
+    async def test_violence_chinese_blocks(self, permissive_gateway: InputSafetyGateway) -> None:
+        v = await permissive_gateway.check("我要杀死你")
+        assert v.is_blocked
+        assert v.matched_category == "violence"
+
+    async def test_all_five_categories_documented(self) -> None:
+        """ISS-01: docstring says 5 categories — verify the code matches."""
+        from niki.safety.dictionaries import SENSITIVE_WORDS
+
+        expected = {"profanity", "violence", "self_harm", "sexual", "drugs"}
+        assert expected.issubset(set(SENSITIVE_WORDS.keys())), (
+            f"Missing categories: {expected - set(SENSITIVE_WORDS.keys())}"
+        )
+
     async def test_chinese_drugs_blocks(self, permissive_gateway: InputSafetyGateway) -> None:
         v = await permissive_gateway.check("毒品是什么样的")
         assert v.is_blocked

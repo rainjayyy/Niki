@@ -55,9 +55,7 @@ class TestPauseMessage:
 
 class TestNaturalExit:
     def test_natural_exit_includes_summary(self, pause: RemotePauseController) -> None:
-        msg = pause.build_natural_exit(
-            "c1", topics_visited=["恐龙", "月亮"]
-        )
+        msg = pause.build_natural_exit("c1", topics_visited=["恐龙", "月亮"])
         assert msg.show_summary is True
         assert "恐龙" in msg.summary_topics
         assert "月亮" in msg.summary_topics
@@ -65,7 +63,7 @@ class TestNaturalExit:
     def test_natural_exit_message_is_chinese(self, pause: RemotePauseController) -> None:
         msg = pause.build_natural_exit("c1")
         # Should be a friendly Chinese message
-        assert any('一' <= c <= '鿿' for c in msg.text)
+        assert any("一" <= c <= "鿿" for c in msg.text)
 
     def test_natural_exit_positive_tone(self, pause: RemotePauseController) -> None:
         """PRD #23: positive-first, never anxiety-inducing."""

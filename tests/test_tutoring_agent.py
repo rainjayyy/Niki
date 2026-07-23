@@ -277,6 +277,7 @@ class TestTutoringAgentZeroExternalTools:
     def test_no_external_tool_imports(self) -> None:
         """Sanity check: no LLM-tool-bridges in tutoring.py."""
         import niki.agents.tutoring as mod
+
         # No tool definitions like @tool or tool definitions
         assert not hasattr(mod, "tools")
         assert not hasattr(mod, "calculator")

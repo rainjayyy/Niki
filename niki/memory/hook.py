@@ -18,7 +18,7 @@ from typing import Any
 
 import structlog
 
-from niki.memory.graph import CognitiveGraph, EntityAligner, EntityNode
+from niki.memory.graph import CognitiveGraph, EntityAligner, EntityNode, RelationType
 from niki.memory.long_term import LongTermMemory, MemoryRecord, MemorySource
 
 logger = structlog.get_logger(__name__)
@@ -107,7 +107,7 @@ class DaytimeMemoryHook:
             self._graph.add_relation(
                 source=child_id,
                 target=entity.name,
-                relation="remembers",
+                relation=RelationType.REMEMBERS,
                 weight_delta=0.2,
             )
             # Persist to long-term memory

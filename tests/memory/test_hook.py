@@ -35,17 +35,13 @@ class TestEntityExtraction:
 class TestEmotionExtraction:
     async def test_extract_sad(self, hook: DaytimeMemoryHook) -> None:
         candidates = await hook.process("c1", "我今天很难过")
-        emotion_candidates = [
-            c for c in candidates if c.kind == ExtractionKind.NEW_EMOTION
-        ]
+        emotion_candidates = [c for c in candidates if c.kind == ExtractionKind.NEW_EMOTION]
         assert len(emotion_candidates) >= 1
         assert emotion_candidates[0].text == "难过"
 
     async def test_extract_happy(self, hook: DaytimeMemoryHook) -> None:
         candidates = await hook.process("c1", "我今天非常开心")
-        emotion_candidates = [
-            c for c in candidates if c.kind == ExtractionKind.NEW_EMOTION
-        ]
+        emotion_candidates = [c for c in candidates if c.kind == ExtractionKind.NEW_EMOTION]
         assert any(c.text == "开心" for c in emotion_candidates)
 
 
@@ -60,9 +56,7 @@ class TestHookSideEffects:
         # Long-term memory should have a record
         assert await hook._long_term.count() >= 1
 
-    async def test_hook_creates_remembers_relation(
-        self, hook: DaytimeMemoryHook
-    ) -> None:
+    async def test_hook_creates_remembers_relation(self, hook: DaytimeMemoryHook) -> None:
         await hook.process("c1", "我的小狗叫旺财")
         rels = hook._graph.get_relations_for("旺财")
         assert any(r.source == "c1" for r in rels)

@@ -99,6 +99,7 @@ def test_parent_pause_request(client: TestClient) -> None:
 def test_parent_has_pause(client: TestClient) -> None:
     # Use a unique child_id per test invocation
     import uuid
+
     child_id = f"test-pause-{uuid.uuid4().hex[:16]}"
     # Initially no pause
     resp = client.get(f"/api/v1/session/parent/has-pause/{child_id}")

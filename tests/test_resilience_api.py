@@ -96,4 +96,4 @@ def test_degradation_message_is_chinese(client: TestClient) -> None:
     data = resp.json()
     msg = data["message"]
     # Should contain Chinese
-    assert any('一' <= c <= '鿿' for c in msg)
+    assert any("一" <= c <= "鿿" for c in msg)
