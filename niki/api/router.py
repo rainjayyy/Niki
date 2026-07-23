@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from niki.api.auth import router as auth_router
+from niki.api.content_policy import router as content_policy_router
 from niki.api.dashboard import router as dashboard_router
 from niki.api.emotion import router as emotion_router
 from niki.api.encyclopedia import router as encyclopedia_router
@@ -56,6 +57,9 @@ api_router.include_router(treehole_router)
 
 # Session control (#12 — daily limit + remote pause + natural exit)
 api_router.include_router(session_router)
+
+# Content policy (#13 — family blacklist + age grading)
+api_router.include_router(content_policy_router)
 
 # Future routers will be added here:
 # api_router.include_router(admin_router)      # Admin & pipeline management
