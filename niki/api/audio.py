@@ -14,13 +14,18 @@ calling their SDKs.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile, status
 
 from niki.media.asr_provider import (
     ASRError,
     get_asr_provider,
+)
+from niki.media.tts_provider import (
+    TTSError,
+    get_tts_provider,
 )
 
 router = APIRouter(prefix="/audio", tags=["audio"])
@@ -88,4 +93,70 @@ async def transcribe(
         "confidence": result.confidence,
         "language": result.language,
         "audio_hash": hashlib.sha1(raw).hexdigest(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# BE-MEDIA-003: TTS synthesis
+# ---------------------------------------------------------------------------
+
+
+MAX_TEXT_CHARS = 1000
+
+
+@router.post("/synthesize")
+async def synthesize(
+    body: dict = Body(...),
+) -> dict:
+    """Synthesise speech from text and return base64-encoded audio.
+
+    JSON body fields:
+        text     (required) — up to 1000 chars
+        voice    (optional) — default "child_friendly"
+        speed    (optional) — float, default 1.0
+        language (optional) — default "zh-CN"
+
+    Response:
+        { audio_base64, mime_type, duration_ms, voice, text_hash, size_bytes }
+    """
+    text = body.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "EMPTY_TEXT", "message": "text is required"},
+        )
+    if len(text) > MAX_TEXT_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "TEXT_TOO_LONG",
+                "message": f"text exceeds {MAX_TEXT_CHARS} chars",
+                "max_chars": MAX_TEXT_CHARS,
+            },
+        )
+
+    voice = body.get("voice", "child_friendly")
+    speed = float(body.get("speed", 1.0))
+    language = body.get("language", "zh-CN")
+
+    try:
+        result = await get_tts_provider().synthesize(
+            text,
+            voice=voice,
+            speed=speed,
+            language=language,
+        )
+    except TTSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": exc.code, "message": exc.message},
+        ) from exc
+
+    return {
+        "audio_base64": base64.b64encode(result.audio).decode("ascii"),
+        "mime_type": result.mime_type,
+        "duration_ms": result.duration_ms,
+        "voice": voice,
+        "text_hash": hashlib.sha1(text.encode("utf-8")).hexdigest(),
+        "size_bytes": len(result.audio),
     }
