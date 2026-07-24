@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from niki.api.audio import router as audio_router
 from niki.api.auth import router as auth_router
+from niki.api.chat_stream import router as chat_stream_router
 from niki.api.content_policy import router as content_policy_router
 from niki.api.dashboard import router as dashboard_router
 from niki.api.emotion import router as emotion_router
@@ -44,6 +45,9 @@ api_router.include_router(emotion_router)
 
 # Chat orchestrator (#6 — composite intent end-to-end pipeline)
 api_router.include_router(chat_router)
+
+# BE-RT-001: SSE streaming
+api_router.include_router(chat_stream_router)
 
 # Parent authentication (#7 — real-name + face + consent + deletion)
 api_router.include_router(auth_router)
