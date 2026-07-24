@@ -21,8 +21,23 @@ from niki.auth import (
     AccountLifecycle,
     AuthError,
 )
-from niki.auth.account import ParentAccount
+from niki.auth.account import (
+    ParentAccount,
+    validate_phone,
+)
 from niki.auth.dependencies import get_current_parent
+from niki.auth.jwt_service import (
+    issue_access_token,
+    issue_refresh_token,
+)
+from niki.auth.sms_service import (
+    SMSCodeExpired,
+    SMSCodeInvalid,
+    SMSTooManyAttempts,
+    SMSRateLimited,
+    get_sms_service,
+)
+from niki.config.settings import get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -187,4 +202,101 @@ async def get_consent_document(consent_type: str) -> dict:
         "type": "child",
         "version": consent.CHILD_DOC_VERSION,
         "text": consent.get_child_document(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# BE-AUTH-002: SMS-code login (mock provider)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/sms/send")
+async def sms_send(payload: dict) -> dict:
+    """Send a 6-digit SMS code to `phone`.
+
+    Dev mode echoes the code back so the frontend can use it directly;
+    production deployments must NOT return the code in the response.
+    """
+    phone = payload.get("phone")
+    if not phone or not validate_phone(phone):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_PHONE_FORMAT"},
+        )
+    try:
+        code = await get_sms_service().send(phone)
+    except SMSRateLimited as exc:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": exc.code,
+                "message": exc.message,
+                "retry_after_seconds": int(exc.retry_after_seconds),
+            },
+        ) from exc
+    settings = get_settings()
+    body: dict = {"phone": phone, "status": "sent"}
+    if settings.debug:
+        # Echo the code in DEBUG only; production must NEVER do this.
+        body["dev_code"] = code
+    return body
+
+
+@router.post("/sms/login")
+async def sms_login(payload: dict) -> dict:
+    """Verify the SMS code and issue a JWT access + refresh pair.
+
+    On a brand-new phone the lifecycle auto-creates a PENDING account
+    so login doubles as first-time signup.
+    """
+    phone = payload.get("phone")
+    code = payload.get("code")
+    if not phone or not validate_phone(phone):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_PHONE_FORMAT"},
+        )
+    if not code or not isinstance(code, str) or len(code) != 6:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "SMS_CODE_INVALID"},
+        )
+
+    try:
+        await get_sms_service().verify(phone, code)
+    except (SMSCodeInvalid, SMSCodeExpired, SMSTooManyAttempts) as exc:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": exc.code, "message": exc.message},
+        ) from exc
+
+    # Find or auto-create the account.
+    account = await _lifecycle.find_by_phone(phone)
+    if account is None:
+        # Auto-create PENDING parent. BE-AUTH-002 v1 placeholder: id_number
+        # uses a fixed valid value to satisfy format validation; the
+        # followup ticket (BE-AUTH-002-followup) adds a proper guided
+        # ID-verification flow.
+        try:
+            account, _ = await _lifecycle.start_signup(
+                name=f"家长{phone[-4:]}",
+                id_number="110101199003078811",
+                phone=phone,
+            )
+        except AuthError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": exc.code, "message": exc.message},
+            ) from exc
+
+    settings = get_settings()
+    access = issue_access_token(account.id)
+    refresh = issue_refresh_token(account.id)
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type": "Bearer",
+        "expires_in": settings.jwt_access_ttl_seconds,
+        "parent_id": account.id,
+        "account_status": account.status.value,
     }

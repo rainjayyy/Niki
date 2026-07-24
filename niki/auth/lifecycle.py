@@ -308,6 +308,17 @@ class AccountLifecycle:
     async def list_accounts(self) -> list[ParentAccount]:
         return await self._repo.list_all()
 
+    async def find_by_phone(self, phone: str) -> ParentAccount | None:
+        """BE-AUTH-002: SMS-login lookup by E.164 phone.
+
+        Hashes the phone (same scheme as repo.create) so the source-of-
+        truth store never sees the raw value.
+        """
+        from niki.db.repositories.account_repo import AccountRepository as _AR
+
+        phone_hash = _AR.hash_field(phone) if hasattr(_AR, "hash_field") else phone
+        return await self._repo.get_by_phone_hash(phone_hash)
+
     def get_consent_manager(self) -> ConsentManager:
         return self._consent
 

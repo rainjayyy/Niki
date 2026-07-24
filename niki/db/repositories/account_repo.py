@@ -359,9 +359,17 @@ class InMemoryAccountRepository(AccountRepository):
 
     def __init__(self) -> None:
         self._parents: dict[str, ParentAccount] = {}
+        self._phone_to_id: dict[str, str] = {}  # phone_hash -> parent_id (BE-AUTH-002)
         self._progress: dict[str, "SignupProgress"] = {}
 
     async def get(self, parent_id: str) -> ParentAccount | None:
+        return self._parents.get(parent_id)
+
+    async def get_by_phone_hash(self, phone_hash: str) -> ParentAccount | None:
+        """BE-AUTH-002: lookup account by phone hash (SMS login)."""
+        parent_id = self._phone_to_id.get(phone_hash)
+        if parent_id is None:
+            return None
         return self._parents.get(parent_id)
 
     async def create(
@@ -384,6 +392,8 @@ class InMemoryAccountRepository(AccountRepository):
             status=AccountStatus.PENDING,
         )
         self._parents[parent_id] = account
+        # BE-AUTH-002: secondary index by phone hash for SMS-login lookup.
+        self._phone_to_id[self.hash_field(phone)] = parent_id
         self._progress[parent_id] = SignupProgress(
             parent_id=parent_id,
             steps=[
@@ -432,7 +442,12 @@ class InMemoryAccountRepository(AccountRepository):
         acc.deletion_completed_at = datetime.now(timezone.utc)
 
     async def delete(self, parent_id: str) -> None:
-        self._parents.pop(parent_id, None)
+        parent = self._parents.pop(parent_id, None)
+        if parent is not None:
+            # BE-AUTH-002: also drop the phone hash index entry.
+            for ph, pid in list(self._phone_to_id.items()):
+                if pid == parent_id:
+                    self._phone_to_id.pop(ph, None)
         self._progress.pop(parent_id, None)
 
     async def list_all(self) -> list[ParentAccount]:
