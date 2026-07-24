@@ -106,10 +106,10 @@ async def signup_consent(payload: dict) -> dict:
 
 @router.get("/me/{parent_id}")
 async def get_account(parent_id: str) -> dict:
-    account = _lifecycle.get_account(parent_id)
+    account = await _lifecycle.get_account(parent_id)
     if account is None:
         raise HTTPException(status_code=404, detail={"error": "NOT_FOUND"})
-    progress = _lifecycle.get_progress(parent_id)
+    progress = await _lifecycle.get_progress(parent_id)
     return {
         "account": account.to_dict(),
         "progress": (

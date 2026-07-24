@@ -103,7 +103,17 @@ class ParentAccount:
             return None
         if self.deletion_requested_at is None:
             return None
-        elapsed = datetime.utcnow() - self.deletion_requested_at
+        # BE-STOR-001: tz-aware vs naive safety net. `deletion_requested_at`
+        # may be aware (Postgres-backed) or naive (legacy in-memory);
+        # align both sides before subtracting.
+        requested = self.deletion_requested_at
+        if requested.tzinfo is None:
+            now = datetime.utcnow()
+        else:
+            from datetime import timezone as _tz
+
+            now = datetime.now(_tz.utc)
+        elapsed = now - requested
         remaining = 30 - elapsed.days
         return max(0, remaining)
 

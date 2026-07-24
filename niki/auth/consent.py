@@ -202,6 +202,20 @@ class ConsentManager:
         """Get all consent records for a parent."""
         return [r for r in self._records.values() if r.parent_id == parent_id]
 
+    def purge_for_parent(self, parent_id: str) -> int:
+        """Erase all consent records for the given parent (ISS-04 / PRD #35).
+
+        Returns:
+            Number of records removed.
+        """
+        before = len(self._records)
+        self._records = {
+            rid: rec
+            for rid, rec in self._records.items()
+            if rec.parent_id != parent_id
+        }
+        return before - len(self._records)
+
     @staticmethod
     def _make_id(parent_id: str, consent_type: ConsentType) -> str:
         """Generate a deterministic consent record id."""

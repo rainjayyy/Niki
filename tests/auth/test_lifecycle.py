@@ -86,7 +86,7 @@ class TestFullSignupFlow:
             device_fingerprint="abc123",
         )
         # Re-fetch to get updated status
-        updated = lifecycle.get_account(account.id)
+        updated = await lifecycle.get_account(account.id)
         assert updated.status == AccountStatus.VERIFIED
         assert updated.is_verified is True
         assert updated.verified_at is not None
@@ -161,7 +161,7 @@ class TestDeletionFlow:
         assert deleted.status == AccountStatus.DELETED
         assert deleted.deletion_completed_at is not None
         # Account should no longer be in storage
-        assert lifecycle.get_account(account.id) is None
+        assert await lifecycle.get_account(account.id) is None
 
     async def test_complete_deletion_without_request_raises(
         self, lifecycle: AccountLifecycle
@@ -189,10 +189,12 @@ class TestAccountLookup:
             id_number="110101199003078811",
             phone="13800138000",
         )
-        assert lifecycle.get_account(account.id) is account
+        fetched = await lifecycle.get_account(account.id)
+        assert fetched is not None
+        assert fetched.id == account.id
 
     async def test_get_nonexistent(self, lifecycle: AccountLifecycle) -> None:
-        assert lifecycle.get_account("nonexistent") is None
+        assert await lifecycle.get_account("nonexistent") is None
 
     async def test_list_accounts(self, lifecycle: AccountLifecycle) -> None:
         await lifecycle.start_signup(
@@ -205,8 +207,8 @@ class TestAccountLookup:
             id_number="110101199003078812",
             phone="13800138001",
         )
-        accounts = lifecycle.list_accounts()
+        accounts = await lifecycle.list_accounts()
         assert len(accounts) == 2
 
-    def test_progress_for_unknown_account(self, lifecycle: AccountLifecycle) -> None:
-        assert lifecycle.get_progress("nonexistent") is None
+    async def test_progress_for_unknown_account(self, lifecycle: AccountLifecycle) -> None:
+        assert await lifecycle.get_progress("nonexistent") is None
