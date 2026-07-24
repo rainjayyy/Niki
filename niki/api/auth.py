@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from niki.auth import (
     AccountLifecycle,
@@ -27,8 +27,11 @@ from niki.auth.account import (
 )
 from niki.auth.dependencies import get_current_parent
 from niki.auth.jwt_service import (
+    JWTError,
+    TokenType,
     issue_access_token,
     issue_refresh_token,
+    verify_token,
 )
 from niki.auth.sms_service import (
     SMSCodeExpired,
@@ -36,6 +39,9 @@ from niki.auth.sms_service import (
     SMSTooManyAttempts,
     SMSRateLimited,
     get_sms_service,
+)
+from niki.auth.token_blacklist import (
+    get_blacklist,
 )
 from niki.config.settings import get_settings
 
@@ -300,3 +306,101 @@ async def sms_login(payload: dict) -> dict:
         "parent_id": account.id,
         "account_status": account.status.value,
     }
+
+
+# ---------------------------------------------------------------------------
+# BE-AUTH-003: refresh token rotation
+# ---------------------------------------------------------------------------
+
+
+@router.post("/refresh")
+async def refresh(payload: dict) -> dict:
+    """Trade a refresh token for a fresh access + refresh pair.
+
+    The presented refresh token is verified (signature + type + expiry)
+    and, on success, immediately revoked so it cannot be re-used.
+    A NEW refresh token is issued (rotation).
+    """
+    refresh_token = payload.get("refresh_token")
+    if not refresh_token or not isinstance(refresh_token, str):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_REFRESH_TOKEN", "message": "refresh_token required"},
+        )
+
+    try:
+        claims = verify_token(
+            refresh_token,
+            TokenType.REFRESH,
+            is_revoked=get_blacklist().is_revoked_sync,
+        )
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": exc.code, "message": exc.message},
+        ) from exc
+
+    parent_id = claims["sub"]
+    old_jti = claims.get("jti")
+
+    # Revoke the old refresh token BEFORE issuing new ones so a replay
+    # of `refresh_token` is impossible even within the same request.
+    if old_jti:
+        await get_blacklist().revoke(old_jti)
+
+    new_access = issue_access_token(parent_id)
+    new_refresh = issue_refresh_token(parent_id)
+    return {
+        "access_token": new_access,
+        "refresh_token": new_refresh,
+        "token_type": "Bearer",
+        "expires_in": get_settings().jwt_access_ttl_seconds,
+        "parent_id": parent_id,
+    }
+
+
+# ---------------------------------------------------------------------------
+# BE-AUTH-004: logout (blacklist the access jti)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/logout")
+async def logout(
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> dict:
+    """Revoke the presented access token by jti.
+
+    The Depends() above has already validated the token's signature,
+    type, expiry and revocation status; reaching this handler means
+    the token was valid at request time. We now add its jti to the
+    blacklist so the same token cannot be used again.
+
+    Idempotent: re-logging-out the same token returns 200 (the
+    blacklist check is `is_revoked_sync`, so already-revoked tokens
+    would have been rejected by the dep with 401; this 200 only fires
+    for tokens that were still valid).
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        # Should be impossible — the dep would have raised 401.
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "MISSING_TOKEN", "message": "Bearer token required"},
+        )
+    token = authorization[7:].strip()
+    try:
+        claims = verify_token(
+            token,
+            TokenType.ACCESS,
+            is_revoked=get_blacklist().is_revoked_sync,
+        )
+    except JWTError:
+        # Dep already validated; this is purely defensive.
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "INVALID_TOKEN"},
+        )
+    jti = claims.get("jti")
+    if jti:
+        await get_blacklist().revoke(jti)
+    return {"status": "logged_out", "parent_id": parent.id, "revoked_jti": jti}
