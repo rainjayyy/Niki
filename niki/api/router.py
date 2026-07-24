@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from niki.api.audio import router as audio_router
 from niki.api.auth import router as auth_router
 from niki.api.content_policy import router as content_policy_router
 from niki.api.dashboard import router as dashboard_router
@@ -25,6 +26,9 @@ api_router.include_router(health_router)
 
 # Safety pipeline (#1 vertical slice)
 api_router.include_router(safety_router)
+
+# BE-MEDIA-002: Audio (ASR + future TTS)
+api_router.include_router(audio_router)
 
 # Routing pipeline (#2 vertical slice)
 api_router.include_router(routing_router)
