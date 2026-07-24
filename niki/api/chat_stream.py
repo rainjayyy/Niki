@@ -18,10 +18,11 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Body, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from niki.infrastructure.llm.streaming import get_streaming_provider
+from niki.middleware.rate_limit import limiter
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -74,7 +75,9 @@ async def _sse_generator(
 
 
 @router.post("/stream")
+@limiter.limit("30/minute")
 async def chat_stream(
+    request: Request,
     body: dict = Body(...),
 ) -> StreamingResponse:
     """Stream a chat reply via Server-Sent Events.

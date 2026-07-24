@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from niki.config.settings import Settings, get_settings
+from niki.middleware.rate_limit import reset_for_tests
 from niki.main import create_app
 
 
@@ -27,6 +28,16 @@ def settings() -> Settings:
     Override with test-specific values.
     """
     return get_settings()
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limit() -> None:
+    """Clear the in-process slowapi limiter between tests so that
+    cross-test accumulation (e.g. 4 fixture calls to /sms/login
+    across 4 tests tripping the 10/minute cap) doesn't cause flakes."""
+    reset_for_tests()
+    yield
+    reset_for_tests()
 
 
 @pytest.fixture(scope="module")

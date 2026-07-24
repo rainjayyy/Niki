@@ -54,6 +54,7 @@ dependencies = [
 
     # Utilities
     "python-multipart>=0.0.12",
+    "slowapi>=0.1.9",            # BE-API-002 rate limiting
 ]
 
 [project.optional-dependencies]

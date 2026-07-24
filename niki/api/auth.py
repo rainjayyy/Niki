@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from niki.auth import (
     AccountLifecycle,
@@ -44,6 +44,7 @@ from niki.auth.token_blacklist import (
     get_blacklist,
 )
 from niki.config.settings import get_settings
+from niki.middleware.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -217,7 +218,8 @@ async def get_consent_document(consent_type: str) -> dict:
 
 
 @router.post("/sms/send")
-async def sms_send(payload: dict) -> dict:
+@limiter.limit("3/minute")
+async def sms_send(request: Request, payload: dict) -> dict:
     """Send a 6-digit SMS code to `phone`.
 
     Dev mode echoes the code back so the frontend can use it directly;
@@ -249,7 +251,8 @@ async def sms_send(payload: dict) -> dict:
 
 
 @router.post("/sms/login")
-async def sms_login(payload: dict) -> dict:
+@limiter.limit("10/minute")
+async def sms_login(request: Request, payload: dict) -> dict:
     """Verify the SMS code and issue a JWT access + refresh pair.
 
     On a brand-new phone the lifecycle auto-creates a PENDING account
@@ -314,7 +317,8 @@ async def sms_login(payload: dict) -> dict:
 
 
 @router.post("/refresh")
-async def refresh(payload: dict) -> dict:
+@limiter.limit("60/minute")
+async def refresh(request: Request, payload: dict) -> dict:
     """Trade a refresh token for a fresh access + refresh pair.
 
     The presented refresh token is verified (signature + type + expiry)

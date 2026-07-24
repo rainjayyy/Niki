@@ -20,6 +20,7 @@ from niki.infrastructure.postgres import PostgresClient
 from niki.infrastructure.redis import RedisClient
 from niki.middleware.cors import setup_cors
 from niki.middleware.error_handler import setup_error_handlers
+from niki.middleware.rate_limit import setup_rate_limit
 
 logger = structlog.get_logger(__name__)
 
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
     # Middleware
     setup_cors(app)
     setup_error_handlers(app)
+    setup_rate_limit(app)
 
     # Routes
     app.include_router(api_router)

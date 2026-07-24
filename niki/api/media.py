@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import base64
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from niki.media.storage import (
     EmptyFileError,
@@ -23,12 +23,15 @@ from niki.media.storage import (
     get_media_storage,
     _category_for,
 )
+from niki.middleware.rate_limit import limiter
 
 router = APIRouter(prefix="/media", tags=["media"])
 
 
 @router.post("/upload")
+@limiter.limit("20/minute")
 async def upload(
+    request: Request,
     file: UploadFile = File(...),
 ) -> dict:
     """Receive a file upload and store it via the active MediaStorage.

@@ -17,7 +17,7 @@ from __future__ import annotations
 import base64
 import hashlib
 
-from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile, status
 
 from niki.media.asr_provider import (
     ASRError,
@@ -27,6 +27,7 @@ from niki.media.tts_provider import (
     TTSError,
     get_tts_provider,
 )
+from niki.middleware.rate_limit import limiter
 
 router = APIRouter(prefix="/audio", tags=["audio"])
 
@@ -46,7 +47,9 @@ def _audio_too_large(size: int) -> HTTPException:
 
 
 @router.post("/transcribe")
+@limiter.limit("30/minute")
 async def transcribe(
+    request: Request,
     audio: UploadFile = File(...),
     language: str = Form(default="zh-CN"),
     child_age: int | None = Form(default=None),
@@ -105,7 +108,9 @@ MAX_TEXT_CHARS = 1000
 
 
 @router.post("/synthesize")
+@limiter.limit("60/minute")
 async def synthesize(
+    request: Request,
     body: dict = Body(...),
 ) -> dict:
     """Synthesise speech from text and return base64-encoded audio.
