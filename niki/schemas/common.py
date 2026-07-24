@@ -30,12 +30,51 @@ class HealthResponse(BaseModel):
 
 
 class APIResponse(BaseModel, Generic[T]):
-    """Standard API response wrapper."""
+    """Standard API response wrapper — BE-API-001 §6.3.
+
+    Success shape:
+        {"success": true, "data": {...}, "request_id": "uuid"}
+
+    Error shape (BE-API-001 §6.3):
+        {"success": false,
+         "error": {"code": "INVALID_PHONE_FORMAT",
+                   "message": "phone format invalid",
+                   "detail": {...}              # optional
+                  },
+         "request_id": "uuid"}
+
+    Back-compat fields (kept so old frontends keep working):
+        error_code   - flat string, mirrors error.code
+        error_detail - flat dict, mirrors error.detail
+
+    BE-API-001 升级版：新前端用 `error.code`；老前端继续读 `error` (字符串)
+    与 `error_code` 任一可用。
+    """
 
     success: bool = True
     data: T | None = None
-    error: str | None = None
+    error: str | dict[str, Any] | None = None
+    error_code: str | None = None
+    error_detail: dict[str, Any] | None = None
     request_id: str | None = None
+
+    @classmethod
+    def from_error(
+        cls,
+        *,
+        code: str,
+        message: str,
+        request_id: str | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> "APIResponse":
+        """Helper to build a structured error response."""
+        return cls(
+            success=False,
+            error={"code": code, "message": message, "detail": detail or {}},
+            error_code=code,
+            error_detail=detail,
+            request_id=request_id,
+        )
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
