@@ -13,12 +13,16 @@ Demonstration endpoints for the #7 vertical slice:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
 
 from niki.auth import (
     AccountLifecycle,
     AuthError,
 )
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -102,6 +106,23 @@ async def signup_consent(payload: dict) -> dict:
         raise HTTPException(status_code=400, detail=_error_response(exc)) from exc
 
     return {"account": account.to_dict()}
+
+
+@router.get("/whoami")
+async def whoami(
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+) -> dict:
+    """BE-AUTH-001 demo endpoint — proves the JWT dependency works.
+
+    Returns the authenticated caller's account id from the JWT subject.
+    Production endpoints should call get_full_parent (which looks up
+    the real account from AccountLifecycle) instead of this stub.
+    """
+    return {
+        "parent_id": parent.id,
+        "name": parent.name,
+        "status": parent.status.value if hasattr(parent.status, "value") else parent.status,
+    }
 
 
 @router.get("/me/{parent_id}")

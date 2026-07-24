@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     aes_encryption_key: str = ""
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
+    # BE-AUTH-001: token TTLs. Access tokens are short-lived (1h); refresh
+    # tokens last 30 days and are only used by POST /auth/refresh.
+    jwt_access_ttl_seconds: int = 3600
+    jwt_refresh_ttl_seconds: int = 30 * 24 * 3600
 
     # --- Session defaults ---
     default_daily_limit_minutes: int = 60
