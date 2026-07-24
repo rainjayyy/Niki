@@ -10,6 +10,7 @@ from niki.api.dashboard import router as dashboard_router
 from niki.api.emotion import router as emotion_router
 from niki.api.encyclopedia import router as encyclopedia_router
 from niki.api.health import router as health_router
+from niki.api.media import router as media_router
 from niki.api.memory import router as memory_router
 from niki.api.orchestrator import router as chat_router
 from niki.api.resilience import router as resilience_router
@@ -30,6 +31,9 @@ api_router.include_router(safety_router)
 
 # BE-MEDIA-002: Audio (ASR + future TTS)
 api_router.include_router(audio_router)
+
+# BE-MEDIA-001: Generic file upload
+api_router.include_router(media_router)
 
 # Routing pipeline (#2 vertical slice)
 api_router.include_router(routing_router)
