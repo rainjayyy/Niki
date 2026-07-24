@@ -62,6 +62,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",               # TestClient for FastAPI
+    "aiosqlite>=0.20.0",           # BE-STOR-001: SQLite-async for tests
     "ruff>=0.7.0",
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
