@@ -14,6 +14,7 @@ from niki.api.router import api_router
 from niki.config.logging_config import configure_logging
 from niki.config.settings import get_settings
 from niki.infrastructure.chroma import ChromaClient
+from niki.infrastructure.heartbeat import HeartbeatService
 from niki.infrastructure.neo4j import Neo4jClient
 from niki.infrastructure.postgres import PostgresClient
 from niki.infrastructure.redis import RedisClient
@@ -62,6 +63,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning("app.neo4j_unavailable", error=str(exc))
 
+    # BE-STOR-002: start background heartbeats for the four clients.
+    heartbeat = HeartbeatService()
+    heartbeat.register("postgres", PostgresClient.health_check, interval_seconds=30)
+    heartbeat.register("redis", RedisClient.health_check, interval_seconds=30)
+    heartbeat.register("chroma", ChromaClient.health_check, interval_seconds=60)
+    heartbeat.register("neo4j", Neo4jClient.health_check, interval_seconds=30)
+    await heartbeat.start()
+    app.state.heartbeat = heartbeat
+
     logger.info("app.started")
 
     # ===== Yield to application =====
@@ -69,6 +79,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # ===== Shutdown =====
     logger.info("app.stopping")
+
+    if hasattr(app.state, "heartbeat"):
+        await heartbeat.stop()
 
     await RedisClient.close()
     await PostgresClient.close()

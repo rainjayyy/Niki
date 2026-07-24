@@ -53,6 +53,9 @@ class Neo4jClient:
                 max_connection_lifetime=3600,
                 max_connection_pool_size=20,
                 connection_acquisition_timeout=10,
+                # BE-STOR-002: keep TCP+bolt heartbeat enabled so long-idle
+                # sessions don't silently die after the 1h default.
+                keep_alive=True,
             )
             # Verify connectivity
             await cls._driver.verify_connectivity()
