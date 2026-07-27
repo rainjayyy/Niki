@@ -19,8 +19,13 @@ from niki.main import create_app
 
 
 @pytest.fixture
-def client() -> TestClient:
-    """Build a fresh app per test to keep state isolated."""
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """Build a fresh app per test to keep state isolated.
+
+    Unset NIKI_TEST_FAKE_AUTH so the real JWT flow runs (these tests
+    explicitly verify token handling — they need the REAL dep).
+    """
+    monkeypatch.delenv("NIKI_TEST_FAKE_AUTH", raising=False)
     # Reset the process blacklist to a clean instance.
     set_blacklist(InMemoryTokenBlacklist())
     return TestClient(create_app())

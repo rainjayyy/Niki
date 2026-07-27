@@ -15,8 +15,12 @@ from niki.main import create_app
 
 
 @pytest.fixture
-def client() -> TestClient:
-    """Per-test isolated app + lifecycle + SMS service."""
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """Per-test isolated app + lifecycle + SMS service.
+
+    Unset NIKI_TEST_FAKE_AUTH so the issued JWT works against /auth/whoami.
+    """
+    monkeypatch.delenv("NIKI_TEST_FAKE_AUTH", raising=False)
     api_auth._lifecycle = AccountLifecycle()
     set_sms_service(InMemorySMSCodeService())
     return TestClient(create_app())

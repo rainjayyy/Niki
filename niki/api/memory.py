@@ -19,6 +19,10 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi import Depends
+
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 from niki.memory import (
     CognitiveGraph,
@@ -54,7 +58,8 @@ def _turn_to_dict(turn: ConversationTurn) -> dict[str, Any]:
 
 
 @router.get("/short-term/{session_id}")
-async def get_recent_turns(session_id: str) -> dict:
+async def get_recent_turns(session_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get recent conversation turns for a session."""
     turns = await _short_term.get_recent(session_id)
     return {
@@ -65,7 +70,8 @@ async def get_recent_turns(session_id: str) -> dict:
 
 
 @router.post("/short-term/{session_id}")
-async def append_turn(session_id: str, payload: dict) -> dict:
+async def append_turn(session_id: str, payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Append a turn to the session's recent memory."""
     turn = ConversationTurn(
         role=payload.get("role", "child"),
@@ -82,14 +88,16 @@ async def append_turn(session_id: str, payload: dict) -> dict:
 
 
 @router.delete("/short-term/{session_id}")
-async def clear_session(session_id: str) -> dict:
+async def clear_session(session_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Clear a session's recent memory."""
     await _short_term.clear(session_id)
     return {"session_id": session_id, "cleared": True}
 
 
 @router.post("/long-term/add")
-async def add_long_term_record(payload: dict) -> dict:
+async def add_long_term_record(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a memory record to long-term storage."""
     record = MemoryRecord(
         id=payload.get("id", ""),
@@ -110,7 +118,8 @@ async def add_long_term_record(payload: dict) -> dict:
 
 
 @router.post("/long-term/search")
-async def search_long_term(payload: dict) -> dict:
+async def search_long_term(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Semantic search over long-term memory."""
     records = await _long_term.search(
         query=payload["query"],
@@ -125,7 +134,7 @@ async def search_long_term(payload: dict) -> dict:
 
 
 @router.get("/graph/entities")
-async def list_entities() -> dict:
+async def list_entities(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """List all entities in the cognitive graph."""
     entities = _graph.list_entities()
     return {
@@ -135,7 +144,8 @@ async def list_entities() -> dict:
 
 
 @router.post("/graph/entities")
-async def add_entity(payload: dict) -> dict:
+async def add_entity(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add an entity (with automatic alignment/dedup)."""
     entity = _hook._aligner.align(
         EntityNode(
@@ -148,7 +158,8 @@ async def add_entity(payload: dict) -> dict:
 
 
 @router.post("/graph/relations")
-async def add_relation(payload: dict) -> dict:
+async def add_relation(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a relation between two entities."""
     edge = _graph.add_relation(
         source=payload["source"],
@@ -160,14 +171,15 @@ async def add_relation(payload: dict) -> dict:
 
 
 @router.post("/graph/apply-decay")
-async def apply_time_decay() -> dict:
+async def apply_time_decay(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Apply PRD #50 time decay to all relations."""
     count = _graph.apply_decay()
     return {"decayed_edges": count}
 
 
 @router.post("/hook/process")
-async def hook_process(payload: dict) -> dict:
+async def hook_process(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Run the daytime memory hook on a child message."""
     candidates = await _hook.process(
         child_id=payload["child_id"],
@@ -188,19 +200,19 @@ async def hook_process(payload: dict) -> dict:
 
 
 @router.get("/pipeline/run")
-async def run_pipeline() -> dict:
+async def run_pipeline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Trigger a pipeline run (for testing/admin)."""
     run = await _pipeline.run()
     return run.to_dict()
 
 
 @router.get("/pipeline/health")
-async def pipeline_health() -> dict:
+async def pipeline_health(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get pipeline health status (PRD #47)."""
     return _pipeline.health_check()
 
 
 @router.get("/pipeline/dead-letter")
-async def pipeline_dead_letter() -> dict:
+async def pipeline_dead_letter(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the dead-letter queue contents (PRD #47)."""
     return {"items": _pipeline.get_dead_letter()}

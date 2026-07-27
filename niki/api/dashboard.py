@@ -12,6 +12,10 @@ Demonstration endpoints for the #8 vertical slice:
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi import Depends
+
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 from niki.agents.emotion import EmotionBaseline, EmotionRecord
 from niki.dashboard.service import DashboardService
@@ -24,7 +28,8 @@ _baseline = EmotionBaseline()
 
 
 @router.get("/weekly-report/{child_id}")
-async def weekly_report(child_id: str) -> dict:
+async def weekly_report(child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the weekly emotion report (PRD #24)."""
     report = _dashboard.generate_weekly_report(
         child_id=child_id,
@@ -34,27 +39,31 @@ async def weekly_report(child_id: str) -> dict:
 
 
 @router.get("/interest/{child_id}")
-async def interest_graph(child_id: str) -> dict:
+async def interest_graph(child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the interest graph (PRD #25)."""
     graph = _dashboard.generate_interest_graph(child_id=child_id)
     return graph.to_dict()
 
 
 @router.get("/learning/{child_id}")
-async def learning_whitepaper(child_id: str) -> dict:
+async def learning_whitepaper(child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the learning whitepaper (PRD #26)."""
     paper = _dashboard.generate_learning_whitepaper(child_id=child_id)
     return paper.to_dict()
 
 
 @router.get("/alerts/{child_id}")
-async def get_alerts(child_id: str) -> dict:
+async def get_alerts(child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get pending alerts (PRD #27, #29)."""
     return _dashboard.get_pending_alerts(child_id=child_id)
 
 
 @router.post("/alerts/record/safety-valve")
-async def record_safety_valve(payload: dict) -> dict:
+async def record_safety_valve(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring safety-valve trigger."""
     alert = _dashboard.record_safety_valve(
         child_id=payload["child_id"],
@@ -65,7 +74,8 @@ async def record_safety_valve(payload: dict) -> dict:
 
 
 @router.post("/alerts/record/high-risk")
-async def record_high_risk(payload: dict) -> dict:
+async def record_high_risk(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a high-risk signal (self-harm, etc.)."""
     alert = _dashboard.record_high_risk(
         child_id=payload["child_id"],
@@ -79,14 +89,16 @@ async def record_high_risk(payload: dict) -> dict:
 
 
 @router.post("/alerts/{alert_id}/delivered")
-async def mark_alert_delivered(alert_id: str) -> dict:
+async def mark_alert_delivered(alert_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Mark a high-risk alert as delivered."""
     success = _dashboard.mark_alert_delivered(alert_id)
     return {"alert_id": alert_id, "delivered": success}
 
 
 @router.post("/baseline/add")
-async def add_baseline_record(payload: dict) -> dict:
+async def add_baseline_record(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a baseline record (for testing/demo)."""
     record = EmotionRecord(
         date=payload["date"],
@@ -99,7 +111,8 @@ async def add_baseline_record(payload: dict) -> dict:
 
 
 @router.post("/events/tutoring")
-async def record_tutoring_event(payload: dict) -> dict:
+async def record_tutoring_event(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
     _dashboard.record_tutoring_event(
         child_id=payload["child_id"],
@@ -111,7 +124,8 @@ async def record_tutoring_event(payload: dict) -> dict:
 
 
 @router.post("/events/knowledge")
-async def record_knowledge_query(payload: dict) -> dict:
+async def record_knowledge_query(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a knowledge-base query."""
     _dashboard.record_knowledge_query(
         child_id=payload["child_id"],

@@ -12,6 +12,10 @@ Demonstration endpoints for the #11 vertical slice:
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi import Depends
+
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 from niki.treehole import (
     TreeholeManager,
@@ -27,7 +31,8 @@ _purger = TreeholePurger()
 
 
 @router.post("/engage")
-async def engage(payload: dict) -> dict:
+async def engage(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Engage treehole mode for a child message.
 
     Request body:
@@ -64,7 +69,8 @@ async def engage(payload: dict) -> dict:
 
 
 @router.get("/summaries/{child_id}")
-async def list_summaries(child_id: str) -> dict:
+async def list_summaries(child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """List stored treehole summaries (parent dashboard)."""
     summaries = await _manager.list_summaries()
     # Filter to the requested child
@@ -77,35 +83,36 @@ async def list_summaries(child_id: str) -> dict:
 
 
 @router.post("/aggregate")
-async def aggregate_baseline() -> dict:
+async def aggregate_baseline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Compute the aggregated baseline contribution from treehole data."""
     result = await _manager.aggregate_for_baseline()
     return result
 
 
 @router.post("/should-activate")
-async def should_activate(payload: dict) -> dict:
+async def should_activate(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Check if a given text would activate treehole mode."""
     text = payload.get("text", "")
     return {"activates_treehole": should_activate_treehole(text)}
 
 
 @router.post("/purge-expired")
-async def purge_expired() -> dict:
+async def purge_expired(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Run the 7-day purge (normally called by cron job)."""
     count = await _purger.purge_expired(_manager.store)
     return {"purged_count": count}
 
 
 @router.post("/purge-all")
-async def purge_all() -> dict:
+async def purge_all(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Force-purge all treehole records (for account deletion)."""
     count = await _purger.purge_all(_manager.store)
     return {"purged_count": count}
 
 
 @router.get("/store-stats")
-async def store_stats() -> dict:
+async def store_stats(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the current treehole store statistics."""
     return _manager.store.to_dict()
 

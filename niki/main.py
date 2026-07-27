@@ -4,6 +4,7 @@ Start the application:
     uvicorn niki.main:app --reload
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -108,6 +109,23 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.debug else None,
         lifespan=lifespan,
     )
+
+    # Test-only: install a fake parent override so existing tests don't
+    # need to mint real JWTs. Set NIKI_TEST_FAKE_AUTH=1 in conftest.
+    # Production should NEVER set this.
+    if os.environ.get("NIKI_TEST_FAKE_AUTH") == "1":
+        from niki.auth.dependencies import get_current_parent
+        from niki.auth.account import ParentAccount
+
+        async def _fake_parent() -> ParentAccount:
+            return ParentAccount(
+                id="test_parent",
+                name="Test Parent",
+                id_number_masked="****",
+                phone_masked="****",
+            )
+
+        app.dependency_overrides[get_current_parent] = _fake_parent
 
     # Middleware
     setup_cors(app)

@@ -18,11 +18,14 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Body, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from niki.infrastructure.llm.streaming import get_streaming_provider
 from niki.middleware.rate_limit import limiter
+from typing import Annotated
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -79,6 +82,8 @@ async def _sse_generator(
 async def chat_stream(
     request: Request,
     body: dict = Body(...),
+    *,
+    parent: ParentAccount = Depends(get_current_parent),
 ) -> StreamingResponse:
     """Stream a chat reply via Server-Sent Events.
 

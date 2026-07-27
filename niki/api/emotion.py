@@ -10,6 +10,10 @@ Demonstration endpoints for the #5 vertical slice:
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi import Depends
+
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 from niki.agents.emotion import EmotionAgent, EmotionBaseline, EmotionRecord
 from niki.api._stub_llm import _StubLLM
@@ -38,7 +42,8 @@ _orchestrator = EmotionAgent(
 
 
 @router.post("/express")
-async def express_emotion(payload: dict) -> dict:
+async def express_emotion(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Child shares an emotional expression.
 
     Request body: {"text": "...", "child_age": 7}
@@ -90,7 +95,7 @@ async def express_emotion(payload: dict) -> dict:
 
 
 @router.get("/baseline")
-async def get_baseline() -> dict:
+async def get_baseline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get baseline statistics."""
     stats = _baseline.window_stats()
     return {
@@ -113,7 +118,7 @@ async def get_baseline() -> dict:
 
 
 @router.post("/proactive-care")
-async def proactive_care_check() -> dict:
+async def proactive_care_check(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Run the 8pm proactive-care check (PRD #12)."""
     care = _orchestrator.run_proactive_care()
     if care is None:
@@ -136,7 +141,7 @@ async def proactive_care_check() -> dict:
 
 
 @router.get("/good-night")
-async def good_night() -> dict:
+async def good_night(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Short good-night greeting (PRD #16)."""
     output = _orchestrator.good_night()
     return {
@@ -146,7 +151,8 @@ async def good_night() -> dict:
 
 
 @router.post("/baseline/add")
-async def add_baseline_record(payload: dict) -> dict:
+async def add_baseline_record(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a record to the baseline (for testing/demo)."""
     record = EmotionRecord(
         date=payload["date"],
@@ -159,7 +165,8 @@ async def add_baseline_record(payload: dict) -> dict:
 
 
 @router.post("/events/tutoring")
-async def record_tutoring_event(payload: dict) -> dict:
+async def record_tutoring_event(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
     _dashboard.record_tutoring_event(
         child_id=payload["child_id"],
@@ -171,7 +178,8 @@ async def record_tutoring_event(payload: dict) -> dict:
 
 
 @router.post("/events/knowledge")
-async def record_knowledge_query(payload: dict) -> dict:
+async def record_knowledge_query(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a knowledge-base query."""
     _dashboard.record_knowledge_query(
         child_id=payload["child_id"],

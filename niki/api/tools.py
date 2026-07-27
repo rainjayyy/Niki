@@ -12,6 +12,10 @@ from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter
+from fastapi import Depends
+
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 from niki.tools import ToolAccessChecker, ToolMatrix, ToolName
 
@@ -25,7 +29,7 @@ _checker = ToolAccessChecker(_matrix)
 
 
 @router.get("/matrix")
-async def get_matrix() -> dict:
+async def get_matrix(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Return the full tool permission matrix."""
     return {
         "matrix": _matrix.to_dict(),
@@ -34,7 +38,8 @@ async def get_matrix() -> dict:
 
 
 @router.get("/allowed/{agent}")
-async def get_allowed_tools(agent: str) -> dict:
+async def get_allowed_tools(agent: str,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """List all tools an agent can use."""
     tools = _matrix.get_allowed_tools(agent)
     return {
@@ -44,7 +49,8 @@ async def get_allowed_tools(agent: str) -> dict:
 
 
 @router.post("/check")
-async def check_access(payload: dict) -> dict:
+async def check_access(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Check whether an agent can use a tool.
 
     Request body: {"agent": "tutoring_agent", "tool": "search_api"}
@@ -66,7 +72,8 @@ async def check_access(payload: dict) -> dict:
 
 
 @router.post("/revoke")
-async def revoke_tool(payload: dict) -> dict:
+async def revoke_tool(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Revoke all access to a tool (admin)."""
     tool_str = payload.get("tool", "")
     try:
@@ -80,7 +87,8 @@ async def revoke_tool(payload: dict) -> dict:
 
 
 @router.post("/grant")
-async def grant_tool(payload: dict) -> dict:
+async def grant_tool(payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Grant a tool to one or more agents (admin)."""
     tool_str = payload.get("tool", "")
     agents = payload.get("agents", [])
@@ -98,7 +106,7 @@ async def grant_tool(payload: dict) -> dict:
 
 
 @router.get("/audit")
-async def get_audit() -> dict:
+async def get_audit(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the access-check audit log (PRD: 降级不降安全)."""
     return {
         "total_checks": len(_checker.checks),

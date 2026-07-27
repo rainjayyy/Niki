@@ -13,7 +13,14 @@ from __future__ import annotations
 
 import base64
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+
+from typing import Annotated
+
+from fastapi import Depends
+
+from niki.auth.account import ParentAccount
+from niki.auth.dependencies import get_current_parent
 
 from niki.media.storage import (
     EmptyFileError,
@@ -33,6 +40,8 @@ router = APIRouter(prefix="/media", tags=["media"])
 async def upload(
     request: Request,
     file: UploadFile = File(...),
+    *,
+    parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
     """Receive a file upload and store it via the active MediaStorage.
 

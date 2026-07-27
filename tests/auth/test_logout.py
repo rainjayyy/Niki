@@ -32,8 +32,13 @@ from niki.main import create_app
 
 
 @pytest.fixture
-def client_with_real_auth() -> TestClient:
-    """Real `get_current_parent` dep wired to a real lifecycle."""
+def client_with_real_auth(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """Real `get_current_parent` dep wired to a real lifecycle.
+
+    Unset NIKI_TEST_FAKE_AUTH so the JWT validation runs against real
+    bearer tokens (not the test sentinel).
+    """
+    monkeypatch.delenv("NIKI_TEST_FAKE_AUTH", raising=False)
     api_auth._lifecycle = AccountLifecycle()
     set_sms_service(InMemorySMSCodeService())
     set_blacklist(InMemoryTokenBlacklist())
@@ -41,7 +46,7 @@ def client_with_real_auth() -> TestClient:
 
 
 @pytest.fixture
-def client_with_fake_auth() -> TestClient:
+def client_with_fake_auth(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Override `get_current_parent` to return a sentinel; useful for
     testing the logout handler in isolation without going through JWT."""
 
