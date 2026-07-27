@@ -16,6 +16,13 @@ from niki.db.repositories.account_repo import (
     InMemoryAccountRepository,
     PostgresAccountRepository,
 )
+from niki.db.repositories.dashboard_repo import (
+    DashboardRepository,
+    InMemoryDashboardRepository,
+    PostgresDashboardRepository,
+    get_dashboard_repository,
+    set_dashboard_repository,
+)
 from niki.db.repositories.treehole_repo import (
     InMemoryTreeholeRepository,
     PostgresTreeholeRepository,
@@ -33,4 +40,9 @@ __all__ = [
     "PostgresTreeholeRepository",
     "get_treehole_repository",
     "set_treehole_repository",
+    "DashboardRepository",
+    "InMemoryDashboardRepository",
+    "PostgresDashboardRepository",
+    "get_dashboard_repository",
+    "set_dashboard_repository",
 ]

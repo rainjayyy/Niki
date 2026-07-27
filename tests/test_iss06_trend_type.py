@@ -27,7 +27,7 @@ class TestTrendType:
             child_id="c1",
             baseline=baseline,
             week_start=today - timedelta(days=2),
-            week_end=today,
+            today=today,
         )
         # One day, 3 records → average = 0.0
         assert len(trend.daily_valences) == 1

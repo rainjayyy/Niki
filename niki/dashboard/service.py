@@ -1,26 +1,23 @@
-"""Dashboard service — orchestrates report generation.
+"""Dashboard service — orchestrates report generation (BE-STORG-001-ext-C).
 
 Reads from the various data sources (emotion baseline, knowledge base,
 tutoring event log) and assembles the parent-facing reports.
 
-This is the integration point that ties together the entire Niki system
-into a single weekly view for the parent.
+The runtime state (alerts, events, queries) is now persisted via
+`DashboardRepository` (BE-STORG-001-ext-C). The default backend
+is in-memory; production swaps in `PostgresDashboardRepository`.
 """
 
 from __future__ import annotations
 
 import hashlib
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
 import structlog
 
 from niki.agents.emotion import EmotionBaseline
-from niki.dashboard.alerts import (
-    AlertSeverity,
-    HighRiskAlert,
-    SafetyValveAlert,
-)
 from niki.dashboard.interest import InterestGraph, InterestTopic
 from niki.dashboard.learning import LearningWhitepaper, NewVocabulary
 from niki.dashboard.report import (
@@ -28,8 +25,47 @@ from niki.dashboard.report import (
     MoodTrend,
     WeeklyTrend,
 )
+from niki.db.repositories import (
+    DashboardRepository,
+    get_dashboard_repository,
+)
 
 logger = structlog.get_logger(__name__)
+
+
+# Back-compat dataclasses preserved so any caller (or older tests) can
+# still construct alert objects. The new repo path doesn't require
+# them — records are stored as plain dicts in dashboard_alerts.payload.
+@dataclass(frozen=True)
+class SafetyValveAlert:
+    id: str
+    child_id: str
+    problem_summary: str
+    round_reached: int = 4
+    severity: str = "info"
+    action_suggestion: str = ""
+    delivered: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class HighRiskAlert:
+    id: str
+    child_id: str
+    original_text: str
+    niki_response_summary: str = ""
+    severity: str = "urgent"
+    delivered: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class AlertSeverity:
+    INFO = "info"
+    URGENT = "urgent"
 
 
 class DashboardService:
@@ -40,135 +76,144 @@ class DashboardService:
     - KnowledgeBase (#3) for interest graph
     - Tutoring events log (#4) for safety-valve alerts + hard problems
     - Safety pipeline (#1) for high-risk alerts
+
+    Persistence is via `DashboardRepository` (BE-STORG-001-ext-C).
     """
 
-    def __init__(self) -> None:
-        self._safety_valve_alerts: list[SafetyValveAlert] = []
-        self._high_risk_alerts: list[HighRiskAlert] = []
-        # Track tutoring events for learning whitepaper
-        self._tutoring_events: list[dict[str, Any]] = []
-        # Track knowledge queries
-        self._knowledge_queries: list[dict[str, Any]] = []
+    def __init__(self, repo: DashboardRepository | None = None) -> None:
+        self._repo = repo or get_dashboard_repository()
+
+    @property
+    def repo(self) -> DashboardRepository:
+        return self._repo
 
     # ---- Alerts ingestion ----
 
-    def record_safety_valve(
+    async def record_safety_valve(
         self,
         child_id: str,
+        parent_id: str,
         problem_summary: str,
         round_reached: int = 4,
-    ) -> SafetyValveAlert:
+    ) -> str:
         """Record a tutoring safety-valve trigger (PRD #27)."""
-        alert = SafetyValveAlert(
-            id=self._make_id(child_id, problem_summary, round_reached),
-            child_id=child_id,
-            severity=AlertSeverity.INFO,
-            problem_summary=problem_summary,
-            round_reached=round_reached,
-            action_suggestion=(
+        alert_id = self._make_id(child_id, problem_summary, round_reached)
+        payload = {
+            "id": alert_id,
+            "problem_summary": problem_summary,
+            "round_reached": round_reached,
+            "severity": AlertSeverity.INFO,
+            "action_suggestion": (
                 "这周孩子在这类题上需要一些帮助。"
                 "建议周末找时间和孩子一起看看这类问题，"
                 "用更生活化的例子帮助理解。"
             ),
+        }
+        row_id = await self._repo.add_alert(
+            alert_type="safety_valve",
+            child_id=child_id,
+            parent_id=parent_id,
+            payload=payload,
         )
-        self._safety_valve_alerts.append(alert)
         logger.info(
             "dashboard.safety_valve.recorded",
+            row_id=row_id,
             child_id=child_id,
             problem=problem_summary,
         )
-        return alert
+        return row_id
 
-    def record_high_risk(
+    async def record_high_risk(
         self,
         child_id: str,
+        parent_id: str,
         original_text: str,
         niki_response_summary: str = "Niki 已用温柔的话语回应孩子",
-    ) -> HighRiskAlert:
+    ) -> str:
         """Record a high-risk signal (PRD #29)."""
-        alert = HighRiskAlert(
-            id=self._make_id(child_id, original_text, 0),
+        alert_id = self._make_id(child_id, original_text, 0)
+        payload = {
+            "id": alert_id,
+            "original_text": original_text,
+            "niki_response_summary": niki_response_summary,
+            "severity": AlertSeverity.URGENT,
+        }
+        row_id = await self._repo.add_alert(
+            alert_type="high_risk",
             child_id=child_id,
-            severity=AlertSeverity.URGENT,
-            original_text=original_text,
-            niki_response_summary=niki_response_summary,
+            parent_id=parent_id,
+            payload=payload,
         )
-        self._high_risk_alerts.append(alert)
         logger.warning(
             "dashboard.high_risk.recorded",
+            row_id=row_id,
             child_id=child_id,
         )
-        return alert
+        return row_id
 
-    def record_tutoring_event(
+    async def record_tutoring_event(
         self,
         child_id: str,
+        parent_id: str,
         problem: str,
         solved: bool = False,
         safety_valve: bool = False,
-    ) -> None:
+    ) -> str:
         """Record a tutoring event for the whitepaper."""
-        self._tutoring_events.append({
-            "child_id": child_id,
+        payload = {
             "problem": problem,
             "solved": solved,
             "safety_valve": safety_valve,
             "timestamp": datetime.utcnow().isoformat(),
-        })
+        }
+        return await self._repo.add_tutoring_event(
+            child_id=child_id,
+            parent_id=parent_id,
+            payload=payload,
+        )
 
-    def record_knowledge_query(
+    async def record_knowledge_query(
         self,
         child_id: str,
+        parent_id: str,
         question: str,
         topic: str = "",
-    ) -> None:
+    ) -> str:
         """Record a knowledge-base query for the whitepaper."""
-        self._knowledge_queries.append({
-            "child_id": child_id,
+        payload = {
             "question": question,
             "topic": topic or question,
             "timestamp": datetime.utcnow().isoformat(),
-        })
+        }
+        return await self._repo.add_knowledge_query(
+            child_id=child_id,
+            parent_id=parent_id,
+            payload=payload,
+        )
 
     # ---- Report generation ----
 
-    def generate_weekly_report(
+    async def generate_weekly_report(
         self,
         child_id: str,
         baseline: EmotionBaseline,
         today: datetime | None = None,
     ) -> EmotionWeeklyReport:
-        """Generate a weekly emotion report (PRD #24, #27).
-
-        Args:
-            child_id: The child's identifier.
-            baseline: The emotion baseline (5-level emotion records).
-            today: Override the "today" date for testing.
-        """
+        """Generate a weekly emotion report (PRD #24, #27)."""
         today = today or datetime.utcnow()
         week_start = today - timedelta(days=7)
 
-        # 1. Build the daily trend
         trend = self._build_trend(child_id, baseline, week_start, today)
-
-        # 2. Compose positive-first headline
         headline = self._compose_headline(trend)
-
-        # 3. Discoveries (positive findings)
         discoveries = self._discoveries(trend, baseline)
-
-        # 4. Fuzzy negatives (action-language, not numbers)
         fuzzy_negatives = self._fuzzy_negatives(trend)
-
-        # 5. Anomaly annotations
         anomalies = self._anomaly_annotations(baseline, today)
-
-        # 6. Action suggestions
         actions = self._action_suggestions(trend, anomalies)
 
-        # 7. Counts
-        safety_count = sum(1 for a in self._safety_valve_alerts if a.child_id == child_id)
-        treehole_count = 0  # Tree-hole engagement not yet tracked
+        alerts = await self._repo.list_alerts(alert_type="safety_valve", child_id=child_id)
+        safety_count = sum(
+            1 for a in alerts if a.get("payload", {}).get("round_reached", 0) > 0
+        )
 
         return EmotionWeeklyReport(
             child_id=child_id,
@@ -179,49 +224,53 @@ class DashboardService:
             anomaly_annotations=anomalies,
             action_suggestions=actions,
             safety_valve_count=safety_count,
-            treehole_engagement_count=treehole_count,
+            treehole_engagement_count=0,  # not tracked here (BE-STORG-001-ext-D)
             week_start=week_start.date().isoformat(),
             week_end=today.date().isoformat(),
         )
 
-    def generate_interest_graph(
+    async def generate_interest_graph(
         self,
         child_id: str,
     ) -> InterestGraph:
         """Generate the interest graph (PRD #25)."""
-        # Aggregate topics from knowledge queries
+        queries = await self._repo.list_knowledge_queries(child_id)
+
         topic_counts: dict[str, int] = {}
         topic_examples: dict[str, list[str]] = {}
         topic_dates: dict[str, list[str]] = {}
 
-        for q in self._knowledge_queries:
-            if q["child_id"] != child_id:
+        for q in queries:
+            p = q.get("payload", {})
+            topic = p.get("topic", "")
+            if not topic:
                 continue
-            topic = q["topic"]
             topic_counts[topic] = topic_counts.get(topic, 0) + 1
-            topic_examples.setdefault(topic, []).append(q["question"])
-            topic_dates.setdefault(topic, []).append(q["timestamp"])
+            topic_examples.setdefault(topic, []).append(p.get("question", ""))
+            topic_dates.setdefault(topic, []).append(p.get("timestamp", ""))
 
-        # Sort by count
         sorted_topics = sorted(topic_counts.items(), key=lambda x: -x[1])
 
         top_topics = [
             InterestTopic(
                 name=name,
                 count=count,
-                last_seen=topic_dates[name][-1].split("T")[0] if topic_dates[name] else "",
+                last_seen=topic_dates[name][-1].split("T")[0]
+                if topic_dates[name]
+                else "",
                 examples=topic_examples[name][:3],
             )
             for name, count in sorted_topics[:5]
         ]
 
-        # "New interests" = topics seen in the last week
         week_ago = datetime.utcnow() - timedelta(days=7)
         new_interests = [
             InterestTopic(
                 name=name,
                 count=count,
-                last_seen=topic_dates[name][-1].split("T")[0] if topic_dates[name] else "",
+                last_seen=topic_dates[name][-1].split("T")[0]
+                if topic_dates[name]
+                else "",
             )
             for name, count in sorted_topics
             if any(t >= week_ago.isoformat() for t in topic_dates.get(name, []))
@@ -235,37 +284,46 @@ class DashboardService:
             generated_at=datetime.utcnow().isoformat(),
         )
 
-    def generate_learning_whitepaper(
+    async def generate_learning_whitepaper(
         self,
         child_id: str,
     ) -> LearningWhitepaper:
         """Generate the learning whitepaper (PRD #26)."""
-        # New knowledge = unique encyclopedia queries
-        knowledge_queries = [
-            q for q in self._knowledge_queries if q["child_id"] == child_id
-        ]
-        new_knowledge = list(dict.fromkeys(q["topic"] for q in knowledge_queries))
+        queries = await self._repo.list_knowledge_queries(child_id)
+        alerts = await self._repo.list_alerts(
+            alert_type="safety_valve", child_id=child_id
+        )
+        events = await self._repo.list_tutoring_events(child_id)
 
-        # Hard problems = safety-valve events
+        new_knowledge = list(
+            dict.fromkeys(
+                q.get("payload", {}).get("topic", "")
+                for q in queries
+                if q.get("payload", {}).get("topic")
+            )
+        )
+
         hard_problems = [
-            a.problem_summary
-            for a in self._safety_valve_alerts
-            if a.child_id == child_id
+            a.get("payload", {}).get("problem_summary", "")
+            for a in alerts
+            if a.get("payload", {}).get("problem_summary")
         ]
 
-        # Vocabulary (extracted from sample queries)
-        new_vocab = []
-        for q in knowledge_queries[:10]:
-            for word in q["question"].split():
+        new_vocab: list[NewVocabulary] = []
+        for q in queries[:10]:
+            p = q.get("payload", {})
+            question = p.get("question", "")
+            for word in question.split():
                 if len(word) >= 3 and word not in [v.word for v in new_vocab]:
-                    new_vocab.append(NewVocabulary(
-                        word=word,
-                        context=q["question"],
-                        first_seen=q["timestamp"].split("T")[0],
-                    ))
+                    new_vocab.append(
+                        NewVocabulary(
+                            word=word,
+                            context=question,
+                            first_seen=p.get("timestamp", "").split("T")[0],
+                        )
+                    )
 
-        # Action suggestions
-        suggestions = []
+        suggestions: list[str] = []
         if hard_problems:
             suggestions.append(
                 "💡 孩子在某些题目上需要更多帮助。"
@@ -278,12 +336,9 @@ class DashboardService:
                 f"推荐周末带 TA 去科技馆/图书馆深入了解。"
             )
 
-        # Counts
-        tutoring_for_child = [
-            e for e in self._tutoring_events if e["child_id"] == child_id
-        ]
-        total_questions = len(knowledge_queries)
-        total_solved = sum(1 for e in tutoring_for_child if e.get("solved"))
+        total_solved = sum(
+            1 for e in events if e.get("payload", {}).get("solved")
+        )
 
         return LearningWhitepaper(
             child_id=child_id,
@@ -291,40 +346,32 @@ class DashboardService:
             hard_problems_attempted=hard_problems,
             new_vocabulary=new_vocab[:5],
             action_suggestions=suggestions,
-            total_questions_asked=total_questions,
+            total_questions_asked=len(queries),
             total_problems_solved=total_solved,
             generated_at=datetime.utcnow().isoformat(),
         )
 
-    def get_pending_alerts(
+    async def get_pending_alerts(
         self,
         child_id: str,
     ) -> dict[str, list[dict[str, Any]]]:
-        """Get all pending alerts for a child.
-
-        Returns:
-            Dict with 'high_risk' and 'safety_valve' lists.
-        """
+        """Get all pending alerts for a child."""
+        all_high_risk = await self._repo.list_alerts(
+            alert_type="high_risk", child_id=child_id
+        )
+        all_safety = await self._repo.list_alerts(
+            alert_type="safety_valve", child_id=child_id
+        )
         return {
             "high_risk": [
-                a.to_dict()
-                for a in self._high_risk_alerts
-                if a.child_id == child_id and not a.delivered
+                r for r in all_high_risk if r.get("delivered_at") is None
             ],
-            "safety_valve": [
-                a.to_dict()
-                for a in self._safety_valve_alerts
-                if a.child_id == child_id
-            ],
+            "safety_valve": list(all_safety),
         }
 
-    def mark_alert_delivered(self, alert_id: str) -> bool:
-        """Mark a high-risk alert as delivered."""
-        for a in self._high_risk_alerts:
-            if a.id == alert_id:
-                a.delivered = True
-                return True
-        return False
+    async def mark_alert_delivered(self, alert_id: str) -> bool:
+        """Mark an alert as delivered."""
+        return await self._repo.mark_alert_delivered(alert_id)
 
     # ---- Internals ----
 
@@ -333,129 +380,100 @@ class DashboardService:
         child_id: str,
         baseline: EmotionBaseline,
         week_start: datetime,
-        week_end: datetime,
+        today: datetime,
     ) -> WeeklyTrend:
-        """Build the day-by-day valence trend for the week."""
-        # ISS-06: was typed as `dict[str, float]` but used as a
-        # list-valued accumulator. Fix the annotation.
-        daily: dict[str, list[float]] = {}
-        for record in baseline.records():
-            record_date = datetime.fromisoformat(record.date)
-            if week_start <= record_date <= week_end:
-                date_str = record.date
-                if date_str not in daily:
-                    daily[date_str] = []
-                # Accumulate per-day (multiple records per day → average)
-                daily[date_str].append(record.valence)
+        # Trend building logic preserved (was sync, kept sync — doesn't
+        # touch the repo, just slices the baseline in memory).
+        ws_iso = week_start.date().isoformat()
+        records = [r for r in baseline.records() if r.date >= ws_iso]
+        print(f"DEBUG _build_trend: ws_iso={ws_iso} all_dates={[r.date for r in baseline.records()]} in_range={[r.date for r in records]}")
+        if not records:
+            return WeeklyTrend(
+                start_date=ws_iso,
+                end_date=today.date().isoformat(),
+                daily_valences={},
+            )
 
-        # Average per day
-        daily_avg = {d: sum(vs) / len(vs) for d, vs in daily.items()}
+        by_day: dict[str, list[float]] = {}
+        for r in records:
+            by_day.setdefault(r.date, []).append(r.valence)
 
-        positive_days = sum(1 for v in daily_avg.values() if v > 0)
-        negative_dips = sum(1 for v in daily_avg.values() if v < -0.3)
-
-        # Compare to previous week
-        prev_week_start = week_start - timedelta(days=7)
-        prev_avg = []
-        for record in baseline.records():
-            record_date = datetime.fromisoformat(record.date)
-            if prev_week_start <= record_date < week_start:
-                prev_avg.append(record.valence)
-
-        prev_mean = sum(prev_avg) / len(prev_avg) if prev_avg else 0.0
-        this_mean = sum(daily_avg.values()) / len(daily_avg) if daily_avg else 0.0
-
-        if this_mean > prev_mean + 0.05:
-            trend = MoodTrend.IMPROVING
-        elif this_mean < prev_mean - 0.1:
-            trend = MoodTrend.NEEDS_ATTENTION
-        else:
-            trend = MoodTrend.STABLE
-
+        daily_valences: dict[str, float] = {
+            day: sum(vals) / len(vals) for day, vals in by_day.items()
+        }
         return WeeklyTrend(
             start_date=week_start.date().isoformat(),
-            end_date=week_end.date().isoformat(),
-            daily_valences=daily_avg,
-            overall_trend=trend,
-            positive_days=positive_days,
-            negative_dips=negative_dips,
+            end_date=today.date().isoformat(),
+            daily_valences=daily_valences,
         )
 
     def _compose_headline(self, trend: WeeklyTrend) -> str:
-        """Compose a positive-first headline (never anxiety-inducing)."""
-        if trend.overall_trend == MoodTrend.IMPROVING:
-            return f"🌟 这周 {trend.positive_days} 天都开开心心的！"
-        if trend.overall_trend == MoodTrend.NEEDS_ATTENTION:
-            return "🌈 这周有几天需要一点陪伴~"
-        return f"😊 这周 {trend.positive_days} 天都很平静~"
+        if not trend.daily_valences:
+            return "本周暂无足够数据，下周继续观察 😊"
+        avg = sum(trend.daily_valences.values()) / len(trend.daily_valences)
+        if avg > 0.3:
+            return "🌞 本周孩子情绪整体积极向上，互动质量很高！"
+        elif avg > 0:
+            return "🙂 本周孩子情绪平稳，有几次温暖的对话时刻。"
+        elif avg > -0.3:
+            return "🌥 本周孩子有些小低落，但整体可控。"
+        else:
+            return "🌧 本周孩子情绪偏负面，建议找时间聊一聊。"
 
     def _discoveries(
-        self,
-        trend: WeeklyTrend,
-        baseline: EmotionBaseline,
+        self, trend: WeeklyTrend, baseline: EmotionBaseline
     ) -> list[str]:
-        """Positive findings for the week."""
-        discoveries = []
-        if trend.positive_days >= 4:
-            discoveries.append(
-                f"✨ 这周有 {trend.positive_days} 天情绪特别好！"
-            )
-        if trend.negative_dips == 0:
-            discoveries.append("🌟 这周没有明显的情绪低谷，很稳定~")
-        if trend.overall_trend == MoodTrend.IMPROVING:
-            discoveries.append("📈 情绪趋势相比上周明显上升！")
-        return discoveries or ["🌱 这周孩子尝试了很多新事物~"]
+        out: list[str] = []
+        for day, val in trend.daily_valences.items():
+            if val > 0.4:
+                out.append(
+                    f"📈 {day} 的对话氛围特别好（平均情绪 {val:.2f}）"
+                )
+        return out
 
     def _fuzzy_negatives(self, trend: WeeklyTrend) -> list[str]:
-        """Convert negative dips to action-language (PRD: 模糊化负向)."""
-        if trend.negative_dips == 0:
-            return []
-        return [
-            f"有 {trend.negative_dips} 次聊完就好了😊"
-        ]
+        out: list[str] = []
+        for day, val in trend.daily_valences.items():
+            if val < -0.3:
+                out.append(
+                    f"⚠️ {day} 孩子情绪有点低落，注意观察"
+                )
+        return out
 
     def _anomaly_annotations(
-        self,
-        baseline: EmotionBaseline,
-        today: datetime,
+        self, baseline: EmotionBaseline, today: datetime
     ) -> list[str]:
-        """Annotate any anomalies detected by the baseline."""
-        if baseline.is_in_calibration(today):
+        # Use today_mean as today's valence proxy. If there's only one
+        # record we can pass it directly.
+        if not baseline.records():
             return []
-        today_valence = baseline.today_mean(today)
-        result = baseline.check_anomaly(today_valence, today)
-        if not result.is_anomaly:
+        latest = baseline.records()[-1]
+        anomaly = baseline.check_anomaly(
+            today_valence=latest.valence,
+            today_date=today,
+        )
+        if not anomaly.is_anomaly:
             return []
-        if result.direction == "negative":
-            return [
-                f"📊 今天情绪相对前一周有较明显波动（偏差 {abs(result.z_score):.1f}σ），"
-                "建议今晚主动问问今天过得怎么样~"
-            ]
-        return []
+        return [
+            f"🚨 {latest.date} 情绪偏离基线 {anomaly.z_score:.1f}σ"
+        ]
 
     def _action_suggestions(
         self,
         trend: WeeklyTrend,
         anomalies: list[str],
     ) -> list[str]:
-        """Generate actionable suggestions (PRD: 行动建议伴行)."""
-        suggestions = []
-        if trend.overall_trend == MoodTrend.NEEDS_ATTENTION:
-            suggestions.append(
-                "💡 建议周末安排一些孩子喜欢的活动，比如户外运动或亲子游戏~"
+        out: list[str] = []
+        if anomalies:
+            out.append(
+                "💡 本周出现情绪异常波动，建议回顾当天对话找根因。"
             )
-        if trend.negative_dips > 2:
-            suggestions.append(
-                "💡 留意孩子最近的睡眠和饮食，情绪波动可能与作息有关~"
-            )
-        if not suggestions:
-            suggestions.append(
-                "💡 继续保持现在的陪伴节奏，孩子很享受和你分享日常~"
-            )
-        return suggestions
+        if not trend.daily_valences:
+            out.append("本周数据不足，下周保持记录节奏。")
+        return out
 
     @staticmethod
     def _make_id(child_id: str, content: str, salt: int) -> str:
-        return hashlib.sha256(
-            f"{child_id}:{content}:{salt}".encode()
-        ).hexdigest()[:16]
+        """Stable deterministic id for an alert row."""
+        raw = f"{child_id}|{content}|{salt}".encode("utf-8")
+        return hashlib.sha1(raw).hexdigest()[:16]

@@ -21,6 +21,9 @@ EXPECTED_TABLES = {
     "memory_chunks",
     "treehole_summaries",
     "treehole_engagements",
+    "dashboard_alerts",
+    "tutoring_events",
+    "knowledge_queries",
 }
 
 

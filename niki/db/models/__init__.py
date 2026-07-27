@@ -18,6 +18,11 @@ from __future__ import annotations
 
 from niki.db.models.account_verification import AccountVerification
 from niki.db.models.child import Child
+from niki.db.models.dashboard_record import (
+    DashboardAlert,
+    KnowledgeQuery,
+    TutoringEvent,
+)
 from niki.db.models.deletion_request import DeletionRequest
 from niki.db.models.emotion_baseline import EmotionBaseline
 from niki.db.models.memory_chunk import MemoryChunk
@@ -37,4 +42,7 @@ __all__ = [
     "MemoryChunk",
     "TreeholeSummary",
     "TreeholeEngagement",
+    "DashboardAlert",
+    "TutoringEvent",
+    "KnowledgeQuery",
 ]

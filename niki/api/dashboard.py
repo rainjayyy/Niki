@@ -31,7 +31,7 @@ _baseline = EmotionBaseline()
 async def weekly_report(child_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the weekly emotion report (PRD #24)."""
-    report = _dashboard.generate_weekly_report(
+    report = await _dashboard.generate_weekly_report(
         child_id=child_id,
         baseline=_baseline,
     )
@@ -42,7 +42,7 @@ async def weekly_report(child_id: str,
 async def interest_graph(child_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the interest graph (PRD #25)."""
-    graph = _dashboard.generate_interest_graph(child_id=child_id)
+    graph = await _dashboard.generate_interest_graph(child_id=child_id)
     return graph.to_dict()
 
 
@@ -50,7 +50,7 @@ async def interest_graph(child_id: str,
 async def learning_whitepaper(child_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the learning whitepaper (PRD #26)."""
-    paper = _dashboard.generate_learning_whitepaper(child_id=child_id)
+    paper = await _dashboard.generate_learning_whitepaper(child_id=child_id)
     return paper.to_dict()
 
 
@@ -58,41 +58,73 @@ async def learning_whitepaper(child_id: str,
 async def get_alerts(child_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get pending alerts (PRD #27, #29)."""
-    return _dashboard.get_pending_alerts(child_id=child_id)
+    pending = await _dashboard.get_pending_alerts(child_id=child_id)
+    # Flatten payload fields to top level for legacy client compat.
+    def _flatten(row: dict) -> dict:
+        flat = {
+            "id": row["id"],
+            "child_id": row["child_id"],
+            "parent_id": row.get("parent_id"),
+            "created_at": row.get("created_at").isoformat()
+            if row.get("created_at") else None,
+            "delivered_at": row.get("delivered_at").isoformat()
+            if row.get("delivered_at") else None,
+        }
+        flat.update(row.get("payload", {}))
+        return flat
+    return {
+        "high_risk": [_flatten(r) for r in pending["high_risk"]],
+        "safety_valve": [_flatten(r) for r in pending["safety_valve"]],
+    }
 
 
 @router.post("/alerts/record/safety-valve")
 async def record_safety_valve(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring safety-valve trigger."""
-    alert = _dashboard.record_safety_valve(
+    row_id = await _dashboard.record_safety_valve(
         child_id=payload["child_id"],
+        parent_id=parent.id,
         problem_summary=payload["problem_summary"],
         round_reached=int(payload.get("round_reached", 4)),
     )
-    return alert.to_dict()
+    return {
+        "id": row_id,
+        "child_id": payload["child_id"],
+        "severity": "info",
+        "problem_summary": payload["problem_summary"],
+        "round_reached": int(payload.get("round_reached", 4)),
+    }
 
 
 @router.post("/alerts/record/high-risk")
 async def record_high_risk(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a high-risk signal (self-harm, etc.)."""
-    alert = _dashboard.record_high_risk(
-        child_id=payload["child_id"],
-        original_text=payload["original_text"],
-        niki_response_summary=payload.get(
-            "niki_response_summary",
-            "Niki 已用温柔的话语回应孩子",
-        ),
+    niki_response_summary = payload.get(
+        "niki_response_summary",
+        "Niki 已用温柔的话语回应孩子",
     )
-    return alert.to_dict()
+    row_id = await _dashboard.record_high_risk(
+        child_id=payload["child_id"],
+        parent_id=parent.id,
+        original_text=payload["original_text"],
+        niki_response_summary=niki_response_summary,
+    )
+    return {
+        "id": row_id,
+        "child_id": payload["child_id"],
+        "severity": "urgent",
+        "original_text": payload["original_text"],
+        "niki_response_summary": niki_response_summary,
+    }
 
 
 @router.post("/alerts/{alert_id}/delivered")
 async def mark_alert_delivered(alert_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Mark a high-risk alert as delivered."""
-    success = _dashboard.mark_alert_delivered(alert_id)
+    success = await _dashboard.mark_alert_delivered(alert_id)
     return {"alert_id": alert_id, "delivered": success}
 
 
@@ -114,8 +146,9 @@ async def add_baseline_record(payload: dict,
 async def record_tutoring_event(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
-    _dashboard.record_tutoring_event(
+    await _dashboard.record_tutoring_event(
         child_id=payload["child_id"],
+        parent_id=parent.id,
         problem=payload["problem"],
         solved=bool(payload.get("solved", False)),
         safety_valve=bool(payload.get("safety_valve", False)),
@@ -127,8 +160,9 @@ async def record_tutoring_event(payload: dict,
 async def record_knowledge_query(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a knowledge-base query."""
-    _dashboard.record_knowledge_query(
+    await _dashboard.record_knowledge_query(
         child_id=payload["child_id"],
+        parent_id=parent.id,
         question=payload["question"],
         topic=payload.get("topic", ""),
     )
