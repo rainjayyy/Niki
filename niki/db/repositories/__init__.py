@@ -16,9 +16,21 @@ from niki.db.repositories.account_repo import (
     InMemoryAccountRepository,
     PostgresAccountRepository,
 )
+from niki.db.repositories.treehole_repo import (
+    InMemoryTreeholeRepository,
+    PostgresTreeholeRepository,
+    TreeholeRepository,
+    get_treehole_repository,
+    set_treehole_repository,
+)
 
 __all__ = [
     "AccountRepository",
     "InMemoryAccountRepository",
     "PostgresAccountRepository",
+    "TreeholeRepository",
+    "InMemoryTreeholeRepository",
+    "PostgresTreeholeRepository",
+    "get_treehole_repository",
+    "set_treehole_repository",
 ]

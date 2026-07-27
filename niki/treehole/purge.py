@@ -1,6 +1,6 @@
-"""Treehole purge — PRD #61.
+"""Treehole purge — PRD #61 (BE-STORG-001-ext-B: via repository).
 
-Auto-purge of treehole records:
+Auto-purge of treehole records via the active TreeholeRepository:
 - Original transcripts deleted after 7 days (PRD: 7-day auto-delete)
 - Encrypted summaries also purged (the baseline already aggregated them)
 - After purge: only the aggregated baseline mean remains (irreversible)
@@ -11,11 +11,11 @@ its contribution to the daily aggregate lives on (anonymously).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import structlog
 
-from niki.treehole.manager import TreeholeStore
+from niki.db.repositories import TreeholeRepository, get_treehole_repository
 
 logger = structlog.get_logger(__name__)
 
@@ -26,69 +26,21 @@ class TreeholePurger:
     Should be run by a daily cron job (similar to NightlyPipeline).
     """
 
-    def __init__(self, retention_days: int = 7) -> None:
+    def __init__(
+        self,
+        retention_days: int = 7,
+        repo: TreeholeRepository | None = None,
+    ) -> None:
         self.retention_days = retention_days
+        self._repo = repo or get_treehole_repository()
 
-    async def purge_expired(
-        self,
-        store: TreeholeStore,
-        now: datetime | None = None,
-    ) -> int:
-        """Purge all records older than retention_days.
+    async def purge_expired(self, now: datetime | None = None) -> int:
+        """Purge all records whose `expires_at` is in the past.
 
-        Args:
-            store: The treehole store to purge from.
-            now: Override the current time (for testing).
-
-        Returns:
-            Number of records purged.
+        Returns the number of records purged.
         """
-        now = now or datetime.utcnow()
-        cutoff = now - timedelta(days=self.retention_days)
+        return await self._repo.delete_expired(now=now)
 
-        # Find expired records (ISS-03: capture INDEX, not just timestamp,
-        # so we can synchronously drop the parallel encrypted_payload entry)
-        expired_indices: list[int] = []
-        for idx, summary in enumerate(store.summaries):
-            ts = datetime.fromisoformat(summary.timestamp)
-            if ts < cutoff:
-                expired_indices.append(idx)
-
-        if not expired_indices:
-            return 0
-
-        expired_set = set(expired_indices)
-        # Purge from all 3 lists (ISS-03: use index-based removal so
-        # encrypted_payloads and summaries stay aligned).
-        store.summaries[:] = [
-            s for i, s in enumerate(store.summaries) if i not in expired_set
-        ]
-        store.encrypted_payloads[:] = [
-            ep
-            for i, ep in enumerate(store.encrypted_payloads)
-            if i not in expired_set
-        ]
-        store.pending_purge[:] = [
-            ts
-            for i, ts in enumerate(store.pending_purge)
-            if i not in expired_set
-        ]
-
-        logger.info(
-            "treehole.purged_expired",
-            count=len(expired_indices),
-            cutoff=cutoff.isoformat(),
-        )
-        return len(expired_indices)
-
-    async def purge_all(
-        self,
-        store: TreeholeStore,
-    ) -> int:
+    async def purge_all(self) -> int:
         """Force-purge ALL records (for account deletion, PRD #35)."""
-        count = len(store.summaries)
-        store.summaries.clear()
-        store.encrypted_payloads.clear()
-        store.pending_purge.clear()
-        logger.warning("treehole.purged_all", count=count)
-        return count
+        return await self._repo.delete_all()

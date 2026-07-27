@@ -53,6 +53,7 @@ async def engage(payload: dict,
 
     summary, encrypted = await _manager.engage(
         child_id=child_id,
+        parent_id=parent.id,
         original_text=text,
         emotion=emotion,
         intensity=intensity,
@@ -62,6 +63,7 @@ async def engage(payload: dict,
     return {
         "summary": summary.to_dict(),
         "encrypted": {
+            "row_id": encrypted["id"],
             "child_id": encrypted["child_id"],
             "encrypted_size_bytes": len(encrypted["encrypted"]),
         },
@@ -72,27 +74,32 @@ async def engage(payload: dict,
 async def list_summaries(child_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """List stored treehole summaries (parent dashboard)."""
-    summaries = await _manager.list_summaries()
-    # Filter to the requested child
-    matching = [s for s in summaries if _matches_child(s, child_id)]
+    summaries = await _manager.list_summaries(child_id=child_id)
     return {
         "child_id": child_id,
-        "count": len(matching),
-        "summaries": [s.to_dict() for s in matching],
+        "count": len(summaries),
+        "summaries": [s.to_dict() for s in summaries],
     }
 
 
 @router.post("/aggregate")
-async def aggregate_baseline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
-    """Compute the aggregated baseline contribution from treehole data."""
-    result = await _manager.aggregate_for_baseline()
+async def aggregate_baseline(payload: dict | None = None,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+    """Compute the aggregated baseline contribution from treehole data.
+
+    Optional body: {"child_id": "..."} to scope to a child.
+    """
+    payload = payload or {}
+    child_id = payload.get("child_id")
+    result = await _manager.aggregate_for_baseline(child_id=child_id)
     return result
 
 
 @router.post("/should-activate")
-async def should_activate(payload: dict,
+async def should_activate(payload: dict | None = None,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Check if a given text would activate treehole mode."""
+    payload = payload or {}
     text = payload.get("text", "")
     return {"activates_treehole": should_activate_treehole(text)}
 
@@ -100,29 +107,39 @@ async def should_activate(payload: dict,
 @router.post("/purge-expired")
 async def purge_expired(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Run the 7-day purge (normally called by cron job)."""
-    count = await _purger.purge_expired(_manager.store)
+    count = await _purger.purge_expired()
     return {"purged_count": count}
 
 
 @router.post("/purge-all")
-async def purge_all(parent: ParentAccount = Depends(get_current_parent),) -> dict:
-    """Force-purge all treehole records (for account deletion)."""
-    count = await _purger.purge_all(_manager.store)
+async def purge_all(payload: dict | None = None,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+    """Force-purge treehole records. Optional body: {"child_id": "..."}.
+
+    Without child_id, purges ALL records (debug/test only). With
+    child_id, purges only that child's (account deletion path).
+    """
+    payload = payload or {}
+    child_id = payload.get("child_id")
+    if child_id:
+        count = await _manager.purge_all_for_child(child_id)
+    else:
+        count = await _purger.purge_all()
     return {"purged_count": count}
 
 
 @router.get("/store-stats")
 async def store_stats(parent: ParentAccount = Depends(get_current_parent),) -> dict:
-    """Get the current treehole store statistics."""
-    return _manager.store.to_dict()
+    """Get the current treehole repository statistics."""
+    from niki.db.repositories import InMemoryTreeholeRepository
+
+    rows = await _manager.repo.list_all()
+    return {
+        "summary_count": len(rows),
+        "in_memory_repo": isinstance(_manager.repo, InMemoryTreeholeRepository),
+    }
 
 
 def _matches_child(summary, child_id: str) -> bool:
-    """Check if a summary is associated with a child.
-
-    In a real implementation, this would check the encrypted_payload.
-    Here we use a simple convention (the timestamp is enough for the demo).
-    """
-    # The summary itself doesn't store child_id (for isolation),
-    # but in production the store would track it.
-    return True  # For demo, return all (caller filters in the API)
+    """Legacy helper — kept for any external imports."""
+    return True

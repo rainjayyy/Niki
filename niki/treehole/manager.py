@@ -4,7 +4,9 @@ Orchestrates treehole mode:
 1. Detect activation (via TreeholeActivationDetector)
 2. Extract emotion summary (emotion_valence, intensity, category)
 3. Encrypt with AES-256-GCM
-4. Store in `source: "treehole"` partition (isolated from normal data)
+4. Persist via TreeholeRepository (BE-STORG-001-ext-B) — defaults
+   to in-memory storage for single-process dev / tests; Postgres
+   recommended for production / multi-worker.
 5. Schedule 7-day auto-purge
 
 CRITICAL: treehole ORIGINAL text must NEVER be written to:
@@ -19,13 +21,15 @@ the individual summaries cannot be re-derived (PRD #64: 聚合即匿名).
 
 from __future__ import annotations
 
+import base64
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import structlog
 
+from niki.db.repositories import TreeholeRepository, get_treehole_repository
 from niki.treehole.activation import should_activate_treehole
 from niki.treehole.encryption import TreeholeEncryption
 
@@ -60,10 +64,11 @@ class TreeholeSummary:
 
 @dataclass
 class TreeholeStore:
-    """In-memory store for treehole summaries.
+    """Legacy in-memory store shape (kept for backward compat).
 
-    Production: this would be Postgres with source='treehole' partition
-    (or a separate encrypted column) plus scheduled purge job.
+    Production: persistence goes through `TreeholeManager`'s
+    injected `TreeholeRepository`. This class is preserved for any
+    caller that still imports the type.
     """
 
     summaries: list[TreeholeSummary] = field(default_factory=list)
@@ -90,33 +95,45 @@ class TreeholeStore:
 
 
 class TreeholeManager:
-    """Orchestrates treehole mode.
+    """Orchestrates treehole mode (BE-STORG-001-ext-B: persistence).
 
     Usage:
-        manager = TreeholeManager(encryption_key=...)
-        summary, encrypted = await manager.engage(child_id, original_text, emotion)
+        manager = TreeholeManager()                         # in-memory
+        manager = TreeholeManager(repo=PostgresTreeholeRepo)  # production
+        summary, encrypted = await manager.engage(child_id, ...)
     """
 
     def __init__(
         self,
         encryption: TreeholeEncryption | None = None,
         retention_days: int = 7,
+        repo: TreeholeRepository | None = None,
     ) -> None:
         self._encryption = encryption or TreeholeEncryption()
-        self._store = TreeholeStore()
         self._retention_days = retention_days
+        self._repo = repo or get_treehole_repository()
 
     @property
     def store(self) -> TreeholeStore:
-        return self._store
+        """Legacy accessor — always returns an empty in-memory store.
+
+        The real state lives in the repository. This property is
+        preserved for any caller that introspected the old shape.
+        """
+        return TreeholeStore()
 
     @property
     def retention_days(self) -> int:
         return self._retention_days
 
+    @property
+    def repo(self) -> TreeholeRepository:
+        return self._repo
+
     async def engage(
         self,
         child_id: str,
+        parent_id: str,
         original_text: str,
         emotion: str = "neutral",
         intensity: int = 3,
@@ -127,6 +144,7 @@ class TreeholeManager:
 
         Args:
             child_id: The child's identifier (used as AAD for encryption).
+            parent_id: The parent's id (for ownership scoping).
             original_text: The child's text (will NEVER be stored).
             emotion: Emotion category.
             intensity: Emotion intensity (1-5).
@@ -134,18 +152,14 @@ class TreeholeManager:
             z_score_deviation: Z-score vs baseline.
 
         Returns:
-            Tuple of (TreeholeSummary, encrypted_payload).
+            Tuple of (TreeholeSummary, encrypted_payload_dict).
         """
-        # 1. Detect activation (caller is expected to have done this,
-        #    but verify)
         if not should_activate_treehole(original_text):
             logger.warning(
                 "treehole.engage_called_without_trigger",
                 child_id=child_id,
             )
 
-        # 2. Build the plaintext summary (PRD #62 schema)
-        #     NOTE: original_text is NOT included — only structured fields
         summary = TreeholeSummary(
             timestamp=datetime.utcnow().isoformat(),
             source="treehole",
@@ -155,28 +169,36 @@ class TreeholeManager:
             z_score_deviation=z_score_deviation,
         )
 
-        # 3. Encrypt the summary (using child_id as AAD for binding)
         plaintext = json.dumps(summary.to_dict(), ensure_ascii=False)
         associated_data = child_id.encode("utf-8")
         encrypted_b64 = self._encryption.encrypt(
             plaintext, associated_data=associated_data
         )
 
-        # 4. Store (in-memory; production = encrypted Postgres column)
+        expires_at = datetime.utcnow() + timedelta(days=self._retention_days)
+        encrypted_bytes = base64.b64decode(encrypted_b64)
+        row_id = await self._repo.add(
+            child_id=child_id,
+            parent_id=parent_id,
+            encrypted_payload=encrypted_bytes,
+            associated_data=associated_data,
+            expires_at=expires_at,
+        )
+
         encrypted_payload = {
+            "id": row_id,
             "child_id": child_id,
             "encrypted": encrypted_b64,
             "associated_data": child_id,  # for decryption context
         }
-        self._store.add(summary, encrypted_payload)
 
         logger.info(
             "treehole.engaged",
+            row_id=row_id,
             child_id=child_id,
             emotion=emotion,
             intensity=intensity,
             category=category,
-            # NEVER log original_text
         )
 
         return summary, encrypted_payload
@@ -192,32 +214,68 @@ class TreeholeManager:
         )
         return TreeholeSummary.from_dict(json.loads(plaintext))
 
-    async def list_summaries(self) -> list[TreeholeSummary]:
-        """List all currently-stored summaries (for the parent dashboard)."""
-        return list(self._store.summaries)
+    async def list_summaries(
+        self, child_id: str | None = None
+    ) -> list[TreeholeSummary]:
+        """List summaries for a child (or all children if child_id is None).
 
-    async def aggregate_for_baseline(self) -> dict[str, float]:
+        Decrypts on the fly. For dashboard reads only — never
+        decodes for the engage() / baseline() path (those use
+        aggregated forms).
+        """
+        if child_id is None:
+            rows = await self._repo.list_all()
+        else:
+            rows = await self._repo.list_for_child(child_id)
+        out: list[TreeholeSummary] = []
+        for row in rows:
+            try:
+                aad = row["associated_data"] or row["child_id"].encode("utf-8")
+                ct = base64.b64encode(row["encrypted_payload"]).decode("ascii")
+                plaintext = self._encryption.decrypt(ct, associated_data=aad)
+                out.append(
+                    TreeholeSummary.from_dict(json.loads(plaintext))
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "treehole.decrypt_failed",
+                    row_id=row.get("id"),
+                    error=str(exc),
+                )
+        return out
+
+    async def aggregate_for_baseline(
+        self, child_id: str | None = None
+    ) -> dict[str, float]:
         """Compute the baseline contribution from treehole summaries.
 
-        PRD #64: '聚合即匿名' — once aggregated into the baseline mean,
-        individual summaries cannot be re-derived.
+        PRD #64: '聚合即匿名' — once aggregated into the baseline
+        mean, individual summaries cannot be re-derived.
         """
-        if not self._store.summaries:
+        summaries = await self.list_summaries(child_id=child_id)
+        if not summaries:
             return {"mean_valence": 0.0, "count": 0}
 
-        # Map intensity to valence
         valence_map = {
             "positive": 0.5,
             "neutral": 0.0,
             "negative": -0.5,
         }
         total = 0.0
-        for s in self._store.summaries:
+        for s in summaries:
             total += valence_map.get(s.emotion_valence, 0.0) * (
                 s.emotion_intensity / 5.0
             )
-        mean = total / len(self._store.summaries)
+        mean = total / len(summaries)
         return {
             "mean_valence": mean,
-            "count": len(self._store.summaries),
+            "count": len(summaries),
         }
+
+    async def purge_expired(self) -> int:
+        """Purge all expired engagements (called by daily cron)."""
+        return await self._repo.delete_expired()
+
+    async def purge_all_for_child(self, child_id: str) -> int:
+        """Drop every engagement for a child (PRD #35)."""
+        return await self._repo.delete_all_for_child(child_id)
