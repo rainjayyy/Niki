@@ -131,14 +131,18 @@ async def mark_alert_delivered(alert_id: str,
 @router.post("/baseline/add")
 async def add_baseline_record(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
-    """Add a baseline record (for testing/demo)."""
+    """Add a baseline record (for testing/demo).
+
+    Persisted via the active EmotionBaselineRepository so the
+    7-day rolling window survives process restarts.
+    """
     record = EmotionRecord(
         date=payload["date"],
         valence=float(payload["valence"]),
         intensity=int(payload.get("intensity", 3)),
         source=payload.get("source", "normal"),
     )
-    _baseline.add(record)
+    await _baseline.add_async(record)
     return {"status": "added", "record_count": len(_baseline.records())}
 
 

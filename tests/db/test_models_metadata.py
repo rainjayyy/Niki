@@ -17,13 +17,13 @@ EXPECTED_TABLES = {
     "account_verifications",
     "deletion_requests",
     "weekly_reports",
-    "emotion_baselines",
     "memory_chunks",
     "treehole_summaries",
     "treehole_engagements",
     "dashboard_alerts",
     "tutoring_events",
     "knowledge_queries",
+    "emotion_baseline_records",
 }
 
 

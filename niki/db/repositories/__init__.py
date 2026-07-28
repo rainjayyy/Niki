@@ -23,6 +23,13 @@ from niki.db.repositories.dashboard_repo import (
     get_dashboard_repository,
     set_dashboard_repository,
 )
+from niki.db.repositories.emotion_baseline_repo import (
+    EmotionBaselineRepository,
+    InMemoryEmotionBaselineRepository,
+    PostgresEmotionBaselineRepository,
+    get_emotion_baseline_repository,
+    set_emotion_baseline_repository,
+)
 from niki.db.repositories.treehole_repo import (
     InMemoryTreeholeRepository,
     PostgresTreeholeRepository,
@@ -45,4 +52,9 @@ __all__ = [
     "PostgresDashboardRepository",
     "get_dashboard_repository",
     "set_dashboard_repository",
+    "EmotionBaselineRepository",
+    "InMemoryEmotionBaselineRepository",
+    "PostgresEmotionBaselineRepository",
+    "get_emotion_baseline_repository",
+    "set_emotion_baseline_repository",
 ]

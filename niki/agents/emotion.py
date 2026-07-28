@@ -25,6 +25,10 @@ from typing import Any
 import structlog
 
 from niki.agents.base import BaseAgent
+from niki.db.repositories import (
+    EmotionBaselineRepository,
+    get_emotion_baseline_repository,
+)
 from niki.safety.output_gateway import OutputSafetyGateway
 from niki.schemas.common import AgentOutput, ChildInput
 
@@ -162,15 +166,35 @@ class EmotionBaseline:
 
     CALIBRATION_DAYS = 7
 
-    def __init__(self, threshold: float = 1.5) -> None:
+    def __init__(
+        self,
+        threshold: float = 1.5,
+        repo: EmotionBaselineRepository | None = None,
+    ) -> None:
         self._records: list[EmotionRecord] = []
         self._threshold = threshold
+        self._repo = repo or get_emotion_baseline_repository()
 
     def add(self, record: EmotionRecord) -> None:
         """Add a record (typically once per day, aggregated)."""
         self._records.append(record)
         # Keep only the most recent 30 days
         self._records = self._records[-30:]
+
+    async def add_async(self, record: EmotionRecord) -> None:
+        """Add a record AND persist it via the active repository.
+
+        Used by long-lived callers (e.g. dashboard report ingest) that
+        need the row to survive process restarts. The in-memory list
+        stays in sync for fast access.
+        """
+        self.add(record)
+        await self._repo.add(
+            date=record.date,
+            valence=record.valence,
+            intensity=record.intensity,
+            source=record.source,
+        )
 
     def records(self) -> list[EmotionRecord]:
         return list(self._records)

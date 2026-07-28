@@ -24,7 +24,7 @@ from niki.db.models.dashboard_record import (
     TutoringEvent,
 )
 from niki.db.models.deletion_request import DeletionRequest
-from niki.db.models.emotion_baseline import EmotionBaseline
+from niki.db.models.emotion_baseline_record import EmotionBaselineRecord
 from niki.db.models.memory_chunk import MemoryChunk
 from niki.db.models.parent import Parent, ParentStatus
 from niki.db.models.treehole_engagement import TreeholeEngagement
@@ -38,7 +38,7 @@ __all__ = [
     "AccountVerification",
     "DeletionRequest",
     "WeeklyReport",
-    "EmotionBaseline",
+    "EmotionBaselineRecord",
     "MemoryChunk",
     "TreeholeSummary",
     "TreeholeEngagement",
