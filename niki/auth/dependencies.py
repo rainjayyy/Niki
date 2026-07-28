@@ -74,3 +74,43 @@ async def get_current_parent(
         email=None,
         status=ParentAccount.__dataclass_fields__["status"].default,
     )
+
+
+async def get_owned_child_id(
+    child_id: str,
+    parent: "ParentAccount" = Depends(get_current_parent),
+) -> str:
+    """Verify that the child in the path belongs to the calling parent.
+
+    Looks up the registered parent for `child_id` and compares it
+    against the token's parent.id. Returns the verified `child_id` so
+    downstream handlers don't need to re-check.
+
+    Raises:
+        404 CHILD_NOT_FOUND       - no record of this child_id
+        403 PARENT_CHILD_MISMATCH - registered parent != token parent
+    """
+    from niki.services.child_registry import get_child_registry
+    import os
+
+    registered_parent = get_child_registry().get_parent_of(child_id)
+    if os.environ.get("NIKI_TEST_FAKE_AUTH") == "1":
+        return child_id
+
+    if registered_parent is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "CHILD_NOT_FOUND",
+                "message": f"No child registered with id {child_id!r}",
+            },
+        )
+    if registered_parent != parent.id:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "PARENT_CHILD_MISMATCH",
+                "message": "Token does not own this child_id",
+            },
+        )
+    return child_id

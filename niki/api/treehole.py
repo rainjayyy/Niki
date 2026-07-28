@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 
 from niki.auth.account import ParentAccount
-from niki.auth.dependencies import get_current_parent
+from niki.auth.dependencies import get_current_parent, get_owned_child_id
 
 from niki.treehole import (
     TreeholeManager,
@@ -71,8 +71,10 @@ async def engage(payload: dict,
 
 
 @router.get("/summaries/{child_id}")
-async def list_summaries(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def list_summaries(
+        child_id: str = Depends(get_owned_child_id),
+        parent: ParentAccount = Depends(get_current_parent),
+    ) -> dict:
     """List stored treehole summaries (parent dashboard)."""
     summaries = await _manager.list_summaries(child_id=child_id)
     return {

@@ -13,6 +13,32 @@ from niki.config.settings import Settings, get_settings
 from niki.middleware.rate_limit import reset_for_tests
 from niki.main import create_app
 
+# Pre-register common test (parent, child) pairs so existing
+# dashboard / treehole tests work with the new ownership check.
+# In production this is replaced by Postgres-backed ChildRepository.
+COMMON_TEST_CHILDREN = {
+    "test_parent": ["test-child-1", "test-child-2", "child-A", "child-B", "child-001", "child-X"],
+    "parent_demo": ["child-demo-1"],
+    "parent-1": ["child-1", "child-2", "child-A", "child-B", "child-001"],
+    "test_parent": ["test-child-1", "test-child-2", "child-A", "child-B", "child-001", "child-X", "child-2"],
+    "parent-A": ["child-A1", "child-A2"],
+    "parent-B": ["child-B1"],
+}
+
+@pytest.fixture(autouse=True)
+def _register_common_test_children():
+    """Auto-register common (parent, child) pairs so the ownership
+    dep lets existing tests through. Tests can override via
+    set_child_registry(InMemoryChildRegistry()) and register_child()
+    manually for custom scenarios."""
+    from niki.services.child_registry import InMemoryChildRegistry, set_child_registry
+    registry = InMemoryChildRegistry()
+    for parent, children in COMMON_TEST_CHILDREN.items():
+        for child in children:
+            registry.register(child, parent)
+    set_child_registry(registry)
+
+
 
 @pytest.fixture(scope="session")
 def event_loop() -> Any:

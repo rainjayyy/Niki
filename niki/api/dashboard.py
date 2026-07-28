@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 
 from niki.auth.account import ParentAccount
-from niki.auth.dependencies import get_current_parent
+from niki.auth.dependencies import get_current_parent, get_owned_child_id
 
 from niki.agents.emotion import EmotionBaseline, EmotionRecord
 from niki.dashboard.service import DashboardService
@@ -28,8 +28,10 @@ _baseline = EmotionBaseline()
 
 
 @router.get("/weekly-report/{child_id}")
-async def weekly_report(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def weekly_report(
+        child_id: str = Depends(get_owned_child_id),
+        parent: ParentAccount = Depends(get_current_parent),
+    ) -> dict:
     """Get the weekly emotion report (PRD #24)."""
     report = await _dashboard.generate_weekly_report(
         child_id=child_id,
@@ -39,24 +41,30 @@ async def weekly_report(child_id: str,
 
 
 @router.get("/interest/{child_id}")
-async def interest_graph(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def interest_graph(
+        child_id: str = Depends(get_owned_child_id),
+        parent: ParentAccount = Depends(get_current_parent),
+    ) -> dict:
     """Get the interest graph (PRD #25)."""
     graph = await _dashboard.generate_interest_graph(child_id=child_id)
     return graph.to_dict()
 
 
 @router.get("/learning/{child_id}")
-async def learning_whitepaper(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def learning_whitepaper(
+        child_id: str = Depends(get_owned_child_id),
+        parent: ParentAccount = Depends(get_current_parent),
+    ) -> dict:
     """Get the learning whitepaper (PRD #26)."""
     paper = await _dashboard.generate_learning_whitepaper(child_id=child_id)
     return paper.to_dict()
 
 
 @router.get("/alerts/{child_id}")
-async def get_alerts(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_alerts(
+        child_id: str = Depends(get_owned_child_id),
+        parent: ParentAccount = Depends(get_current_parent),
+    ) -> dict:
     """Get pending alerts (PRD #27, #29)."""
     pending = await _dashboard.get_pending_alerts(child_id=child_id)
     # Flatten payload fields to top level for legacy client compat.
