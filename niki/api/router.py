@@ -7,6 +7,7 @@ from niki.api.auth import router as auth_router
 from niki.api.chat_stream import router as chat_stream_router
 from niki.api.content_policy import router as content_policy_router
 from niki.api.dashboard import router as dashboard_router
+from niki.api.children import router as children_router
 from niki.api.data_export import router as data_export_router
 from niki.api.emotion import router as emotion_router
 from niki.api.encyclopedia import router as encyclopedia_router
@@ -80,6 +81,9 @@ api_router.include_router(tools_router)
 
 # BE-COMP-001: Data export (PIPL/GDPR data portability)
 api_router.include_router(data_export_router)
+
+# BE-STOR-001-ext-E: children registration
+api_router.include_router(children_router)
 
 # Future routers will be added here:
 # api_router.include_router(admin_router)      # Admin & pipeline management

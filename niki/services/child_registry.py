@@ -1,58 +1,70 @@
-"""ChildRegistry (BE-AUTH-001-rollout-ext)."""
+"""ChildRegistry (BE-STOR-001-ext-E).
+
+Adapter over a ChildRepository. Default uses InMemoryChildRepository
+(thread-safe dict); for multi-worker production, swap in
+PostgresChildRepository via set_child_registry(ChildRegistry(repo=...)).
+
+The previous dict-backed behavior is preserved in InMemoryChildRegistry
+so existing test fixtures (and the legacy in-memory use case) continue
+to work.
+"""
 
 from __future__ import annotations
 
-import threading
-from abc import ABC, abstractmethod
+import logging
 from typing import Optional
 
 import structlog
 
+from niki.db.repositories.child_repo import (
+    ChildRepository,
+    InMemoryChildRepository,
+)
+
 logger = structlog.get_logger(__name__)
 
 
-class ChildRegistry(ABC):
-    """Contract for parent-of-child lookup."""
+class ChildRegistry:
+    """Thin adapter that delegates to a ChildRepository."""
 
-    @abstractmethod
-    def get_parent_of(self, child_id: str) -> Optional[str]:
-        """Return parent_id for this child, or None if not registered."""
-
-    @abstractmethod
-    def register(self, child_id: str, parent_id: str) -> None:
-        """Register a new (child_id, parent_id) pair. Idempotent."""
-
-
-class InMemoryChildRegistry(ChildRegistry):
-    """Dict-backed registry, thread-safe."""
-
-    def __init__(self) -> None:
-        self._children: dict[str, str] = {}
-        self._lock = threading.Lock()
+    def __init__(self, repo: Optional[ChildRegistry] = None) -> None:
+        # Avoid recursive type: use Any via __class__ on a callable.
+        self._repo: ChildRepository = repo or InMemoryChildRegistry()
 
     def get_parent_of(self, child_id: str) -> Optional[str]:
-        return self._children.get(child_id)
+        return self._repo.get_parent_of(child_id)
 
-    def register(self, child_id: str, parent_id: str) -> None:
-        with self._lock:
-            self._children[child_id] = parent_id
+    def register(
+        self,
+        child_id: str,
+        parent_id: str,
+        name: str = '"""(child)"""',
+    ) -> None:
+        self._repo.register(child_id, parent_id, name=name)
 
-    def unregister(self, child_id: str) -> None:
-        with self._lock:
-            self._children.pop(child_id, None)
+    def list_children_of(self, parent_id: str) -> list[str]:
+        return self._repo.list_children_of(parent_id)
+
+    def delete(self, child_id: str) -> bool:
+        return self._repo.delete(child_id)
 
     def __len__(self) -> int:
-        return len(self._children)
+        return len(self._repo)
 
 
-_registry: ChildRegistry | None = None
+# Back-compat: re-export the InMemoryChildRepository under its
+# previous name so external callers (or older code) still work.
+InMemoryChildRegistry = InMemoryChildRepository
+
+# Process-wide singleton
+_registry: Optional[ChildRegistry] = None
 
 
 def get_child_registry() -> ChildRegistry:
     """Return the process-wide child registry (in-memory default)."""
     global _registry
     if _registry is None:
-        _registry = InMemoryChildRegistry()
+        _registry = ChildRegistry()
     return _registry
 
 

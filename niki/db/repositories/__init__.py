@@ -58,3 +58,9 @@ __all__ = [
     "get_emotion_baseline_repository",
     "set_emotion_baseline_repository",
 ]
+
+from niki.db.repositories.child_repo import (
+    ChildRepository,
+    InMemoryChildRepository,
+    PostgresChildRepository,
+)
