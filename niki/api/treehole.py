@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import HTTPException
 
 from niki.api._pagination import paginate, parse_pagination
 from niki.auth.account import ParentAccount
@@ -99,11 +100,25 @@ async def aggregate_baseline(payload: dict | None = None,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Compute the aggregated baseline contribution from treehole data.
 
-    Optional body: {"child_id": "..."} to scope to a child.
+    Optional body:
+        child_id   — scope to a child
+        window     — "daily" | "weekly" (BE-TREEHOLE-AGG-rollout);
+                    default "weekly" (back-compat)
     """
     payload = payload or {}
     child_id = payload.get("child_id")
-    result = await _manager.aggregate_for_baseline(child_id=child_id)
+    window_kind = payload.get("window", "weekly")
+    if window_kind not in ("daily", "weekly"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_WINDOW",
+                "message": "window must be 'daily' or 'weekly'",
+            },
+        )
+    result = await _manager.aggregate_for_baseline(
+        child_id=child_id, window_kind=window_kind
+    )
     return result
 
 

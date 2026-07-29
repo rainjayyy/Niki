@@ -1,13 +1,20 @@
-"""TreeholeAggregation ORM model (BE-TREEHOLE-AGG).
+"""TreeholeAggregation ORM model (BE-TREEHOLE-AGG, BE-TREEHOLE-AGG-rollout).
 
 Maintains a per-child rolling aggregate of treehole engagements
 so `aggregate_for_baseline()` is O(1) instead of having to
 decrypt every engagement on every dashboard refresh.
 
+BE-TREEHOLE-AGG-rollout: the model now supports multiple
+window granularities in parallel:
+    - "daily"  (1-day window;  re-anchored each calendar day)
+    - "weekly" (7-day window; anchored to ISO Monday)
+The composite primary key (child_id, window_kind, window_start)
+keeps the two windows in independent rows so a single
+`engage()` can update both with cheap upserts.
+
 PIPL compliant: only structured emotion metadata is stored; the
 original child text never enters this table — it remains in the
-encrypted `treehole_engagements` payload until the 7-day purge
-(after which both rows disappear together).
+encrypted `treehole_engagements` payload until the 7-day purge.
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,8 +38,15 @@ from sqlalchemy.types import JSON
 from niki.db.base import Base
 
 
+# Window-kind enum. The DB column is a plain String for SQLite
+# compat; the application layer validates with these constants.
+WINDOW_KIND_DAILY: str = "daily"
+WINDOW_KIND_WEEKLY: str = "weekly"
+VALID_WINDOW_KINDS: tuple[str, ...] = (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
+
+
 class TreeholeAggregation(Base):
-    """One rolling-window aggregate row per child."""
+    """One rolling-window aggregate row per (child × window_kind × window_start)."""
 
     __tablename__ = "treehole_aggregations"
 
@@ -39,6 +54,10 @@ class TreeholeAggregation(Base):
         String(36),
         ForeignKey("children.id", ondelete="CASCADE"),
         primary_key=True,
+    )
+    window_kind: Mapped[str] = mapped_column(
+        String(16), primary_key=True, nullable=False,
+        default=WINDOW_KIND_WEEKLY,
     )
     window_start: Mapped[date] = mapped_column(
         Date, primary_key=True, nullable=False
@@ -82,16 +101,25 @@ class TreeholeAggregation(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    __table_args__ = (
+        UniqueConstraint(
+            "child_id", "window_kind", "window_start",
+            name="uq_treehole_agg_scope",
+        ),
+    )
+
     def __repr__(self) -> str:
         return (
             f"<TreeholeAggregation child={self.child_id} "
-            f"window={self.window_start} count={self.count}>"
+            f"kind={self.window_kind} window={self.window_start} "
+            f"count={self.count}>"
         )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe snapshot of the aggregate."""
         return {
             "child_id": self.child_id,
+            "window_kind": self.window_kind,
             "window_start": self.window_start.isoformat(),
             "count": self.count,
             "valence_sum": self.valence_sum,

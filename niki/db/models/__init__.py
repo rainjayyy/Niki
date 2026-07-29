@@ -30,7 +30,12 @@ from niki.db.models.memory_chunk import MemoryChunk
 from niki.db.models.parent import Parent, ParentStatus
 from niki.db.models.push_device import PushDevice, PushPrefs, VALID_CHANNELS, VALID_PLATFORMS
 from niki.db.models.treehole_engagement import TreeholeEngagement
-from niki.db.models.treehole_aggregation import TreeholeAggregation
+from niki.db.models.treehole_aggregation import (
+    TreeholeAggregation,
+    VALID_WINDOW_KINDS,
+    WINDOW_KIND_DAILY,
+    WINDOW_KIND_WEEKLY,
+)
 from niki.db.models.treehole_summary import TreeholeSummary
 from niki.db.models.weekly_report import WeeklyReport
 
@@ -46,6 +51,9 @@ __all__ = [
     "TreeholeSummary",
     "TreeholeEngagement",
     "TreeholeAggregation",
+    "WINDOW_KIND_DAILY",
+    "WINDOW_KIND_WEEKLY",
+    "VALID_WINDOW_KINDS",
     "DashboardAlert",
     "TutoringEvent",
     "KnowledgeQuery",

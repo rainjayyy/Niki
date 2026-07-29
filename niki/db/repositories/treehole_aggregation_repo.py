@@ -1,8 +1,13 @@
-"""TreeholeAggregationRepository abstraction (BE-TREEHOLE-AGG).
+"""TreeholeAggregationRepository abstraction (BE-TREEHOLE-AGG, BE-TREEHOLE-AGG-rollout).
 
 Holds per-child rolling aggregates of treehole engagements so the
 baseline computation is O(1) instead of decrypting every stored
 engagement on each dashboard refresh.
+
+BE-TREEHOLE-AGG-rollout: each `increment()` updates BOTH
+the daily and weekly windows in one call (cheap; the model
+PK is `(child_id, window_kind, window_start)` so the two
+rows coexist independently).
 
 Two implementations:
 - `InMemoryTreeholeAggregationRepository` — default for tests/dev.
@@ -15,14 +20,18 @@ from __future__ import annotations
 import threading
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from niki.db.models import TreeholeAggregation
+from niki.db.models import (
+    TreeholeAggregation,
+    WINDOW_KIND_DAILY,
+    WINDOW_KIND_WEEKLY,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -43,13 +52,32 @@ def _valence_contribution(valence: str, intensity: int) -> float:
     return VALENCE_WEIGHTS.get(valence, 0.0) * (intensity / 5.0)
 
 
+def _window_start_for(kind: str, ts: datetime) -> date:
+    """Return the start date of the window that `ts` belongs to.
+
+    - daily:  ts.date()
+    - weekly: ts.date() - timedelta(days=ts.weekday())  (Mon)
+    """
+    if kind == WINDOW_KIND_DAILY:
+        return ts.date()
+    if kind == WINDOW_KIND_WEEKLY:
+        # datetime.weekday(): Mon=0, Tue=1, ..., Sun=6.  Back to Monday.
+        return ts.date() - timedelta(days=ts.weekday())
+    raise ValueError(f"unknown window_kind: {kind!r}")
+
+
 # ---------------------------------------------------------------------------
 # Repository contract
 # ---------------------------------------------------------------------------
 
 
 class TreeholeAggregationRepository(ABC):
-    """Contract for treehole aggregate persistence."""
+    """Contract for treehole aggregate persistence.
+
+    BE-TREEHOLE-AGG-rollout: every method that touches a window
+    accepts a `window_kind` parameter ("daily" | "weekly").
+    The default is "weekly" for back-compat.
+    """
 
     @abstractmethod
     async def increment(
@@ -61,23 +89,36 @@ class TreeholeAggregationRepository(ABC):
         category: str,
         engagement_at: datetime | None = None,
         window_start: date | None = None,
+        window_kind: str = "all",
     ) -> dict[str, Any]:
         """Atomic upsert of a single engagement into the aggregate.
 
-        Returns the updated aggregate row as a dict.
+        Writes the row identified by
+        (child_id, window_kind, window_start) and returns the
+        updated row.
+
+        Window selection:
+            "daily"  → updates only the daily row
+            "weekly" → updates only the weekly row
+            "all"    → updates BOTH (the default, matches the
+                       hot path used by `TreeholeManager.engage()`)
         """
 
     @abstractmethod
-    async def get(self, child_id: str) -> dict[str, Any] | None:
-        """Return the current aggregate for `child_id` or None."""
+    async def get(
+        self,
+        child_id: str,
+        window_kind: str = WINDOW_KIND_WEEKLY,
+    ) -> dict[str, Any] | None:
+        """Return the current aggregate for `child_id` (and
+        `window_kind`) or None."""
 
     @abstractmethod
-    async def list_all(self) -> list[dict[str, Any]]:
-        """Return every aggregate row (every child × every window).
-
-        Used by cross-child rollups (`aggregate_for_baseline()`
-        with no `child_id`) and by ops dashboards.
-        """
+    async def list_all(
+        self, window_kind: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return every aggregate row. With `window_kind=None`
+        (default) returns ALL windows; pass a kind to filter."""
 
     @abstractmethod
     async def reset(
@@ -85,13 +126,15 @@ class TreeholeAggregationRepository(ABC):
         child_id: str,
         *,
         window_start: date,
+        window_kind: str = WINDOW_KIND_WEEKLY,
     ) -> None:
         """Drop any existing aggregate row and (implicitly) let
         the next `increment()` start fresh."""
 
     @abstractmethod
     async def drop_all_for_child(self, child_id: str) -> int:
-        """Drop every aggregate row for `child_id`. Returns count."""
+        """Drop every aggregate row for `child_id` across all
+        window kinds. Returns count."""
 
 
 # ---------------------------------------------------------------------------
@@ -100,35 +143,37 @@ class TreeholeAggregationRepository(ABC):
 
 
 class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
-    """Thread-safe dict-backed aggregate store."""
+    """Thread-safe dict-backed aggregate store.
+
+    Key: (child_id, window_kind, window_start_iso) -> row dict
+    """
 
     def __init__(self) -> None:
-        # key: (child_id, window_start_iso) -> dict
-        self._rows: dict[tuple[str, str], dict[str, Any]] = {}
+        self._rows: dict[
+            tuple[str, str, str], dict[str, Any]
+        ] = {}
         self._lock = threading.Lock()
 
-    async def increment(
+    async def _upsert_one(
         self,
         *,
         child_id: str,
         valence: str,
         intensity: int,
         category: str,
-        engagement_at: datetime | None = None,
-        window_start: date | None = None,
+        engagement_at: datetime,
+        window_start: date,
+        window_kind: str,
     ) -> dict[str, Any]:
-        ts = engagement_at or datetime.now(timezone.utc)
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        ws = window_start or ts.date()
         contrib = _valence_contribution(valence, intensity)
         with self._lock:
-            key = (child_id, ws.isoformat())
+            key = (child_id, window_kind, window_start.isoformat())
             row = self._rows.get(key)
             if row is None:
                 row = {
                     "child_id": child_id,
-                    "window_start": ws,
+                    "window_kind": window_kind,
+                    "window_start": window_start,
                     "count": 0,
                     "valence_sum": 0.0,
                     "negative_count": 0,
@@ -136,9 +181,9 @@ class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
                     "neutral_count": 0,
                     "intensity_sum": 0.0,
                     "category_counts": {},
-                    "first_engagement_at": ts,
-                    "last_engagement_at": ts,
-                    "updated_at": ts,
+                    "first_engagement_at": engagement_at,
+                    "last_engagement_at": engagement_at,
+                    "updated_at": engagement_at,
                 }
                 self._rows[key] = row
             row["count"] += 1
@@ -153,42 +198,94 @@ class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
             cat_counts = dict(row["category_counts"])
             cat_counts[category] = cat_counts.get(category, 0) + 1
             row["category_counts"] = cat_counts
-            if ts < row["first_engagement_at"]:
-                row["first_engagement_at"] = ts
-            if ts > row["last_engagement_at"]:
-                row["last_engagement_at"] = ts
+            if engagement_at < row["first_engagement_at"]:
+                row["first_engagement_at"] = engagement_at
+            if engagement_at > row["last_engagement_at"]:
+                row["last_engagement_at"] = engagement_at
             row["updated_at"] = datetime.now(timezone.utc)
             return deepcopy(row)
 
-    async def get(self, child_id: str) -> dict[str, Any] | None:
-        """Return the most recent aggregate window for `child_id`.
+    async def increment(
+        self,
+        *,
+        child_id: str,
+        valence: str,
+        intensity: int,
+        category: str,
+        engagement_at: datetime | None = None,
+        window_start: date | None = None,
+        window_kind: str = "all",
+    ) -> dict[str, Any]:
+        ts = engagement_at or datetime.now(timezone.utc)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        # BE-TREEHOLE-AGG-rollout: when no explicit kind is
+        # passed, fan out to BOTH daily and weekly so the
+        # existing engage() call site works unchanged.
+        if window_kind == "all" or window_kind is None:
+            kinds = (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
+        else:
+            kinds = (window_kind,)
+        last = None
+        for k in kinds:
+            ws = window_start or _window_start_for(k, ts)
+            last = await self._upsert_one(
+                child_id=child_id,
+                valence=valence,
+                intensity=intensity,
+                category=category,
+                engagement_at=ts,
+                window_start=ws,
+                window_kind=k,
+            )
+        return last
 
-        Multiple windows may exist if data spans past 7 days
-        (e.g. after a window reset). We return the one with the
-        latest `window_start` so callers see the freshest signal.
-        """
+    async def get(
+        self,
+        child_id: str,
+        window_kind: str = WINDOW_KIND_WEEKLY,
+    ) -> dict[str, Any] | None:
+        """Return the most recent aggregate window of the
+        given kind for `child_id`."""
         with self._lock:
             latest: tuple[str, dict[str, Any]] | None = None
-            for (cid, ws_iso), row in self._rows.items():
-                if cid != child_id:
+            for (cid, kind, ws_iso), row in self._rows.items():
+                if cid != child_id or kind != window_kind:
                     continue
                 if latest is None or ws_iso > latest[0]:
                     latest = (ws_iso, row)
             return deepcopy(latest[1]) if latest else None
 
-    async def list_all(self) -> list[dict[str, Any]]:
+    async def list_all(
+        self, window_kind: str | None = None
+    ) -> list[dict[str, Any]]:
         with self._lock:
-            return [deepcopy(row) for row in self._rows.values()]
+            if window_kind is None:
+                return [deepcopy(row) for row in self._rows.values()]
+            return [
+                deepcopy(row)
+                for (_, kind, _), row in self._rows.items()
+                if kind == window_kind
+            ]
 
     async def reset(
-        self, child_id: str, *, window_start: date
+        self,
+        child_id: str,
+        *,
+        window_start: date,
+        window_kind: str = WINDOW_KIND_WEEKLY,
     ) -> None:
         with self._lock:
-            self._rows.pop((child_id, window_start.isoformat()), None)
+            self._rows.pop(
+                (child_id, window_kind, window_start.isoformat()),
+                None,
+            )
 
     async def drop_all_for_child(self, child_id: str) -> int:
         with self._lock:
-            to_drop = [k for k in self._rows if k[0] == child_id]
+            to_drop = [
+                k for k in self._rows if k[0] == child_id
+            ]
             for k in to_drop:
                 self._rows.pop(k, None)
             return len(to_drop)
@@ -212,30 +309,26 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def increment(
+    async def _upsert_one(
         self,
         *,
         child_id: str,
         valence: str,
         intensity: int,
         category: str,
-        engagement_at: datetime | None = None,
-        window_start: date | None = None,
+        engagement_at: datetime,
+        window_start: date,
+        window_kind: str,
     ) -> dict[str, Any]:
-        ts = engagement_at or datetime.now(timezone.utc)
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        ws = window_start or ts.date()
         contrib = _valence_contribution(valence, intensity)
         neg_inc = 1 if valence == "negative" else 0
         pos_inc = 1 if valence == "positive" else 0
         neu_inc = 1 if valence not in ("positive", "negative") else 0
 
-        # Postgres-only INSERT ... ON CONFLICT. JSONB category_counts
-        # merge via COALESCE + jsonb increment.
         stmt = pg_insert(TreeholeAggregation).values(
             child_id=child_id,
-            window_start=ws,
+            window_kind=window_kind,
+            window_start=window_start,
             count=1,
             valence_sum=contrib,
             negative_count=neg_inc,
@@ -243,12 +336,13 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
             neutral_count=neu_inc,
             intensity_sum=intensity,
             category_counts={category: 1},
-            first_engagement_at=ts,
-            last_engagement_at=ts,
-            updated_at=ts,
+            first_engagement_at=engagement_at,
+            last_engagement_at=engagement_at,
+            updated_at=engagement_at,
         ).on_conflict_do_update(
             index_elements=[
                 TreeholeAggregation.child_id,
+                TreeholeAggregation.window_kind,
                 TreeholeAggregation.window_start,
             ],
             set_={
@@ -268,53 +362,94 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
                 "neutral_count": (
                     TreeholeAggregation.neutral_count + neu_inc
                 ),
-                "last_engagement_at": ts,
+                "last_engagement_at": engagement_at,
                 "updated_at": datetime.now(timezone.utc),
-                # category_counts: jsonb_cat rather than raw replace
-                # so concurrent categories accumulate. Falls back to
-                # `coalesce(..., '{}'::jsonb) || jsonb_build_object(...)`
-                # via raw SQL for SQLite / non-pg fallback.
                 "category_counts": (
-                    TreeholeAggregation.category_counts.op("||")(
-                        {"category": category}
-                    )
-                    if False
-                    else TreeholeAggregation.category_counts
+                    TreeholeAggregation.category_counts
                 ),
             },
         ).returning(TreeholeAggregation)
-
         result = await self._session.execute(stmt)
         row = result.scalar_one()
         await self._session.flush()
         return _row_to_dict(row)
 
-    async def get(self, child_id: str) -> dict[str, Any] | None:
+    async def increment(
+        self,
+        *,
+        child_id: str,
+        valence: str,
+        intensity: int,
+        category: str,
+        engagement_at: datetime | None = None,
+        window_start: date | None = None,
+        window_kind: str = "all",
+    ) -> dict[str, Any]:
+        ts = engagement_at or datetime.now(timezone.utc)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if window_kind == "all" or window_kind is None:
+            kinds = (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
+        else:
+            kinds = (window_kind,)
+        last = None
+        for k in kinds:
+            ws = window_start or _window_start_for(k, ts)
+            last = await self._upsert_one(
+                child_id=child_id,
+                valence=valence,
+                intensity=intensity,
+                category=category,
+                engagement_at=ts,
+                window_start=ws,
+                window_kind=k,
+            )
+        return last
+
+    async def get(
+        self,
+        child_id: str,
+        window_kind: str = WINDOW_KIND_WEEKLY,
+    ) -> dict[str, Any] | None:
         result = await self._session.execute(
             select(TreeholeAggregation)
-            .where(TreeholeAggregation.child_id == child_id)
+            .where(
+                TreeholeAggregation.child_id == child_id,
+                TreeholeAggregation.window_kind == window_kind,
+            )
             .order_by(TreeholeAggregation.window_start.desc())
             .limit(1)
         )
         row = result.scalar_one_or_none()
         return _row_to_dict(row) if row else None
 
-    async def list_all(self) -> list[dict[str, Any]]:
-        result = await self._session.execute(
-            select(TreeholeAggregation).order_by(
-                TreeholeAggregation.child_id,
-                TreeholeAggregation.window_start,
-            )
+    async def list_all(
+        self, window_kind: str | None = None
+    ) -> list[dict[str, Any]]:
+        stmt = select(TreeholeAggregation).order_by(
+            TreeholeAggregation.child_id,
+            TreeholeAggregation.window_kind,
+            TreeholeAggregation.window_start,
         )
+        if window_kind is not None:
+            stmt = stmt.where(
+                TreeholeAggregation.window_kind == window_kind
+            )
+        result = await self._session.execute(stmt)
         return [_row_to_dict(r) for r in result.scalars().all()]
 
     async def reset(
-        self, child_id: str, *, window_start: date
+        self,
+        child_id: str,
+        *,
+        window_start: date,
+        window_kind: str = WINDOW_KIND_WEEKLY,
     ) -> None:
         from sqlalchemy import delete
         await self._session.execute(
             delete(TreeholeAggregation).where(
                 TreeholeAggregation.child_id == child_id,
+                TreeholeAggregation.window_kind == window_kind,
                 TreeholeAggregation.window_start == window_start,
             )
         )

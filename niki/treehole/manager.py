@@ -283,14 +283,20 @@ class TreeholeManager:
         return out
 
     async def aggregate_for_baseline(
-        self, child_id: str | None = None
+        self,
+        child_id: str | None = None,
+        window_kind: str = "weekly",
     ) -> dict[str, float]:
         """Compute the baseline contribution from treehole summaries.
 
         BE-TREEHOLE-AGG: reads from the per-child rolling aggregate
         table (O(1) per child) instead of decrypting every stored
         engagement. When `child_id` is None, returns the cross-child
-        rollup (sum of all per-child aggregates).
+        rollup (sum of all per-child aggregates for the given kind).
+
+        BE-TREEHOLE-AGG-rollout: `window_kind` picks the window
+        granularity. Default "weekly" preserves the original API.
+        Pass "daily" for short-window reporting cards.
 
         Returns the same shape as the legacy path for backwards
         compatibility:
@@ -300,15 +306,17 @@ class TreeholeManager:
         mean, individual summaries cannot be re-derived.
         """
         if child_id is not None:
-            agg = await self._agg_repo.get(child_id)
+            agg = await self._agg_repo.get(
+                child_id, window_kind=window_kind
+            )
             if not agg or agg.get("count", 0) == 0:
                 return {"mean_valence": 0.0, "count": 0}
             return {
                 "mean_valence": agg["valence_sum"] / agg["count"],
                 "count": agg["count"],
             }
-        # Cross-child rollup.
-        all_rows = await self._agg_repo.list_all()
+        # Cross-child rollup (filtered by window_kind).
+        all_rows = await self._agg_repo.list_all(window_kind=window_kind)
         if not all_rows:
             return {"mean_valence": 0.0, "count": 0}
         total_count = sum(r.get("count", 0) for r in all_rows)

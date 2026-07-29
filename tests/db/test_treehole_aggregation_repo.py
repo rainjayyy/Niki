@@ -99,12 +99,23 @@ class TestInMemoryTreeholeAggregationRepository:
         await repo.increment(
             child_id="c1", valence="negative", intensity=4,
             category="family", engagement_at=ts,
+            window_kind="daily",  # BE-TREEHOLE-AGG-rollout: scope
         )
-        await repo.reset("c1", window_start=ts.date())
-        assert await repo.get("c1") is None
+        await repo.reset(
+            "c1", window_start=ts.date(), window_kind="daily"
+        )
+        # After reset the daily row is gone. Weekly was never
+        # written (we passed window_kind="daily") so it stays
+        # absent.
+        assert await repo.get("c1", window_kind="daily") is None
+        assert await repo.get("c1", window_kind="weekly") is None
 
     async def test_drop_all_for_child(self) -> None:
         repo = InMemoryTreeholeAggregationRepository()
+        # Both increments happen on the same calendar day, so
+        # the daily window collapses to a single row (key on
+        # child + window_kind + window_start) — same for weekly.
+        # BE-TREEHOLE-AGG-rollout writes BOTH kinds per call.
         await repo.increment(
             child_id="c1", valence="positive", intensity=2,
             category="self", engagement_at=_now(),
@@ -113,9 +124,11 @@ class TestInMemoryTreeholeAggregationRepository:
             child_id="c1", valence="negative", intensity=3,
             category="school", engagement_at=_now(),
         )
+        # 1 daily row + 1 weekly row = 2 rows total.
         dropped = await repo.drop_all_for_child("c1")
-        assert dropped == 1  # one window row
-        assert await repo.get("c1") is None
+        assert dropped == 2
+        assert await repo.get("c1", window_kind="daily") is None
+        assert await repo.get("c1", window_kind="weekly") is None
 
     async def test_first_and_last_engagement_tracked(self) -> None:
         repo = InMemoryTreeholeAggregationRepository()
