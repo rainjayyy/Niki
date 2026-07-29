@@ -16,6 +16,7 @@ from datetime import datetime
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import HTTPException
 from fastapi.responses import Response
 
 from niki.auth.account import ParentAccount
@@ -48,6 +49,7 @@ async def weekly_report(
 async def weekly_report_pdf(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
+        template: str = "child",
     ) -> Response:
     """Get the weekly emotion report as a downloadable PDF (BE-DASH-001).
 
@@ -55,17 +57,41 @@ async def weekly_report_pdf(
     the server does the rendering so the layout is consistent
     across browsers / OSes. A4 portrait, single page for the
     common case.
+
+    BE-DASH-001-rollout: ?template=child|preschool|school picks
+    the report variant. The default `child` is the balanced
+    tone for ages 7-10.
     """
     # Import here so the API module doesn't pull reportlab
     # unless the endpoint is actually hit.
+    from fastapi import Query
     from niki.dashboard.pdf import render_weekly_report_pdf
+    from niki.dashboard.templates import ReportTemplate
+
+    # template may come in via the function arg (FastAPI parses
+    # `?template=`) — we already declared it. Normalise here:
+    try:
+        template_enum = ReportTemplate(template)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_TEMPLATE",
+                "message": (
+                    f"template must be one of "
+                    f"{[t.value for t in ReportTemplate]}"
+                ),
+            },
+        )
 
     report = await _dashboard.generate_weekly_report(
         child_id=child_id,
         baseline=_baseline,
     )
     pdf_bytes = render_weekly_report_pdf(
-        child_id=child_id, report=report
+        child_id=child_id,
+        report=report,
+        template=template_enum,
     )
     # Filename: niki-weekly-c-{short_child_id}-{date}.pdf
     short_id = child_id[:8]

@@ -1,13 +1,19 @@
-"""Weekly report PDF rendering (BE-DASH-001).
+"""Weekly report PDF rendering (BE-DASH-001, BE-DASH-001-rollout).
 
 Wraps `EmotionWeeklyReport` from `niki.dashboard.report` into a
 parent-facing A4 PDF. Uses reportlab's built-in STSong-Light
 CJK CID font so Chinese text renders without external font
 files (no system-font dependency).
 
-Output is plain PDF bytes; the API layer is responsible for
-returning it as `application/pdf` with a sensible
-`Content-Disposition`.
+Templates (BE-DASH-001-rollout):
+    - CHILD       — default, balanced tone
+    - PRESCHOOL   — emoji-heavy, short sentences
+    - SCHOOL      — data-forward
+
+Branding (BE-DASH-001-rollout):
+    - Optional logo (base64 image) in the header
+    - Brand name (max 30 chars) above the title
+    - Brand color (hex) for the title accent
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import (
+    Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -33,6 +40,17 @@ from niki.dashboard.report import (
     EmotionWeeklyReport,
     MoodTrend,
 )
+from niki.dashboard.templates import (
+    MAX_LOGO_BASE64_BYTES,
+    ReportBranding,
+    ReportTemplate,
+    _template_text,
+    get_default_actions,
+)
+
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 # Register the CJK font once on first import. reportlab's
@@ -49,16 +67,30 @@ def _ensure_cjk_font() -> None:
     _FONT_REGISTERED = True
 
 
-# Colour palette (kept minimal — single accent + neutrals).
-COLOR_ACCENT = colors.HexColor("#5B6BFF")     # Niki indigo
-COLOR_POSITIVE = colors.HexColor("#3CB371")
-COLOR_ATTENTION = colors.HexColor("#E68A00")
-COLOR_TEXT = colors.HexColor("#1A1A1A")
-COLOR_SUBTLE = colors.HexColor("#6B6B6B")
-COLOR_RULE = colors.HexColor("#E5E5E5")
+_TREND_LABEL = {
+    MoodTrend.IMPROVING: "上升 ↗",
+    MoodTrend.STABLE: "稳定 →",
+    MoodTrend.NEEDS_ATTENTION: "需关注 ⚠",
+}
 
 
-def _build_styles() -> dict[str, ParagraphStyle]:
+def _safe_color(hex_color: str) -> colors.Color:
+    """Best-effort: parse a hex color; fall back to indigo on error."""
+    try:
+        return colors.HexColor(hex_color)
+    except Exception:  # pragma: no cover
+        return colors.HexColor("#5B6BFF")
+
+
+def _trend_color(trend: MoodTrend) -> colors.Color:
+    if trend == MoodTrend.IMPROVING:
+        return colors.HexColor("#3CB371")
+    if trend == MoodTrend.NEEDS_ATTENTION:
+        return colors.HexColor("#E68A00")
+    return colors.HexColor("#6B6B6B")
+
+
+def _build_styles(brand_color: colors.Color) -> dict[str, ParagraphStyle]:
     base = getSampleStyleSheet()
     _ensure_cjk_font()
     title = ParagraphStyle(
@@ -67,7 +99,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         fontName=_CJK_FONT,
         fontSize=20,
         leading=26,
-        textColor=COLOR_ACCENT,
+        textColor=brand_color,
         spaceAfter=4,
     )
     subtitle = ParagraphStyle(
@@ -76,7 +108,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         fontName=_CJK_FONT,
         fontSize=10,
         leading=14,
-        textColor=COLOR_SUBTLE,
+        textColor=colors.HexColor("#6B6B6B"),
         spaceAfter=16,
     )
     section = ParagraphStyle(
@@ -85,7 +117,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         fontName=_CJK_FONT,
         fontSize=14,
         leading=18,
-        textColor=COLOR_ACCENT,
+        textColor=brand_color,
         spaceBefore=12,
         spaceAfter=6,
     )
@@ -95,7 +127,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         fontName=_CJK_FONT,
         fontSize=11,
         leading=16,
-        textColor=COLOR_TEXT,
+        textColor=colors.HexColor("#1A1A1A"),
         spaceAfter=4,
     )
     bullet = ParagraphStyle(
@@ -111,7 +143,16 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         fontName=_CJK_FONT,
         fontSize=9,
         leading=12,
-        textColor=COLOR_SUBTLE,
+        textColor=colors.HexColor("#6B6B6B"),
+    )
+    brand_name_style = ParagraphStyle(
+        "NikiBrand",
+        parent=base["Normal"],
+        fontName=_CJK_FONT,
+        fontSize=12,
+        leading=14,
+        textColor=brand_color,
+        spaceAfter=2,
     )
     return {
         "title": title,
@@ -120,37 +161,42 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         "body": body,
         "bullet": bullet,
         "meta": meta,
+        "brand_name": brand_name_style,
     }
-
-
-_TREND_LABEL = {
-    MoodTrend.IMPROVING: "上升 ↗",
-    MoodTrend.STABLE: "稳定 →",
-    MoodTrend.NEEDS_ATTENTION: "需关注 ⚠",
-}
-
-
-def _trend_color(trend: MoodTrend) -> colors.Color:
-    if trend == MoodTrend.IMPROVING:
-        return COLOR_POSITIVE
-    if trend == MoodTrend.NEEDS_ATTENTION:
-        return COLOR_ATTENTION
-    return COLOR_SUBTLE
 
 
 class WeeklyReportPDF:
     """Render an `EmotionWeeklyReport` to PDF bytes.
 
     Stateless — `render()` returns the encoded PDF as `bytes`.
+
+    Args:
+        child_id:  the child's identifier (used for the title)
+        report:    the structured EmotionWeeklyReport
+        template:  one of ReportTemplate — controls tone / emoji / detail
+        branding:  ReportBranding — optional logo + brand name + color
     """
 
-    def __init__(self, *, child_id: str, report: EmotionWeeklyReport) -> None:
+    LOGO_MAX_WIDTH_MM = 24
+    LOGO_MAX_HEIGHT_MM = 12
+
+    def __init__(
+        self,
+        *,
+        child_id: str,
+        report: EmotionWeeklyReport,
+        template: ReportTemplate = ReportTemplate.CHILD,
+        branding: ReportBranding | None = None,
+    ) -> None:
         self.child_id = child_id
         self.report = report
+        self.template = template
+        self.branding = branding or ReportBranding()
 
     def render(self) -> bytes:
-        """Build and return the PDF as a `bytes` blob."""
-        styles = _build_styles()
+        styles = _build_styles(
+            _safe_color(self.branding.brand_color)
+        )
         buf = io.BytesIO()
         doc = SimpleDocTemplate(
             buf,
@@ -159,7 +205,10 @@ class WeeklyReportPDF:
             rightMargin=18 * mm,
             topMargin=18 * mm,
             bottomMargin=18 * mm,
-            title=f"Niki 周报 - {self.child_id}",
+            title=(
+                f"Niki 周报 - {self.branding.brand_name or 'Niki'} "
+                f"- {self.child_id}"
+            ),
         )
         story = self._build_story(styles)
         doc.build(story)
@@ -171,9 +220,18 @@ class WeeklyReportPDF:
         story: list = []
         report = self.report
         trend = report.trend
+        copy = _template_text(self.template, report)
 
-        # Title block
-        story.append(Paragraph("Niki 周报", styles["title"]))
+        # ---- Brand header (logo + brand name) ----
+        if self.branding.brand_name or self.branding.logo_b64:
+            story.extend(self._build_header(styles))
+            story.append(Spacer(1, 4))
+
+        # ---- Title block ----
+        title_emoji = copy["title_emoji"]
+        story.append(
+            Paragraph(f"{title_emoji}Niki 周报", styles["title"])
+        )
         story.append(
             Paragraph(
                 f"孩子 ID: {self.child_id} &nbsp;|&nbsp; "
@@ -182,14 +240,22 @@ class WeeklyReportPDF:
             )
         )
 
-        # Headline
-        story.append(Paragraph("本周亮点", styles["section"]))
-        story.append(Paragraph(report.headline or "—", styles["body"]))
+        # ---- Headline ----
+        story.append(
+            Paragraph("本周亮点", styles["section"])
+        )
+        story.append(
+            Paragraph(report.headline or "—", styles["body"])
+        )
         story.append(Spacer(1, 6))
 
-        # Trend
-        story.append(Paragraph("情绪趋势", styles["section"]))
-        trend_label = _TREND_LABEL.get(trend.overall_trend, "—")
+        # ---- Trend ----
+        story.append(
+            Paragraph("情绪趋势", styles["section"])
+        )
+        trend_label = _TREND_LABEL.get(
+            trend.overall_trend, "—"
+        ) + copy["trend_label_extra"]
         trend_table = Table(
             [
                 ["整体趋势", "正向天数", "情绪低谷", "数据窗口"],
@@ -207,9 +273,12 @@ class WeeklyReportPDF:
                 [
                     ("FONTNAME", (0, 0), (-1, -1), _CJK_FONT),
                     ("FONTSIZE", (0, 0), (-1, -1), 10),
-                    ("BACKGROUND", (0, 0), (-1, 0), COLOR_RULE),
-                    ("TEXTCOLOR", (1, 1), (1, 1), _trend_color(trend.overall_trend)),
-                    ("TEXTCOLOR", (0, 1), (0, 1), _trend_color(trend.overall_trend)),
+                    ("BACKGROUND", (0, 0), (-1, 0),
+                     colors.HexColor("#E5E5E5")),
+                    ("TEXTCOLOR", (1, 1), (1, 1),
+                     _trend_color(trend.overall_trend)),
+                    ("TEXTCOLOR", (0, 1), (0, 1),
+                     _trend_color(trend.overall_trend)),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                     ("TOPPADDING", (0, 0), (-1, -1), 6),
                     ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -220,58 +289,132 @@ class WeeklyReportPDF:
         story.append(trend_table)
         story.append(Spacer(1, 6))
 
-        # Discoveries
-        story.append(Paragraph("本周发现", styles["section"]))
+        # ---- Discoveries ----
         if report.discoveries:
+            story.append(
+                Paragraph(
+                    copy["discoveries_intro"], styles["section"]
+                )
+            )
             for d in report.discoveries:
                 story.append(
                     Paragraph(f"• {d}", styles["bullet"])
                 )
-        else:
-            story.append(Paragraph("—", styles["body"]))
-        story.append(Spacer(1, 6))
+            story.append(Spacer(1, 6))
 
-        # Fuzzy negatives
-        story.append(Paragraph("温馨提示", styles["section"]))
+        # ---- Fuzzy negatives ----
         if report.fuzzy_negatives:
+            story.append(
+                Paragraph("温馨提示", styles["section"])
+            )
             for n in report.fuzzy_negatives:
                 story.append(
                     Paragraph(f"• {n}", styles["bullet"])
                 )
-        else:
-            story.append(Paragraph("本周状态平稳～", styles["body"]))
-        story.append(Spacer(1, 6))
+            story.append(Spacer(1, 6))
 
-        # Anomalies
+        # ---- Anomalies ----
         if report.anomaly_annotations:
-            story.append(Paragraph("关注点", styles["section"]))
+            story.append(
+                Paragraph("关注点", styles["section"])
+            )
             for a in report.anomaly_annotations:
                 story.append(
                     Paragraph(f"⚠ {a}", styles["bullet"])
                 )
             story.append(Spacer(1, 6))
 
-        # Action suggestions
-        if report.action_suggestions:
-            story.append(Paragraph("行动建议", styles["section"]))
-            for s in report.action_suggestions:
+        # ---- Action suggestions (template-aware) ----
+        actions = get_default_actions(self.template, report)
+        if actions:
+            story.append(
+                Paragraph(
+                    copy["tips_intro"], styles["section"]
+                )
+            )
+            for s in actions:
                 story.append(
                     Paragraph(f"• {s}", styles["bullet"])
                 )
             story.append(Spacer(1, 6))
 
-        # Footer / metadata
+        # ---- Footer ----
         story.append(Spacer(1, 10))
-        story.append(
-            Paragraph(
-                f"生成时间: {self._fmt_ts(report.generated_at)} &nbsp;|&nbsp; "
-                f"覆盖 {self._window_days()} 天 &nbsp;|&nbsp; "
-                f"安全阀触发 {report.safety_valve_count} 次 &nbsp;|&nbsp; "
-                f"心洞模式 {report.treehole_engagement_count} 次",
-                styles["meta"],
-            )
+        footer = (
+            f"生成时间: {self._fmt_ts(report.generated_at)} &nbsp;|&nbsp; "
+            f"覆盖 {self._window_days()} 天 &nbsp;|&nbsp; "
+            f"安全阀触发 {report.safety_valve_count} 次 &nbsp;|&nbsp; "
+            f"心洞模式 {report.treehole_engagement_count} 次"
         )
+        if copy["footer_message"]:
+            footer = f"{copy['footer_message']} &nbsp;|&nbsp; " + footer
+        story.append(Paragraph(footer, styles["meta"]))
         return story
+
+    def _build_header(
+        self, styles: dict[str, ParagraphStyle]
+    ) -> list:
+        """Logo (left) + brand name (right) header row."""
+        logo_bytes = self.branding.logo_bytes()
+        if logo_bytes:
+            try:
+                logo_buf = io.BytesIO(logo_bytes)
+                # Try to read image dimensions to compute a
+                # sensible aspect ratio.
+                try:
+                    from PIL import Image as PILImage
+                    with PILImage.open(logo_buf) as im:
+                        w_px, h_px = im.size
+                except Exception:
+                    w_px, h_px = 100, 50
+                logo_buf.seek(0)
+                # Scale to fit LOGO_MAX_WIDTH_MM, preserve ratio
+                aspect = (
+                    h_px / w_px if w_px else 0.5
+                )
+                w_mm = self.LOGO_MAX_WIDTH_MM
+                h_mm = min(
+                    self.LOGO_MAX_HEIGHT_MM,
+                    w_mm * aspect,
+                )
+                logo_img = Image(logo_buf, width=w_mm, height=h_mm)
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "dashboard.pdf.logo_render_failed",
+                    error=str(exc),
+                )
+                logo_img = None
+        else:
+            logo_img = None
+
+        if logo_img and self.branding.brand_name:
+            row = Table(
+                [[logo_img, Paragraph(
+                    self.branding.brand_name,
+                    styles["brand_name"],
+                )]],
+                colWidths=[
+                    self.LOGO_MAX_WIDTH_MM + 4,
+                    A4[0] - 18 * 2 - 4 - self.LOGO_MAX_WIDTH_MM,
+                ],
+            )
+            row.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            return [row]
+        if logo_img:
+            return [logo_img]
+        if self.branding.brand_name:
+            return [Paragraph(
+                self.branding.brand_name, styles["brand_name"]
+            )]
+        return []
 
     def _window_days(self) -> int:
         try:
@@ -292,11 +435,16 @@ class WeeklyReportPDF:
 
 
 def render_weekly_report_pdf(
-    *, child_id: str, report: EmotionWeeklyReport
+    *,
+    child_id: str,
+    report: EmotionWeeklyReport,
+    template: ReportTemplate = ReportTemplate.CHILD,
+    branding: ReportBranding | None = None,
 ) -> bytes:
-    """Module-level helper: render a report to PDF bytes.
-
-    Equivalent to `WeeklyReportPDF(child_id=..., report=...).render()`
-    but easier to call from the API layer.
-    """
-    return WeeklyReportPDF(child_id=child_id, report=report).render()
+    """Module-level helper: render a report to PDF bytes."""
+    return WeeklyReportPDF(
+        child_id=child_id,
+        report=report,
+        template=template,
+        branding=branding,
+    ).render()
