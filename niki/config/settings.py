@@ -101,6 +101,18 @@ class Settings(BaseSettings):
     # requests don't 500 just because the cache is down.
     rate_limit_storage_uri: str = "memory://"
 
+    # --- BE-AUTH-001-rollout-alerts-rollout: email sink ---
+    # SMTP delivery of SecurityAlerts. When `auth_alert_smtp_host`
+    # is empty the EmailAlertDispatcher short-circuits to a
+    # structlog warning, so it's safe to leave blank in dev.
+    auth_alert_smtp_host: str = ""
+    auth_alert_smtp_port: int = 587
+    auth_alert_smtp_username: str = ""
+    auth_alert_smtp_password: str = ""
+    auth_alert_email_from: str = ""
+    auth_alert_email_to: str = ""        # comma-separated recipients
+    auth_alert_smtp_timeout_s: int = 5
+
     # --- BE-MEDIA-001-real: object storage backend ---
     # "local"   → LocalDiskStorage (single-process, dev / PoC)
     # "s3"      → S3CompatibleStorage (Aliyun OSS / Tencent COS /
