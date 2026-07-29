@@ -56,6 +56,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "slowapi>=0.1.9",            # BE-API-002 rate limiting
     "reportlab>=5.0.0",          # BE-DASH-001 PDF weekly report
+    "boto3>=1.34.0",             # BE-MEDIA-001-real S3-compatible storage
 ]
 
 [project.optional-dependencies]

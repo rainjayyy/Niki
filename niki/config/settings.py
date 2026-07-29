@@ -101,6 +101,20 @@ class Settings(BaseSettings):
     # requests don't 500 just because the cache is down.
     rate_limit_storage_uri: str = "memory://"
 
+    # --- BE-MEDIA-001-real: object storage backend ---
+    # "local"   → LocalDiskStorage (single-process, dev / PoC)
+    # "s3"      → S3CompatibleStorage (Aliyun OSS / Tencent COS /
+    #             AWS S3 via boto3, production)
+    media_storage_backend: str = "local"
+    s3_endpoint_url: str = ""        # empty = AWS S3 default
+    s3_region: str = "us-east-1"
+    s3_bucket_name: str = "niki-media"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_presign_ttl_seconds: int = 3600
+    s3_multipart_threshold_bytes: int = 5 * 1024 * 1024  # 5 MB
+    s3_addressing_style: str = "auto"  # "auto" | "path" | "virtual"
+
 
 @lru_cache
 def get_settings() -> Settings:

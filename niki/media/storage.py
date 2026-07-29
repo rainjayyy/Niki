@@ -277,14 +277,42 @@ _storage: MediaStorage | None = None
 
 
 def get_media_storage() -> MediaStorage:
-    """Return the process-wide media storage (default: LocalDiskStorage)."""
+    """Return the process-wide media storage.
+
+    BE-MEDIA-001-real: the active backend is driven by
+    `settings.media_storage_backend`:
+        "local" → LocalDiskStorage (single-process, dev / PoC)
+        "s3"    → S3CompatibleStorage (production, boto3)
+
+    Tests should call `set_media_storage(...)` to inject a fake
+    (e.g. `InMemoryS3Storage`) so the S3 path can be exercised
+    without a real endpoint.
+    """
     global _storage
     if _storage is None:
-        base = os.environ.get(
-            "NIKI_UPLOAD_DIR",
-            str(Path.home() / ".niki" / "uploads"),
-        )
-        _storage = LocalDiskStorage(base)
+        from niki.config.settings import get_settings
+        settings = get_settings()
+        if settings.media_storage_backend == "s3":
+            # Lazy import — keeps boto3 optional for local dev.
+            from niki.media.s3_storage import S3CompatibleStorage
+            _storage = S3CompatibleStorage(
+                endpoint_url=settings.s3_endpoint_url,
+                region=settings.s3_region,
+                bucket=settings.s3_bucket_name,
+                access_key=settings.s3_access_key,
+                secret_key=settings.s3_secret_key,
+                presign_ttl_seconds=settings.s3_presign_ttl_seconds,
+                addressing_style=settings.s3_addressing_style,
+                multipart_threshold_bytes=(
+                    settings.s3_multipart_threshold_bytes
+                ),
+            )
+        else:
+            base = os.environ.get(
+                "NIKI_UPLOAD_DIR",
+                str(Path.home() / ".niki" / "uploads"),
+            )
+            _storage = LocalDiskStorage(base)
     return _storage
 
 
