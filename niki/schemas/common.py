@@ -27,6 +27,15 @@ class HealthResponse(BaseModel):
     version: str = Field(..., description="Application version")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     components: list[HealthStatus] = Field(default_factory=list)
+    # BE-API-002-redis: surface the active rate-limit backend so
+    # ops can confirm the multi-worker deployment is using the
+    # shared counter (not per-process memory).
+    rate_limit_backend: str = Field(
+        "memory", description="'memory' | 'redis'"
+    )
+    rate_limit_in_fallback: bool = Field(
+        False, description="True if slowapi has degraded to in-memory after a Redis outage"
+    )
 
 
 class APIResponse(BaseModel, Generic[T]):

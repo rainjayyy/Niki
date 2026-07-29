@@ -92,6 +92,15 @@ class Settings(BaseSettings):
     auth_alert_webhook_url: str = ""
     auth_alert_webhook_timeout_s: int = 5
 
+    # --- BE-API-002-redis: shared rate-limit counter backend ---
+    # Default keeps current in-memory behaviour for tests / dev.
+    # Production: set NIKI_RATE_LIMIT_STORAGE_URI=redis://...
+    # When the URI points at Redis, slowapi auto-selects the
+    # Redis backend; if Redis is unreachable the limiter falls
+    # back to in-memory for the lifetime of the process so
+    # requests don't 500 just because the cache is down.
+    rate_limit_storage_uri: str = "memory://"
+
 
 @lru_cache
 def get_settings() -> Settings:

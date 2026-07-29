@@ -10,6 +10,10 @@ from niki.infrastructure.chroma import ChromaClient
 from niki.infrastructure.neo4j import Neo4jClient
 from niki.infrastructure.postgres import PostgresClient
 from niki.infrastructure.redis import RedisClient
+from niki.middleware.rate_limit import (
+    get_rate_limit_backend,
+    is_rate_limit_in_fallback,
+)
 from niki.schemas.common import HealthResponse, HealthStatus
 
 router = APIRouter(tags=["health"])
@@ -56,6 +60,8 @@ async def health_check() -> HealthResponse:
         version=settings.api_version,
         timestamp=datetime.now(),
         components=components,
+        rate_limit_backend=get_rate_limit_backend(),
+        rate_limit_in_fallback=is_rate_limit_in_fallback(),
     )
 
 
