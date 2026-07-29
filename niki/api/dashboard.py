@@ -1,18 +1,22 @@
 """Parent dashboard API endpoints — PRD #24-#29.
 
 Demonstration endpoints for the #8 vertical slice:
-  GET  /dashboard/weekly-report/{child_id}    — emotion weekly report
-  GET  /dashboard/interest/{child_id}        — interest graph
-  GET  /dashboard/learning/{child_id}        — learning whitepaper
-  GET  /dashboard/alerts/{child_id}          — pending alerts
-  POST /dashboard/alerts/record/safety-valve — record a safety-valve event
-  POST /dashboard/alerts/record/high-risk    — record a high-risk event
+  GET  /dashboard/weekly-report/{child_id}      — emotion weekly report (JSON)
+  GET  /dashboard/weekly-report/{child_id}/pdf — PDF version (BE-DASH-001)
+  GET  /dashboard/interest/{child_id}          — interest graph
+  GET  /dashboard/learning/{child_id}          — learning whitepaper
+  GET  /dashboard/alerts/{child_id}            — pending alerts
+  POST /dashboard/alerts/record/safety-valve   — record a safety-valve event
+  POST /dashboard/alerts/record/high-risk      — record a high-risk event
 """
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi.responses import Response
 
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent, get_owned_child_id
@@ -38,6 +42,45 @@ async def weekly_report(
         baseline=_baseline,
     )
     return report.to_dict()
+
+
+@router.get("/weekly-report/{child_id}/pdf")
+async def weekly_report_pdf(
+        child_id: str = Depends(get_owned_child_id),
+        parent: ParentAccount = Depends(get_current_parent),
+    ) -> Response:
+    """Get the weekly emotion report as a downloadable PDF (BE-DASH-001).
+
+    Frontend can present this as a single `<a href="…">` link;
+    the server does the rendering so the layout is consistent
+    across browsers / OSes. A4 portrait, single page for the
+    common case.
+    """
+    # Import here so the API module doesn't pull reportlab
+    # unless the endpoint is actually hit.
+    from niki.dashboard.pdf import render_weekly_report_pdf
+
+    report = await _dashboard.generate_weekly_report(
+        child_id=child_id,
+        baseline=_baseline,
+    )
+    pdf_bytes = render_weekly_report_pdf(
+        child_id=child_id, report=report
+    )
+    # Filename: niki-weekly-c-{short_child_id}-{date}.pdf
+    short_id = child_id[:8]
+    today = datetime.now().strftime("%Y%m%d")
+    filename = f"niki-weekly-c-{short_id}-{today}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"'
+            ),
+            "Content-Length": str(len(pdf_bytes)),
+        },
+    )
 
 
 @router.get("/interest/{child_id}")
