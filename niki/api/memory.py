@@ -21,6 +21,7 @@ from typing import Any
 from fastapi import APIRouter
 from fastapi import Depends
 
+from niki.api._pagination import paginate, parse_pagination
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
@@ -134,13 +135,22 @@ async def search_long_term(payload: dict,
 
 
 @router.get("/graph/entities")
-async def list_entities(parent: ParentAccount = Depends(get_current_parent),) -> dict:
-    """List all entities in the cognitive graph."""
+async def list_entities(
+    parent: ParentAccount = Depends(get_current_parent),
+    pagination: tuple[int, int] = Depends(parse_pagination),
+) -> dict:
+    """List entities in the cognitive graph (BE-API-003: paginated)."""
+    page, page_size = pagination
     entities = _graph.list_entities()
-    return {
-        "count": len(entities),
-        "entities": [e.to_dict() for e in entities],
-    }
+    payload = paginate(
+        [e.to_dict() for e in entities],
+        page,
+        page_size,
+        items_key="entities",
+    )
+    # Back-compat: legacy `count` field still present.
+    payload["count"] = payload["total"]
+    return payload
 
 
 @router.post("/graph/entities")

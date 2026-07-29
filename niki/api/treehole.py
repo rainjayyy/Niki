@@ -14,6 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi import Depends
 
+from niki.api._pagination import paginate, parse_pagination
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent, get_owned_child_id
 
@@ -74,13 +75,22 @@ async def engage(payload: dict,
 async def list_summaries(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
+        pagination: tuple[int, int] = Depends(parse_pagination),
     ) -> dict:
-    """List stored treehole summaries (parent dashboard)."""
+    """List stored treehole summaries (parent dashboard, BE-API-003 paginated)."""
+    page, page_size = pagination
     summaries = await _manager.list_summaries(child_id=child_id)
+    payload = paginate(
+        [s.to_dict() for s in summaries],
+        page,
+        page_size,
+        items_key="summaries",
+    )
+    # Back-compat with the pre-pagination shape.
     return {
         "child_id": child_id,
-        "count": len(summaries),
-        "summaries": [s.to_dict() for s in summaries],
+        "count": payload["total"],
+        **payload,
     }
 
 
