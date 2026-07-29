@@ -26,6 +26,19 @@ COMMON_TEST_CHILDREN = {
 }
 
 @pytest.fixture(autouse=True)
+def _reset_session_store():
+    """BE-SESSION-redis: reset the session store singleton
+    between tests so cross-test session state doesn't leak."""
+    from niki.session.store import (
+        InMemorySessionStore,
+        set_session_store,
+    )
+    set_session_store(InMemorySessionStore())
+    yield
+    set_session_store(None)  # type: ignore[arg-type]
+
+
+@pytest.fixture(autouse=True)
 def _register_common_test_children():
     """Auto-register common (parent, child) pairs so the ownership
     dep lets existing tests through. Tests can override via

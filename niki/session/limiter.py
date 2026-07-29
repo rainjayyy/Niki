@@ -87,31 +87,36 @@ class SessionLimiter:
         self,
         daily_limit_minutes: int = DEFAULT_DAILY_LIMIT_MINUTES,
         max_idle_minutes: int = MAX_IDLE_MINUTES,
+        store: "SessionStore | None" = None,
     ) -> None:
         self.daily_limit_minutes = daily_limit_minutes
         self.max_idle_minutes = max_idle_minutes
-        # Per-child state
-        self._session_start: dict[str, datetime] = {}
-        self._session_last_activity: dict[str, datetime] = {}
-        self._soft_warned: set[str] = set()  # warned this session
-        self._ended: dict[str, ExitReason] = {}  # ended this session
+        # BE-SESSION-redis: per-child state lives in the store
+        # so multiple workers share the same session counters
+        # (the daily cap is enforced globally, not per-worker).
+        # Default = process-local in-memory (legacy behaviour).
+        if store is not None:
+            self._store = store
+        else:
+            from niki.session.store import get_session_store
+            self._store = get_session_store()
 
     def start_session(self, child_id: str, now: datetime | None = None) -> None:
         """Mark a session as started."""
         now = now or datetime.now(timezone.utc)
-        self._session_start[child_id] = now
-        self._session_last_activity[child_id] = now
-        self._soft_warned.discard(child_id)
-        self._ended.pop(child_id, None)
+        self._store.set_started_at(child_id, now)
+        self._store.set_last_activity(child_id, now)
+        self._store.clear_soft_warned(child_id)
+        self._store.clear_ended(child_id)
         logger.info("session.started", child_id=child_id)
 
     def record_activity(self, child_id: str, now: datetime | None = None) -> None:
         """Update the last-activity timestamp (called on each message)."""
         now = now or datetime.now(timezone.utc)
-        if child_id not in self._session_start:
+        if self._store.get_started_at(child_id) is None:
             self.start_session(child_id, now)
         else:
-            self._session_last_activity[child_id] = now
+            self._store.set_last_activity(child_id, now)
 
     def end_session(
         self,
@@ -123,13 +128,13 @@ class SessionLimiter:
 
         Returns None if no session was started.
         """
-        if child_id not in self._session_start:
+        started = self._store.get_started_at(child_id)
+        if started is None:
             return None
 
         now = now or datetime.now(timezone.utc)
-        started = self._session_start[child_id]
         duration = (now - started).total_seconds()
-        self._ended[child_id] = reason
+        self._store.set_ended(child_id, reason.value)
 
         stats = SessionStats(
             child_id=child_id,
@@ -147,37 +152,44 @@ class SessionLimiter:
         )
 
         # Clean up session state
-        del self._session_start[child_id]
-        self._session_last_activity.pop(child_id, None)
-        self._soft_warned.discard(child_id)
+        self._store.clear_started_at(child_id)
+        self._store.clear_last_activity(child_id)
+        self._store.clear_soft_warned(child_id)
 
         return stats
 
     def is_started(self, child_id: str) -> bool:
-        return child_id in self._session_start
+        return self._store.get_started_at(child_id) is not None
 
     def is_ended(self, child_id: str) -> ExitReason | None:
-        return self._ended.get(child_id)
+        reason = self._store.get_ended(child_id)
+        return ExitReason(reason) if reason else None
 
     def elapsed_minutes(self, child_id: str, now: datetime | None = None) -> float:
         """Get the elapsed time in the current session (in minutes)."""
-        if child_id not in self._session_start:
+        started = self._store.get_started_at(child_id)
+        if started is None:
             return 0.0
         now = now or datetime.now(timezone.utc)
-        elapsed = (now - self._session_start[child_id]).total_seconds() / 60
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        elapsed = (now - started).total_seconds() / 60
         return max(0.0, elapsed)
 
     def idle_minutes(self, child_id: str, now: datetime | None = None) -> float:
         """Get the minutes since last activity (PRD #17)."""
-        if child_id not in self._session_last_activity:
+        activity = self._store.get_last_activity(child_id)
+        if activity is None:
             return 0.0
         now = now or datetime.now(timezone.utc)
-        elapsed = (now - self._session_last_activity[child_id]).total_seconds() / 60
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        elapsed = (now - activity).total_seconds() / 60
         return max(0.0, elapsed)
 
     def should_warn(self, child_id: str, now: datetime | None = None) -> bool:
         """True if the soft warning should be issued (5 min before limit)."""
-        if child_id in self._soft_warned:
+        if self._store.is_soft_warned(child_id):
             return False  # Already warned
         if not self.is_started(child_id):
             return False
@@ -186,7 +198,7 @@ class SessionLimiter:
 
     def mark_warned(self, child_id: str) -> None:
         """Mark that we've issued the soft warning for this session."""
-        self._soft_warned.add(child_id)
+        self._store.mark_soft_warned(child_id)
 
     def is_exhausted(self, child_id: str, now: datetime | None = None) -> bool:
         """True if the hard limit has been reached (must end session)."""
