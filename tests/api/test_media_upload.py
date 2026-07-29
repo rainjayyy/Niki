@@ -84,6 +84,33 @@ class TestLocalDiskStorageUnit:
         assert s.get("../../etc/passwd") is None
         assert s.get("f-../something") is None
 
+    # BE-MEDIA-001-rollout -----------------------------------------
+
+    def test_get_with_meta_returns_mime_and_bytes(self, tmp_path) -> None:
+        s = LocalDiskStorage(tmp_path)
+        stored = s.put(JPG, mime_type="image/jpeg")
+        result = s.get_with_meta(stored.file_id)
+        assert result is not None
+        assert result.content == JPG
+        assert result.mime_type == "image/jpeg"
+        assert result.file_id == stored.file_id
+
+    def test_get_with_meta_wav(self, tmp_path) -> None:
+        s = LocalDiskStorage(tmp_path)
+        stored = s.put(WAV, mime_type="audio/wav")
+        result = s.get_with_meta(stored.file_id)
+        assert result is not None
+        assert result.mime_type == "audio/wav"
+
+    def test_get_with_meta_unknown_id(self, tmp_path) -> None:
+        s = LocalDiskStorage(tmp_path)
+        assert s.get_with_meta("f-deadbeef") is None
+
+    def test_get_with_meta_rejects_path_traversal(self, tmp_path) -> None:
+        s = LocalDiskStorage(tmp_path)
+        assert s.get_with_meta("../../etc/passwd") is None
+        assert s.get_with_meta("f-../something") is None
+
 
 # ---------------------------------------------------------------------------
 # Integration tests via FastAPI TestClient
@@ -222,3 +249,103 @@ class TestAllowedMimesCoverage:
         else:
             data = b"\x00"
         assert _detect_mime(data, mime) == mime
+
+
+# ---------------------------------------------------------------------------
+# BE-MEDIA-001-rollout: GET retrieval endpoint
+# ---------------------------------------------------------------------------
+
+
+def _upload_via_client(client: TestClient, mime: str = "image/png") -> str:
+    """Helper: upload a PNG, return the bare file_id from the response."""
+    r = client.post(
+        "/api/v1/media/upload",
+        files={"file": ("avatar.png", PNG, mime)},
+    )
+    assert r.status_code == 200
+    return r.json()["file_id"]
+
+
+class TestMediaRetrievalHappyPath:
+    def test_get_returns_uploaded_bytes_with_correct_mime(
+        self, client: TestClient
+    ) -> None:
+        file_id = _upload_via_client(client)
+        r = client.get(f"/api/v1/media/{file_id}")
+        assert r.status_code == 200
+        assert r.content == PNG
+        assert r.headers["content-type"].startswith("image/png")
+        assert r.headers["content-length"] == str(len(PNG))
+        assert "cache-control" in r.headers
+        assert "private" in r.headers["cache-control"]
+        assert r.headers.get("x-niki-file-id") == file_id
+
+    def test_get_jpg(self, client: TestClient) -> None:
+        r_up = client.post(
+            "/api/v1/media/upload",
+            files={"file": ("pic.jpg", JPG, "image/jpeg")},
+        )
+        file_id = r_up.json()["file_id"]
+        r = client.get(f"/api/v1/media/{file_id}")
+        assert r.status_code == 200
+        assert r.content == JPG
+        assert r.headers["content-type"].startswith("image/jpeg")
+
+    def test_get_wav_audio(self, client: TestClient) -> None:
+        r_up = client.post(
+            "/api/v1/media/upload",
+            files={"file": ("clip.wav", WAV, "audio/wav")},
+        )
+        file_id = r_up.json()["file_id"]
+        r = client.get(f"/api/v1/media/{file_id}")
+        assert r.status_code == 200
+        assert r.content == WAV
+        assert r.headers["content-type"].startswith("audio/wav")
+
+
+class TestMediaRetrievalAccessUrl:
+    """The synthetic access_url `media://local/<id>.<ext>` should
+    round-trip through the GET endpoint — frontend never has to
+    parse the URL itself."""
+
+    def test_get_via_access_url(self, client: TestClient) -> None:
+        r_up = client.post(
+            "/api/v1/media/upload",
+            files={"file": ("avatar.png", PNG, "image/png")},
+        )
+        access_url = r_up.json()["access_url"]
+        # access_url is "media://local/f-xxxxxxxx.png"
+        assert access_url.startswith("media://local/")
+        r = client.get(f"/api/v1/media/{access_url}")
+        assert r.status_code == 200
+        assert r.content == PNG
+        assert r.headers["content-type"].startswith("image/png")
+
+
+class TestMediaRetrievalErrors:
+    def test_get_unknown_id_returns_404(self, client: TestClient) -> None:
+        r = client.get("/api/v1/media/f-deadbeef")
+        assert r.status_code == 404
+        assert r.json()["detail"]["error"] == "FILE_NOT_FOUND"
+
+    def test_get_malformed_id_returns_404(self, client: TestClient) -> None:
+        # No `f-` prefix and not path-traversal — still 404 (not 500).
+        r = client.get("/api/v1/media/not-a-file-id")
+        assert r.status_code == 404
+        assert r.json()["detail"]["error"] == "FILE_NOT_FOUND"
+
+    def test_get_path_traversal_returns_404_not_500(
+        self, client: TestClient
+    ) -> None:
+        # URL parser strips /, but `..` segments are sanitised away
+        # by TestClient. The storage regex further rejects them. We
+        # expect 404, never 500.
+        r = client.get("/api/v1/media/..%2Fetc%2Fpasswd")
+        # TestClient may 404 the path, or our handler returns 404 —
+        # either way no 500.
+        assert r.status_code in (404, 400)
+
+    def test_get_empty_id_returns_404(self, client: TestClient) -> None:
+        # Trailing slash with no file_id.
+        r = client.get("/api/v1/media/")
+        assert r.status_code in (404, 307)

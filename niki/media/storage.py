@@ -46,6 +46,15 @@ class StoredFile:
     uploaded_at: datetime
 
 
+@dataclass(frozen=True)
+class StoredContent:
+    """Outcome of a successful get_with_meta()."""
+
+    content: bytes
+    mime_type: str
+    file_id: str
+
+
 class MediaStorageError(Exception):
     """Base class for storage failures."""
 
@@ -142,6 +151,16 @@ class MediaStorage(ABC):
     def get(self, file_id: str) -> bytes | None:
         """Read back the bytes for `file_id`, or None if not found."""
 
+    def get_with_meta(self, file_id: str) -> StoredContent | None:
+        """Read back the bytes plus MIME for `file_id`, or None.
+
+        Default implementation derives `mime_type` from the file
+        extension written by `put()`. Remote-storage providers
+        (OSS / S3) should override this to query object metadata
+        for an authoritative MIME rather than trusting extensions.
+        """
+        raise NotImplementedError
+
 
 # ---------------------------------------------------------------------------
 # Local-disk implementation
@@ -194,6 +213,23 @@ class LocalDiskStorage(MediaStorage):
                 return path.read_bytes()
         return None
 
+    def get_with_meta(self, file_id: str) -> StoredContent | None:
+        """Read back the bytes + MIME for `file_id`.
+
+        Accepts the bare id (`f-abc12345`) — extension is discovered
+        via glob, so callers don't need to know it.
+        """
+        if not re.fullmatch(r"f-[0-9a-f]{1,32}", file_id):
+            return None
+        for path in self._base.glob(f"{file_id}.*"):
+            if path.is_file():
+                return StoredContent(
+                    content=path.read_bytes(),
+                    mime_type=_mime_for_ext(path.suffix),
+                    file_id=file_id,
+                )
+        return None
+
 
 _EXT_BY_MIME = {
     "image/jpeg": ".jpg",
@@ -209,8 +245,27 @@ _EXT_BY_MIME = {
 }
 
 
+# Reverse map for retrieval (BE-MEDIA-001-rollout). Multiple MIME
+# types can share an extension (audio/wav + audio/x-wav); the
+# canonical one for GET responses is listed here.
+_MIME_BY_EXT = {
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".mp3": "audio/mpeg",
+}
+
+
 def _ext_for(mime: str) -> str:
     return _EXT_BY_MIME.get(mime, ".bin")
+
+
+def _mime_for_ext(ext: str) -> str:
+    return _MIME_BY_EXT.get(ext.lower(), "application/octet-stream")
 
 
 # ---------------------------------------------------------------------------
