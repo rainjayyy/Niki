@@ -14,7 +14,7 @@ Here: in-memory graph with the same interface.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -42,8 +42,8 @@ class EntityNode:
     name: str
     entity_type: str = "concept"   # person, place, topic, thing
     aliases: list[str] = field(default_factory=list)
-    first_seen: datetime = field(default_factory=datetime.utcnow)
-    last_seen: datetime = field(default_factory=datetime.utcnow)
+    first_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,7 +63,7 @@ class RelationEdge:
     target: str
     relation: RelationType
     weight: float = 1.0
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -81,7 +81,7 @@ class RelationEdge:
         - 30 days no update: weight × 0.5
         - 60 days no update: weight × 0.1
         """
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         days = (now - self.last_updated).days
         if days >= 60:
             self.weight *= 0.1
@@ -126,7 +126,7 @@ class CognitiveGraph:
                 for a in aliases:
                     if a not in existing.aliases:
                         existing.aliases.append(a)
-            existing.last_seen = datetime.utcnow()
+            existing.last_seen = datetime.now(timezone.utc)
             return existing
 
         entity = EntityNode(
@@ -167,7 +167,7 @@ class CognitiveGraph:
                 and edge.relation == relation
             ):
                 edge.weight = min(1.0, edge.weight + weight_delta)
-                edge.last_updated = datetime.utcnow()
+                edge.last_updated = datetime.now(timezone.utc)
                 return edge
 
         edge = RelationEdge(
@@ -227,7 +227,7 @@ class EntityAligner:
                 # Merge into existing
                 if new_entity.name not in existing.aliases and new_entity.name != existing.name:
                     existing.aliases.append(new_entity.name)
-                existing.last_seen = datetime.utcnow()
+                existing.last_seen = datetime.now(timezone.utc)
                 return existing
 
         # New entity

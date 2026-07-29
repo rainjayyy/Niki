@@ -27,7 +27,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
@@ -179,7 +179,7 @@ class TreeholeManager:
             )
 
         summary = TreeholeSummary(
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             source="treehole",
             emotion_valence=emotion,
             emotion_intensity=intensity,
@@ -193,7 +193,7 @@ class TreeholeManager:
             plaintext, associated_data=associated_data
         )
 
-        expires_at = datetime.utcnow() + timedelta(days=self._retention_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=self._retention_days)
         encrypted_bytes = base64.b64decode(encrypted_b64)
         row_id = await self._repo.add(
             child_id=child_id,
@@ -214,7 +214,7 @@ class TreeholeManager:
                 valence=emotion,
                 intensity=intensity,
                 category=category,
-                engagement_at=datetime.utcnow(),
+                engagement_at=datetime.now(timezone.utc),
             )
         except Exception as exc:  # pragma: no cover
             logger.error(

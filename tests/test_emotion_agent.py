@@ -1,6 +1,6 @@
 """Tests for the Emotion Agent end-to-end."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -114,7 +114,7 @@ class TestBaseline:
 
     def test_calibration_skips_anomaly(self, baseline: EmotionBaseline) -> None:
         # In calibration: anomaly should be False even with extreme value
-        result = baseline.check_anomaly(-1.0, today_date=datetime.utcnow())
+        result = baseline.check_anomaly(-1.0, today_date=datetime.now(timezone.utc))
         assert result.is_anomaly is False
         assert "calibration" in result.reason
 

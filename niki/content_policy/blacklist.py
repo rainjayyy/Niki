@@ -9,7 +9,7 @@ PRD #32: 家长可以设置话题黑名单（如"打游戏"），Niki遇到这�
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -34,7 +34,7 @@ class BlacklistMatch:
     action: BlacklistAction
     matched_text: str
     position: tuple[int, int]
-    added_at: datetime = field(default_factory=datetime.utcnow)
+    added_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     added_by: str = ""              # parent_id
 
     def to_dict(self) -> dict[str, Any]:
@@ -54,7 +54,7 @@ class BlacklistedTopic:
 
     topic: str
     action: BlacklistAction = BlacklistAction.DOWNGRADE
-    added_at: datetime = field(default_factory=datetime.utcnow)
+    added_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     added_by: str = ""
 
     def to_dict(self) -> dict[str, Any]:

@@ -6,7 +6,7 @@ are exercised against the same contract.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -34,7 +34,7 @@ class TestInMemoryRepo:
             parent_id="p1",
             encrypted_payload=b"ct",
             associated_data=b"aad",
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         assert isinstance(row_id, str) and len(row_id) > 0
 
@@ -43,7 +43,7 @@ class TestInMemoryRepo:
         await repo.add(
             child_id="c1", parent_id="p1",
             encrypted_payload=b"ct", associated_data=None,
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         rows = await repo.list_for_child("c1")
         assert len(rows) == 1
@@ -55,7 +55,7 @@ class TestInMemoryRepo:
             await repo.add(
                 child_id=c, parent_id="p1",
                 encrypted_payload=b"ct", associated_data=None,
-                expires_at=datetime.utcnow() + timedelta(days=7),
+                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             )
         assert len(await repo.list_for_child("c1")) == 2
         assert len(await repo.list_for_child("c2")) == 1
@@ -66,12 +66,12 @@ class TestInMemoryRepo:
         await repo.add(
             child_id="c1", parent_id="p1",
             encrypted_payload=b"fresh", associated_data=None,
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         await repo.add(
             child_id="c1", parent_id="p1",
             encrypted_payload=b"stale", associated_data=None,
-            expires_at=datetime.utcnow() - timedelta(days=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
         rows = await repo.list_for_child("c1")
         assert len(rows) == 1
@@ -82,12 +82,12 @@ class TestInMemoryRepo:
         await repo.add(
             child_id="c1", parent_id="p1", encrypted_payload=b"f",
             associated_data=None,
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         await repo.add(
             child_id="c2", parent_id="p1", encrypted_payload=b"s",
             associated_data=None,
-            expires_at=datetime.utcnow() - timedelta(days=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
         n = await repo.delete_expired()
         assert n == 1
@@ -99,12 +99,12 @@ class TestInMemoryRepo:
             await repo.add(
                 child_id="c1", parent_id="p1",
                 encrypted_payload=b"x", associated_data=None,
-                expires_at=datetime.utcnow() + timedelta(days=7),
+                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             )
         await repo.add(
             child_id="c2", parent_id="p1",
             encrypted_payload=b"x", associated_data=None,
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         n = await repo.delete_all_for_child("c1")
         assert n == 3
@@ -117,7 +117,7 @@ class TestInMemoryRepo:
             await repo.add(
                 child_id="c1", parent_id="p1",
                 encrypted_payload=b"x", associated_data=None,
-                expires_at=datetime.utcnow() + timedelta(days=7),
+                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             )
         n = await repo.delete_all()
         assert n == 5
@@ -145,7 +145,7 @@ class TestPostgresRepoSqlite:
                 child_id="c1", parent_id="p1",
                 encrypted_payload=b"ct-bytes",
                 associated_data=b"aad-bytes",
-                expires_at=datetime.utcnow() + timedelta(days=7),
+                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             )
             await session.commit()
 

@@ -8,7 +8,7 @@ NOT a panic alert, NOT a push notification.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 import structlog
 
@@ -62,7 +62,7 @@ class DegradationNotifier:
         """Mark degradation as active + record notification."""
         if not self._state.active:
             self._state.active = True
-            self._state.started_at = datetime.utcnow()
+            self._state.started_at = datetime.now(timezone.utc)
             self._state.reason = reason
         self._state.notification_count += 1
         logger.info(
@@ -75,7 +75,7 @@ class DegradationNotifier:
         """Mark degradation as resolved (when breaker closes)."""
         if self._state.active:
             duration = (
-                (datetime.utcnow() - self._state.started_at).total_seconds()
+                (datetime.now(timezone.utc) - self._state.started_at).total_seconds()
                 if self._state.started_at
                 else 0
             )

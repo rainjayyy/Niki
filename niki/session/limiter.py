@@ -13,7 +13,7 @@ guards against runaway idle sessions via max_idle_minutes.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -98,7 +98,7 @@ class SessionLimiter:
 
     def start_session(self, child_id: str, now: datetime | None = None) -> None:
         """Mark a session as started."""
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         self._session_start[child_id] = now
         self._session_last_activity[child_id] = now
         self._soft_warned.discard(child_id)
@@ -107,7 +107,7 @@ class SessionLimiter:
 
     def record_activity(self, child_id: str, now: datetime | None = None) -> None:
         """Update the last-activity timestamp (called on each message)."""
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         if child_id not in self._session_start:
             self.start_session(child_id, now)
         else:
@@ -126,7 +126,7 @@ class SessionLimiter:
         if child_id not in self._session_start:
             return None
 
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         started = self._session_start[child_id]
         duration = (now - started).total_seconds()
         self._ended[child_id] = reason
@@ -163,7 +163,7 @@ class SessionLimiter:
         """Get the elapsed time in the current session (in minutes)."""
         if child_id not in self._session_start:
             return 0.0
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         elapsed = (now - self._session_start[child_id]).total_seconds() / 60
         return max(0.0, elapsed)
 
@@ -171,7 +171,7 @@ class SessionLimiter:
         """Get the minutes since last activity (PRD #17)."""
         if child_id not in self._session_last_activity:
             return 0.0
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         elapsed = (now - self._session_last_activity[child_id]).total_seconds() / 60
         return max(0.0, elapsed)
 

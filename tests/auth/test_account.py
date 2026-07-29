@@ -88,7 +88,7 @@ class TestParentAccount:
         assert "110101****8811" in str(d)
 
     def test_deletion_window_remaining(self) -> None:
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         acc = ParentAccount(
             id="p-001",
@@ -96,13 +96,13 @@ class TestParentAccount:
             id_number_masked="110101****8811",
             phone_masked="138****8000",
             status=AccountStatus.DELETION_PENDING,
-            deletion_requested_at=datetime.utcnow() - timedelta(days=5),
+            deletion_requested_at=datetime.now(timezone.utc) - timedelta(days=5),
         )
         # 30 - 5 = 25 days remaining
         assert acc.deletion_window_remaining_days == 25
 
     def test_deletion_window_expired(self) -> None:
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         acc = ParentAccount(
             id="p-001",
@@ -110,7 +110,7 @@ class TestParentAccount:
             id_number_masked="110101****8811",
             phone_masked="138****8000",
             status=AccountStatus.DELETION_PENDING,
-            deletion_requested_at=datetime.utcnow() - timedelta(days=35),
+            deletion_requested_at=datetime.now(timezone.utc) - timedelta(days=35),
         )
         # Past 30 days
         assert acc.deletion_window_remaining_days == 0

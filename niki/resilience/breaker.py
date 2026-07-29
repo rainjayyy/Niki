@@ -28,7 +28,7 @@ import asyncio
 import time
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -120,7 +120,7 @@ class CircuitBreaker:
         self._consecutive_failures: int = 0
         self._opened_at: float | None = None
         self._current_cooldown: float = initial_cooldown_s
-        self._last_change: datetime = datetime.utcnow()
+        self._last_change: datetime = datetime.now(timezone.utc)
         self._total_trips: int = 0
         self._half_open_in_flight: bool = False
         # Lock for state transitions
@@ -301,7 +301,7 @@ class CircuitBreaker:
             return
         old = self._state
         self._state = new_state
-        self._last_change = datetime.utcnow()
+        self._last_change = datetime.now(timezone.utc)
         logger.info(
             "breaker.transition",
             from_state=old.value,
@@ -313,7 +313,7 @@ class CircuitBreaker:
         self._state = CircuitState.OPEN
         self._opened_at = time.monotonic()
         self._total_trips += 1
-        self._last_change = datetime.utcnow()
+        self._last_change = datetime.now(timezone.utc)
         logger.warning("breaker.force_open", reason=reason)
 
     def reset(self) -> None:
@@ -324,5 +324,5 @@ class CircuitBreaker:
         self._opened_at = None
         self._current_cooldown = self.initial_cooldown_s
         self._half_open_in_flight = False
-        self._last_change = datetime.utcnow()
+        self._last_change = datetime.now(timezone.utc)
         logger.info("breaker.reset")

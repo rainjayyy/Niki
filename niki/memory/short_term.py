@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -31,7 +31,7 @@ class ConversationTurn:
 
     role: str                       # "child" | "niki"
     text: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     intent: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 

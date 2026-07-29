@@ -10,7 +10,7 @@ Two types of alerts:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -41,7 +41,7 @@ class SafetyValveAlert:
     severity: AlertSeverity = AlertSeverity.INFO
     problem_summary: str = ""         # e.g. "数学应用题"
     round_reached: int = 4
-    triggered_at: datetime = field(default_factory=datetime.utcnow)
+    triggered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     action_suggestion: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -69,7 +69,7 @@ class HighRiskAlert:
     original_text: str            # PRD #29: 看到原文
     niki_response_summary: str
     severity: AlertSeverity = AlertSeverity.URGENT
-    triggered_at: datetime = field(default_factory=datetime.utcnow)
+    triggered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     delivered: bool = False
 
     def to_dict(self) -> dict[str, Any]:

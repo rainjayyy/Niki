@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -208,13 +208,27 @@ class EmotionBaseline:
 
         A record is in the window if its date is on or after (today - window_days)
         AND strictly before today.
+
+        BE-COMP-002: callers may pass a naive `today` (legacy tests
+        + scripts). Internally we treat it as UTC so comparisons
+        against the aware parsed record dates are consistent.
         """
-        today = today or datetime.utcnow()
+        if today is None:
+            today = datetime.now(timezone.utc)
+        elif today.tzinfo is None:
+            today = today.replace(tzinfo=timezone.utc)
         cutoff = today - timedelta(days=window_days)
+        # BE-COMP-002: `r.date` is a stored ISO string (naive); the
+        # `today` we compute is offset-aware. Attach UTC to the
+        # parsed date so the comparison is consistent. (Strip the
+        # timezone after comparison to keep the original string
+        # form available if needed.)
         window = [
             r
             for r in self._records
-            if cutoff <= datetime.fromisoformat(r.date) < today
+            if cutoff <= datetime.fromisoformat(r.date).replace(
+                tzinfo=timezone.utc
+            ) < today
         ]
 
         if not window:
@@ -248,7 +262,7 @@ class EmotionBaseline:
         Returns:
             AnomalyResult with z-score and anomaly flag.
         """
-        today = today_date or datetime.utcnow()
+        today = today_date or datetime.now(timezone.utc)
         if self.is_in_calibration(today):
             return AnomalyResult(
                 is_anomaly=False,
@@ -300,7 +314,7 @@ class EmotionBaseline:
 
     def today_mean(self, today_date: datetime | None = None) -> float:
         """Get the mean valence for today (single value or mean of all records today)."""
-        today = today_date or datetime.utcnow()
+        today = today_date or datetime.now(timezone.utc)
         today_str = today.date().isoformat()
         today_records = [r for r in self._records if r.date == today_str]
         if not today_records:
@@ -379,7 +393,7 @@ class EmotionAgent(BaseAgent):
         self._baseline = baseline or EmotionBaseline()
         self._output_gateway = OutputSafetyGateway(child_age=child_age)
         self._session_count = session_count
-        self._today_date = today_date or datetime.utcnow()
+        self._today_date = today_date or datetime.now(timezone.utc)
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt for the emotion agent.

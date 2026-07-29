@@ -6,7 +6,7 @@ legacy TreeholeStore shape.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -33,7 +33,7 @@ def _make_manager_with_records(
     # InMemoryTreeholeRepository holds rows in self._rows; we
     # synthesize UUIDs and call utcnow() synchronously.
     import uuid as _uuid
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for created_at, child_id, enc in records or []:
         repo._rows[str(_uuid.uuid4())] = {
             "id": str(_uuid.uuid4()),
@@ -140,7 +140,7 @@ class TestTreeholePurgerAcceptsRepo:
             parent_id="p",
             encrypted_payload=b"x",
             associated_data=None,
-            expires_at=datetime.utcnow() - timedelta(days=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
         n = await purger_a.purge_expired()
         assert n == 1

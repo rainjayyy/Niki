@@ -1,6 +1,6 @@
 """End-to-end API tests for the emotion endpoints."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -58,7 +58,7 @@ def test_baseline_initial_calibration(client: TestClient) -> None:
 
 def test_baseline_after_record(client: TestClient) -> None:
     # Add a record dated 2 days ago (so it's in the 7-day window)
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     past = (today - timedelta(days=2)).isoformat()
     resp = client.post(
         "/api/v1/emotion/baseline/add",

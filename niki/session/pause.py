@@ -12,7 +12,7 @@ PRD #23: "我今天很开心呢" → natural exit should celebrate the day.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -89,7 +89,7 @@ class RemotePauseController:
         self._pending_pauses[child_id] = {
             "parent_id": parent_id,
             "reason": reason,
-            "requested_at": datetime.utcnow().isoformat(),
+            "requested_at": datetime.now(timezone.utc).isoformat(),
         }
         logger.info(
             "session.parent_pause_requested",
@@ -111,7 +111,7 @@ class RemotePauseController:
             return None
 
         pause = self._pending_pauses.pop(child_id)
-        self._paused_sessions[child_id] = datetime.utcnow()
+        self._paused_sessions[child_id] = datetime.now(timezone.utc)
 
         # Use a pause message — should sound like Niki is tired
         msg = PARENT_PAUSE_DEFAULT

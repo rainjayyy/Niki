@@ -1,42 +1,40 @@
-"""EmotionBaseline — rolling baseline of a child's emotional state.
-
-One row per observation; z-score over the trailing window is computed
-in-memory by EmotionBaselineService (see niki/api/emotion.py).
-"""
+"""EmotionBaselineRecord ORM model (BE-STORG-001-ext-D)."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, Index, String
+from sqlalchemy import DateTime, Float, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from niki.db.base import Base
 
 
-class EmotionBaseline(Base):
-    """A single observation in a child's emotion baseline."""
+class EmotionBaselineRecord(Base):
+    """A single emotion baseline entry (7-day rolling window of valences)."""
 
-    __tablename__ = "emotion_baselines"
+    __tablename__ = "emotion_baseline_records"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    child_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    parent_id: Mapped[str] = mapped_column(String(16), nullable=False)
-    emotion_score: Mapped[float] = mapped_column(Float, nullable=False)
-    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    source: Mapped[str] = mapped_column(String(64), nullable=False)  # "chat" / "baseline"
-    recorded_at: Mapped[datetime] = mapped_column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    valence: Mapped[float] = mapped_column(Float, nullable=False)
+    intensity: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="normal"
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
 
     __table_args__ = (
-        Index("ix_emotion_baselines_child_recorded", "child_id", "recorded_at"),
+        Index("ix_emotion_baseline_date_created", "date", "created_at"),
     )
 
     def __repr__(self) -> str:
         return (
-            f"<EmotionBaseline child_id={self.child_id} "
-            f"score={self.emotion_score:.2f} at={self.recorded_at}>"
+            f"<EmotionBaselineRecord id={self.id} date={self.date} "
+            f"valence={self.valence:.2f}>"
         )

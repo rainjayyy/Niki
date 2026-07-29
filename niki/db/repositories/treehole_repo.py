@@ -15,7 +15,7 @@ Returned rows are plain dicts (not ORM objects) so the
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -100,12 +100,12 @@ class InMemoryTreeholeRepository(TreeholeRepository):
             "encrypted_payload": encrypted_payload,
             "associated_data": associated_data,
             "expires_at": expires_at,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         }
         return row_id
 
     async def list_for_child(self, child_id: str) -> list[dict[str, Any]]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return [
             dict(r)
             for r in self._rows.values()
@@ -113,13 +113,13 @@ class InMemoryTreeholeRepository(TreeholeRepository):
         ]
 
     async def list_all(self) -> list[dict[str, Any]]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return [
             dict(r) for r in self._rows.values() if r["expires_at"] > now
         ]
 
     async def delete_expired(self, now: datetime | None = None) -> int:
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         expired = [
             k for k, r in self._rows.items() if r["expires_at"] <= now
         ]
@@ -182,7 +182,7 @@ class PostgresTreeholeRepository(TreeholeRepository):
         return row.id
 
     async def list_for_child(self, child_id: str) -> list[dict[str, Any]]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         result = await self._session.execute(
             select(TreeholeEngagement)
             .where(
@@ -194,7 +194,7 @@ class PostgresTreeholeRepository(TreeholeRepository):
         return [_row_to_dict(r) for r in result.scalars().all()]
 
     async def list_all(self) -> list[dict[str, Any]]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         result = await self._session.execute(
             select(TreeholeEngagement)
             .where(TreeholeEngagement.expires_at > now)
@@ -203,7 +203,7 @@ class PostgresTreeholeRepository(TreeholeRepository):
         return [_row_to_dict(r) for r in result.scalars().all()]
 
     async def delete_expired(self, now: datetime | None = None) -> int:
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         result = await self._session.execute(
             delete(TreeholeEngagement).where(
                 TreeholeEngagement.expires_at <= now

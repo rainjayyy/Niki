@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -42,7 +42,7 @@ class MemoryRecord:
     content: str
     source: MemorySource
     child_id: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     emotion: str | None = None
     intensity: int | None = None
     topic: str | None = None
@@ -165,7 +165,7 @@ class LongTermMemory:
                     child_id=meta.get("child_id", ""),
                     timestamp=datetime.fromisoformat(meta["timestamp"])
                     if meta.get("timestamp")
-                    else datetime.utcnow(),
+                    else datetime.now(timezone.utc),
                     emotion=meta.get("emotion") or None,
                     intensity=meta.get("intensity") or None,
                     topic=meta.get("topic") or None,

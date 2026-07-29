@@ -1,6 +1,6 @@
 """Tests for the cognitive graph + entity aligner."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -83,7 +83,7 @@ class TestTimeDecay:
         graph = CognitiveGraph()
         edge = graph.add_relation("c1", "恐龙", RelationType.LIKES, weight_delta=1.0)
         # Force the edge to be 31 days old
-        edge.last_updated = datetime.utcnow() - timedelta(days=31)
+        edge.last_updated = datetime.now(timezone.utc) - timedelta(days=31)
         original_weight = edge.weight
         graph.apply_decay()
         # 30+ days: weight × 0.5

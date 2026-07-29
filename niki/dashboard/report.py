@@ -12,7 +12,7 @@ Design principles (PRD):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -68,7 +68,7 @@ class EmotionWeeklyReport:
     action_suggestions: list[str]      # actionable advice
     safety_valve_count: int = 0        # tutoring safety-valve events
     treehole_engagement_count: int = 0  # tree-hole conversations (anonymized)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     week_start: str = ""
     week_end: str = ""
 

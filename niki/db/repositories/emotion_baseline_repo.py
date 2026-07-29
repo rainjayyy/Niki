@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
@@ -93,13 +93,13 @@ class InMemoryEmotionBaselineRepository(EmotionBaselineRepository):
                 "valence": valence,
                 "intensity": intensity,
                 "source": source,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
         )
         return row_id
 
     async def list_in_window(self, window_days: int = 30) -> list[dict[str, Any]]:
-        cutoff = datetime.utcnow() - timedelta(days=window_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
         return [r for r in self._rows if r["created_at"] >= cutoff]
 
     async def list_all(self) -> list[dict[str, Any]]:
@@ -139,7 +139,7 @@ class PostgresEmotionBaselineRepository(EmotionBaselineRepository):
         return row.id
 
     async def list_in_window(self, window_days: int = 30) -> list[dict[str, Any]]:
-        cutoff = datetime.utcnow() - timedelta(days=window_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
         result = await self._session.execute(
             select(EmotionBaselineRecord)
             .where(EmotionBaselineRecord.created_at >= cutoff)

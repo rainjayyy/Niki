@@ -7,7 +7,7 @@ TreeholeRepository instead of an in-memory dict-of-lists).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from niki.db.repositories import (
     InMemoryTreeholeRepository,
@@ -34,7 +34,7 @@ def _fresh_components() -> tuple[TreeholeManager, TreeholePurger]:
 
 def _backdate_row(row_id: str, repo: InMemoryTreeholeRepository, days_ago: int) -> None:
     """Make an existing row's expires_at be `days_ago` days in the past."""
-    past = datetime.utcnow() - timedelta(days=days_ago)
+    past = datetime.now(timezone.utc) - timedelta(days=days_ago)
     repo._rows[row_id]["expires_at"] = past
 
 
@@ -78,7 +78,7 @@ class TestTreeholePurgeEncryption:
             _backdate_row(r["id"], repo, days_ago=10)
 
         # Purge at "now"
-        purged = await purger.purge_expired(now=datetime.utcnow())
+        purged = await purger.purge_expired(now=datetime.now(timezone.utc))
         assert purged == 2
 
         # Only 1 row remains (the "new" one, still valid).
@@ -96,7 +96,7 @@ class TestTreeholePurgeEncryption:
                 emotion="neutral",
                 intensity=2,
             )
-        purged = await purger.purge_expired(now=datetime.utcnow())
+        purged = await purger.purge_expired(now=datetime.now(timezone.utc))
         assert purged == 0
         assert len(await manager.repo.list_all()) == 3
 

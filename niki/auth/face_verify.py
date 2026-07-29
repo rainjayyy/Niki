@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -97,7 +97,7 @@ class FaceVerifier:
             confidence=confidence,
             liveness_score=liveness,
             provider=self.provider_name,
-            verified_at=datetime.utcnow() if verified else None,
+            verified_at=datetime.now(timezone.utc) if verified else None,
             error=None if verified else "Face verification failed (stub)",
         )
 

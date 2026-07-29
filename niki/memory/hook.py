@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -44,7 +44,7 @@ class ExtractionCandidate:
     confidence: float
     context: str = ""            # surrounding text
     metadata: dict[str, Any] = field(default_factory=dict)
-    extracted_at: datetime = field(default_factory=datetime.utcnow)
+    extracted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DaytimeMemoryHook:

@@ -21,7 +21,7 @@ import asyncio
 import hashlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -222,12 +222,12 @@ class NightlyPipeline:
             PipelineRun with per-step results.
         """
         run_id = hashlib.sha256(
-            f"pipeline:{datetime.utcnow().isoformat()}".encode()
+            f"pipeline:{datetime.now(timezone.utc).isoformat()}".encode()
         ).hexdigest()[:16]
 
         run = PipelineRun(
             run_id=run_id,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
         any_failed = False
         all_failed = True
@@ -249,7 +249,7 @@ class NightlyPipeline:
             run.status = PipelineStatus.PARTIAL
         else:
             run.status = PipelineStatus.SUCCESS
-        run.completed_at = datetime.utcnow()
+        run.completed_at = datetime.now(timezone.utc)
         self._history.append(run)
         logger.info(
             "pipeline.run_complete",
@@ -263,7 +263,7 @@ class NightlyPipeline:
         result = PipelineStepResult(
             step_name=step.name,
             status=StepStatus.PENDING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
 
         for attempt in range(1, self._max_retries + 1):
@@ -273,9 +273,9 @@ class NightlyPipeline:
                 result.status = StepStatus.RUNNING
                 result.attempt_history.append(StepStatus.RUNNING)
             try:
-                start = datetime.utcnow()
+                start = datetime.now(timezone.utc)
                 items = await step.fn({})
-                end = datetime.utcnow()
+                end = datetime.now(timezone.utc)
                 result.items_processed = items
                 result.duration_ms = (end - start).total_seconds() * 1000
                 result.completed_at = end
@@ -293,14 +293,14 @@ class NightlyPipeline:
                     # ISS-05: each failed attempt (before exhausting retries)
                     # is a transient FAILED, not yet a DEAD_LETTER.
                     result.error = str(exc)
-                    result.completed_at = datetime.utcnow()
+                    result.completed_at = datetime.now(timezone.utc)
                     result.status = StepStatus.FAILED
                     result.attempt_history.append(StepStatus.FAILED)
                     backoff = self.BACKOFF_BASE_S * (2 ** (attempt - 1))
                     await asyncio.sleep(backoff)
                 else:
                     result.error = str(exc)
-                    result.completed_at = datetime.utcnow()
+                    result.completed_at = datetime.now(timezone.utc)
                     result.status = StepStatus.DEAD_LETTER
                     result.attempt_history.append(StepStatus.DEAD_LETTER)
 
@@ -314,7 +314,7 @@ class NightlyPipeline:
         Returns:
             Dict with summary + per-step status over the lookback window.
         """
-        cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         recent_runs = [r for r in self._history if r.started_at >= cutoff]
 
         step_status: dict[str, dict[str, int]] = {}

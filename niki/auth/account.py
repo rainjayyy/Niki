@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -82,7 +82,7 @@ class ParentAccount:
     phone_masked: str
     email: str | None = None
     status: AccountStatus = AccountStatus.PENDING
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     verified_at: datetime | None = None
     deletion_requested_at: datetime | None = None
     deletion_completed_at: datetime | None = None
@@ -108,7 +108,7 @@ class ParentAccount:
         # align both sides before subtracting.
         requested = self.deletion_requested_at
         if requested.tzinfo is None:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
         else:
             from datetime import timezone as _tz
 

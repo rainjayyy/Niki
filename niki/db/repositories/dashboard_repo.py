@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -159,7 +159,7 @@ class InMemoryDashboardRepository(DashboardRepository):
             "child_id": child_id,
             "parent_id": parent_id,
             "payload": dict(payload),
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
             "delivered_at": None,
         }
         return row_id
@@ -183,7 +183,7 @@ class InMemoryDashboardRepository(DashboardRepository):
         row = self._alerts.get(alert_id)
         if row is None:
             return False
-        row["delivered_at"] = datetime.utcnow()
+        row["delivered_at"] = datetime.now(timezone.utc)
         return True
 
     async def add_tutoring_event(
@@ -199,7 +199,7 @@ class InMemoryDashboardRepository(DashboardRepository):
             "child_id": child_id,
             "parent_id": parent_id,
             "payload": dict(payload),
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         }
         return row_id
 
@@ -225,7 +225,7 @@ class InMemoryDashboardRepository(DashboardRepository):
             "child_id": child_id,
             "parent_id": parent_id,
             "payload": dict(payload),
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         }
         return row_id
 
@@ -289,7 +289,7 @@ class PostgresDashboardRepository(DashboardRepository):
         result = await self._session.execute(
             update(DashboardAlert)
             .where(DashboardAlert.id == alert_id)
-            .values(delivered_at=datetime.utcnow())
+            .values(delivered_at=datetime.now(timezone.utc))
         )
         return (result.rowcount or 0) > 0
 

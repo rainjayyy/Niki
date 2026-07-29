@@ -6,7 +6,7 @@ legacy TreeholeStore shape.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -93,7 +93,7 @@ class TestTreeholeManager:
         rows = await manager.repo.list_all()
         # expires_at should be ~7 days from now
         exp = rows[0]["expires_at"]
-        delta = exp - datetime.utcnow()
+        delta = exp - datetime.now(timezone.utc)
         assert timedelta(days=6, hours=23) < delta < timedelta(days=7, hours=1)
 
     async def test_decrypt_summary(self, manager: TreeholeManager) -> None:

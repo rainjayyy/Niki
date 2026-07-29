@@ -139,7 +139,7 @@ class Parent(Base):
 
     def deletion_window_days(self) -> int | None:
         """Return days remaining in the 30-day deletion window, if active."""
-        from datetime import timedelta
+        from datetime import timedelta, timezone
 
         if self.status != ParentStatus.DELETION_PENDING:
             return None

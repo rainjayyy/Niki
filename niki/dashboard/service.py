@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
@@ -164,7 +164,7 @@ class DashboardService:
             "problem": problem,
             "solved": solved,
             "safety_valve": safety_valve,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         return await self._repo.add_tutoring_event(
             child_id=child_id,
@@ -183,7 +183,7 @@ class DashboardService:
         payload = {
             "question": question,
             "topic": topic or question,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         return await self._repo.add_knowledge_query(
             child_id=child_id,
@@ -200,7 +200,7 @@ class DashboardService:
         today: datetime | None = None,
     ) -> EmotionWeeklyReport:
         """Generate a weekly emotion report (PRD #24, #27)."""
-        today = today or datetime.utcnow()
+        today = today or datetime.now(timezone.utc)
         week_start = today - timedelta(days=7)
 
         trend = self._build_trend(child_id, baseline, week_start, today)
@@ -263,7 +263,7 @@ class DashboardService:
             for name, count in sorted_topics[:5]
         ]
 
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
         new_interests = [
             InterestTopic(
                 name=name,
@@ -281,7 +281,7 @@ class DashboardService:
             top_topics=top_topics,
             new_interests=new_interests,
             growing_topics=[t.name for t in top_topics[:3]],
-            generated_at=datetime.utcnow().isoformat(),
+            generated_at=datetime.now(timezone.utc).isoformat(),
         )
 
     async def generate_learning_whitepaper(
@@ -348,7 +348,7 @@ class DashboardService:
             action_suggestions=suggestions,
             total_questions_asked=len(queries),
             total_problems_solved=total_solved,
-            generated_at=datetime.utcnow().isoformat(),
+            generated_at=datetime.now(timezone.utc).isoformat(),
         )
 
     async def get_pending_alerts(

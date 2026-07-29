@@ -1,6 +1,6 @@
 """End-to-end API tests for the dashboard endpoints."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -16,7 +16,7 @@ def test_weekly_report_empty_baseline(client: TestClient) -> None:
 
 def test_weekly_report_with_data(client: TestClient) -> None:
     """Add some baseline records, then check the report."""
-    today = datetime.utcnow()
+    today = datetime.now(timezone.utc)
     for i in range(7):
         d = (today - timedelta(days=i + 1)).date().isoformat()
         client.post(

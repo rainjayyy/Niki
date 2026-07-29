@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -167,7 +167,7 @@ class ConsentManager:
             typed_signature=typed_signature,
             ip_address=ip_address,
             device_fingerprint=device_fingerprint,
-            signed_at=datetime.utcnow(),
+            signed_at=datetime.now(timezone.utc),
         )
 
         self._records[record.id] = record
@@ -193,7 +193,7 @@ class ConsentManager:
         revoked = dataclasses.replace(
             record,
             revoked=True,
-            revoked_at=datetime.utcnow(),
+            revoked_at=datetime.now(timezone.utc),
         )
         self._records[record_id] = revoked
         return revoked
@@ -219,5 +219,5 @@ class ConsentManager:
     @staticmethod
     def _make_id(parent_id: str, consent_type: ConsentType) -> str:
         """Generate a deterministic consent record id."""
-        raw = f"{parent_id}:{consent_type.value}:{datetime.utcnow().isoformat()}"
+        raw = f"{parent_id}:{consent_type.value}:{datetime.now(timezone.utc).isoformat()}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
