@@ -28,6 +28,7 @@ from niki.db.models.deletion_request import DeletionRequest
 from niki.db.models.emotion_baseline_record import EmotionBaselineRecord
 from niki.db.models.memory_chunk import MemoryChunk
 from niki.db.models.parent import Parent, ParentStatus
+from niki.db.models.push_device import PushDevice, PushPrefs, VALID_CHANNELS, VALID_PLATFORMS
 from niki.db.models.treehole_engagement import TreeholeEngagement
 from niki.db.models.treehole_aggregation import TreeholeAggregation
 from niki.db.models.treehole_summary import TreeholeSummary
@@ -48,4 +49,8 @@ __all__ = [
     "DashboardAlert",
     "TutoringEvent",
     "KnowledgeQuery",
+    "PushDevice",
+    "PushPrefs",
+    "VALID_CHANNELS",
+    "VALID_PLATFORMS",
 ]

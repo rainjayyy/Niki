@@ -24,6 +24,18 @@ from niki.db.repositories.auth_audit_repo import (
     get_auth_audit_log_repository,
     set_auth_audit_log_repository,
 )
+from niki.db.repositories.push_device_repo import (
+    InMemoryPushDeviceRepository,
+    InMemoryPushPrefsRepository,
+    PostgresPushDeviceRepository,
+    PostgresPushPrefsRepository,
+    PushDeviceRepository,
+    PushPrefsRepository,
+    get_push_device_repository,
+    get_push_prefs_repository,
+    set_push_device_repository,
+    set_push_prefs_repository,
+)
 from niki.db.repositories.dashboard_repo import (
     DashboardRepository,
     InMemoryDashboardRepository,
@@ -83,6 +95,16 @@ __all__ = [
     "PostgresEmotionBaselineRepository",
     "get_emotion_baseline_repository",
     "set_emotion_baseline_repository",
+    "PushDeviceRepository",
+    "InMemoryPushDeviceRepository",
+    "PostgresPushDeviceRepository",
+    "get_push_device_repository",
+    "set_push_device_repository",
+    "PushPrefsRepository",
+    "InMemoryPushPrefsRepository",
+    "PostgresPushPrefsRepository",
+    "get_push_prefs_repository",
+    "set_push_prefs_repository",
 ]
 
 from niki.db.repositories.child_repo import (

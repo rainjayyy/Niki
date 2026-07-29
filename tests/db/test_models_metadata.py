@@ -26,6 +26,8 @@ EXPECTED_TABLES = {
     "knowledge_queries",
     "emotion_baseline_records",
     "auth_audit_logs",  # BE-AUTH-001-rollout-audit
+    "push_devices",      # BE-PUSH-001
+    "push_prefs",        # BE-PUSH-001
 }
 
 
@@ -62,6 +64,7 @@ class TestMetadataShape:
         sorted(EXPECTED_TABLES - {
             "treehole_engagements",
             "treehole_aggregations",  # uses first/last_engagement_at
+            "push_prefs",              # uses updated_at only
         }),
     )
     def test_all_tables_have_audit_timestamp(self, table: str) -> None:

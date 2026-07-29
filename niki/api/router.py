@@ -16,6 +16,7 @@ from niki.api.health import router as health_router
 from niki.api.media import router as media_router
 from niki.api.memory import router as memory_router
 from niki.api.orchestrator import router as chat_router
+from niki.api.push import router as push_router
 from niki.api.resilience import router as resilience_router
 from niki.api.routing import router as routing_router
 from niki.api.safety import router as safety_router
@@ -88,6 +89,9 @@ api_router.include_router(children_router)
 
 # BE-AUTH-001-rollout-audit: lateral-auth audit log query
 api_router.include_router(auth_audit_router)
+
+# BE-PUSH-001: push channel registration + preferences
+api_router.include_router(push_router)
 
 # Future routers will be added here:
 # api_router.include_router(admin_router)      # Admin & pipeline management

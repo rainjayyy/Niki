@@ -43,6 +43,10 @@ def _register_common_test_children():
     # doesn't accumulate state across tests.
     from niki.db.repositories import (
         InMemoryTreeholeAggregationRepository,
+        InMemoryPushDeviceRepository,
+        InMemoryPushPrefsRepository,
+        set_push_device_repository,
+        set_push_prefs_repository,
         set_treehole_aggregation_repository,
         set_treehole_repository,
     )
@@ -51,6 +55,9 @@ def _register_common_test_children():
     set_treehole_aggregation_repository(
         InMemoryTreeholeAggregationRepository()
     )
+    # BE-PUSH-001: reset push device + prefs repos too
+    set_push_device_repository(InMemoryPushDeviceRepository())
+    set_push_prefs_repository(InMemoryPushPrefsRepository())
 
 
 @pytest.fixture(autouse=True)
