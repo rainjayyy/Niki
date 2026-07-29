@@ -7,7 +7,10 @@ Orchestrates treehole mode:
 4. Persist via TreeholeRepository (BE-STORG-001-ext-B) — defaults
    to in-memory storage for single-process dev / tests; Postgres
    recommended for production / multi-worker.
-5. Schedule 7-day auto-purge
+5. Increment per-child rolling aggregate (BE-TREEHOLE-AGG) so
+   `aggregate_for_baseline()` is O(1) instead of decrypting every
+   stored engagement on each dashboard refresh.
+6. Schedule 7-day auto-purge
 
 CRITICAL: treehole ORIGINAL text must NEVER be written to:
 - Chroma (long-term vectors)
@@ -29,7 +32,12 @@ from typing import Any
 
 import structlog
 
-from niki.db.repositories import TreeholeRepository, get_treehole_repository
+from niki.db.repositories import (
+    TreeholeAggregationRepository,
+    TreeholeRepository,
+    get_treehole_aggregation_repository,
+    get_treehole_repository,
+)
 from niki.treehole.activation import should_activate_treehole
 from niki.treehole.encryption import TreeholeEncryption
 
@@ -108,10 +116,20 @@ class TreeholeManager:
         encryption: TreeholeEncryption | None = None,
         retention_days: int = 7,
         repo: TreeholeRepository | None = None,
+        agg_repo: TreeholeAggregationRepository | None = None,
     ) -> None:
         self._encryption = encryption or TreeholeEncryption()
         self._retention_days = retention_days
-        self._repo = repo or get_treehole_repository()
+        # NOTE: `or` would treat an empty `InMemoryTreeholeRepository`
+        # as falsy (it defines `__len__`), silently dropping an
+        # explicit repo argument. Use `is not None` instead.
+        self._repo = (
+            repo if repo is not None else get_treehole_repository()
+        )
+        self._agg_repo = (
+            agg_repo if agg_repo is not None
+            else get_treehole_aggregation_repository()
+        )
 
     @property
     def store(self) -> TreeholeStore:
@@ -185,6 +203,26 @@ class TreeholeManager:
             expires_at=expires_at,
         )
 
+        # BE-TREEHOLE-AGG: keep the per-child rolling aggregate in
+        # sync with the encrypted payload. Increment failures must
+        # never block the encrypted write (and the dashboard call
+        # below can fall back to the legacy decrypt path), so we
+        # swallow exceptions and just log.
+        try:
+            await self._agg_repo.increment(
+                child_id=child_id,
+                valence=emotion,
+                intensity=intensity,
+                category=category,
+                engagement_at=datetime.utcnow(),
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.error(
+                "treehole.aggregate_increment_failed",
+                child_id=child_id,
+                error=str(exc),
+            )
+
         encrypted_payload = {
             "id": row_id,
             "child_id": child_id,
@@ -249,33 +287,55 @@ class TreeholeManager:
     ) -> dict[str, float]:
         """Compute the baseline contribution from treehole summaries.
 
+        BE-TREEHOLE-AGG: reads from the per-child rolling aggregate
+        table (O(1) per child) instead of decrypting every stored
+        engagement. When `child_id` is None, returns the cross-child
+        rollup (sum of all per-child aggregates).
+
+        Returns the same shape as the legacy path for backwards
+        compatibility:
+            {"mean_valence": float, "count": int}
+
         PRD #64: '聚合即匿名' — once aggregated into the baseline
         mean, individual summaries cannot be re-derived.
         """
-        summaries = await self.list_summaries(child_id=child_id)
-        if not summaries:
+        if child_id is not None:
+            agg = await self._agg_repo.get(child_id)
+            if not agg or agg.get("count", 0) == 0:
+                return {"mean_valence": 0.0, "count": 0}
+            return {
+                "mean_valence": agg["valence_sum"] / agg["count"],
+                "count": agg["count"],
+            }
+        # Cross-child rollup.
+        all_rows = await self._agg_repo.list_all()
+        if not all_rows:
             return {"mean_valence": 0.0, "count": 0}
-
-        valence_map = {
-            "positive": 0.5,
-            "neutral": 0.0,
-            "negative": -0.5,
-        }
-        total = 0.0
-        for s in summaries:
-            total += valence_map.get(s.emotion_valence, 0.0) * (
-                s.emotion_intensity / 5.0
-            )
-        mean = total / len(summaries)
+        total_count = sum(r.get("count", 0) for r in all_rows)
+        total_valence = sum(r.get("valence_sum", 0.0) for r in all_rows)
+        if total_count == 0:
+            return {"mean_valence": 0.0, "count": 0}
         return {
-            "mean_valence": mean,
-            "count": len(summaries),
+            "mean_valence": total_valence / total_count,
+            "count": total_count,
         }
 
     async def purge_expired(self) -> int:
-        """Purge all expired engagements (called by daily cron)."""
+        """Purge all expired engagements (called by daily cron).
+
+        BE-TREEHOLE-AGG: aggregate rows are NOT purged — they
+        represent an irreversible rollup (PRD #64) so it's safe
+        and useful to keep them after the underlying ciphertext
+        expires.
+        """
         return await self._repo.delete_expired()
 
     async def purge_all_for_child(self, child_id: str) -> int:
-        """Drop every engagement for a child (PRD #35)."""
-        return await self._repo.delete_all_for_child(child_id)
+        """Drop every engagement for a child (PRD #35).
+
+        BE-TREEHOLE-AGG: also drops the per-child aggregate so
+        re-registration starts fresh.
+        """
+        dropped_engagements = await self._repo.delete_all_for_child(child_id)
+        await self._agg_repo.drop_all_for_child(child_id)
+        return dropped_engagements

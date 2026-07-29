@@ -38,6 +38,20 @@ def _register_common_test_children():
             registry.register(child, parent)
     set_child_registry(registry)
 
+    # BE-TREEHOLE-AGG: also reset the aggregate repo so the
+    # cross-child rollup in `aggregate_for_baseline(child_id=None)`
+    # doesn't accumulate state across tests.
+    from niki.db.repositories import (
+        InMemoryTreeholeAggregationRepository,
+        set_treehole_aggregation_repository,
+        set_treehole_repository,
+    )
+    from niki.db.repositories import InMemoryTreeholeRepository
+    set_treehole_repository(InMemoryTreeholeRepository())
+    set_treehole_aggregation_repository(
+        InMemoryTreeholeAggregationRepository()
+    )
+
 
 @pytest.fixture(autouse=True)
 def _reset_auth_audit():

@@ -29,6 +29,7 @@ from niki.db.models.emotion_baseline_record import EmotionBaselineRecord
 from niki.db.models.memory_chunk import MemoryChunk
 from niki.db.models.parent import Parent, ParentStatus
 from niki.db.models.treehole_engagement import TreeholeEngagement
+from niki.db.models.treehole_aggregation import TreeholeAggregation
 from niki.db.models.treehole_summary import TreeholeSummary
 from niki.db.models.weekly_report import WeeklyReport
 
@@ -43,6 +44,7 @@ __all__ = [
     "MemoryChunk",
     "TreeholeSummary",
     "TreeholeEngagement",
+    "TreeholeAggregation",
     "DashboardAlert",
     "TutoringEvent",
     "KnowledgeQuery",

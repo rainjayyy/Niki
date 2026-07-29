@@ -45,6 +45,13 @@ from niki.db.repositories.treehole_repo import (
     get_treehole_repository,
     set_treehole_repository,
 )
+from niki.db.repositories.treehole_aggregation_repo import (
+    InMemoryTreeholeAggregationRepository,
+    PostgresTreeholeAggregationRepository,
+    TreeholeAggregationRepository,
+    get_treehole_aggregation_repository,
+    set_treehole_aggregation_repository,
+)
 
 __all__ = [
     "AccountRepository",
@@ -61,6 +68,11 @@ __all__ = [
     "PostgresTreeholeRepository",
     "get_treehole_repository",
     "set_treehole_repository",
+    "TreeholeAggregationRepository",
+    "InMemoryTreeholeAggregationRepository",
+    "PostgresTreeholeAggregationRepository",
+    "get_treehole_aggregation_repository",
+    "set_treehole_aggregation_repository",
     "DashboardRepository",
     "InMemoryDashboardRepository",
     "PostgresDashboardRepository",

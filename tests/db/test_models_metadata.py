@@ -20,6 +20,7 @@ EXPECTED_TABLES = {
     "memory_chunks",
     "treehole_summaries",
     "treehole_engagements",
+    "treehole_aggregations",  # BE-TREEHOLE-AGG
     "dashboard_alerts",
     "tutoring_events",
     "knowledge_queries",
@@ -58,7 +59,10 @@ class TestMetadataShape:
 
     @pytest.mark.parametrize(
         "table",
-        sorted(EXPECTED_TABLES - {"treehole_engagements"}),
+        sorted(EXPECTED_TABLES - {
+            "treehole_engagements",
+            "treehole_aggregations",  # uses first/last_engagement_at
+        }),
     )
     def test_all_tables_have_audit_timestamp(self, table: str) -> None:
         cols = {c.name for c in Base.metadata.tables[table].columns}
