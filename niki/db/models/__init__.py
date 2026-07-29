@@ -17,6 +17,7 @@ Tables:
 from __future__ import annotations
 
 from niki.db.models.account_verification import AccountVerification
+from niki.db.models.auth_audit_log import AuthAuditLog
 from niki.db.models.child import Child
 from niki.db.models.dashboard_record import (
     DashboardAlert,

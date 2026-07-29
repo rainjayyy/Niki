@@ -39,6 +39,26 @@ def _register_common_test_children():
     set_child_registry(registry)
 
 
+@pytest.fixture(autouse=True)
+def _reset_auth_audit():
+    """Reset the auth-audit log repo + logger between tests so
+    cross-test audit events don't leak. Tests that want to inspect
+    audit output can override via set_auth_audit_log_repository()
+    in their own setup."""
+    from niki.db.repositories import (
+        InMemoryAuthAuditLogRepository,
+        set_auth_audit_log_repository,
+    )
+    from niki.services.auth_audit import (
+        AuthAuditLogger,
+        set_auth_audit_logger,
+    )
+
+    repo = InMemoryAuthAuditLogRepository()
+    set_auth_audit_log_repository(repo)
+    set_auth_audit_logger(AuthAuditLogger(repo=repo))
+
+
 
 @pytest.fixture(scope="session")
 def event_loop() -> Any:

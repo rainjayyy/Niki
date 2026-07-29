@@ -5,25 +5,57 @@ POST /api/v1/parents/{parent_id}/children
   - Lateral-auth check: the parent_id in the path must match the
     token's parent.id (403 PARENT_MISMATCH otherwise), and the child
     cannot already be owned by another parent (409 CHILD_OWNED).
+  - PARENT_MISMATCH is recorded via AuthAuditLogger
+    (BE-AUTH-001-rollout-audit).
 
 GET /api/v1/parents/{parent_id}/children
   - Lists child_ids owned by the calling parent.
+  - PARENT_MISMATCH is recorded via AuthAuditLogger.
 """
 
 from __future__ import annotations
+
+from typing import Optional
 
 from fastapi import APIRouter
 from fastapi import Depends, HTTPException, Request
 
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
+from niki.services.auth_audit import get_auth_audit_logger
 from niki.services.child_registry import get_child_registry
 
 router = APIRouter(prefix="/children", tags=["children"])
 
 
+async def _audit_parent_mismatch(
+    request: Request,
+    parent: ParentAccount,
+    target_parent_id: str,
+    endpoint_suffix: str,
+) -> None:
+    """Emit a `parent_mismatch` audit event for the children admin routes."""
+    endpoint = f"{request.method} /api/v1/children/{endpoint_suffix}"
+    client_ip: Optional[str] = (
+        request.client.host if request.client else None
+    )
+    await get_auth_audit_logger().log_violation(
+        "parent_mismatch",
+        actor_parent_id=parent.id,
+        target_parent_id=target_parent_id,
+        reason=(
+            f"Parent {parent.id!r} tried to act as "
+            f"{target_parent_id!r} via children admin endpoint"
+        ),
+        endpoint=endpoint,
+        method=request.method,
+        client_ip=client_ip,
+    )
+
+
 @router.post("/register/{parent_id}")
 async def register_child(
+    request: Request,
     parent_id: str,
     payload: dict,
     parent: ParentAccount = Depends(get_current_parent),
@@ -37,6 +69,9 @@ async def register_child(
     parent.
     """
     if parent.id != parent_id:
+        await _audit_parent_mismatch(
+            request, parent, parent_id, f"register/{parent_id}"
+        )
         raise HTTPException(
             status_code=403,
             detail={
@@ -74,11 +109,15 @@ async def register_child(
 
 @router.get("/list/{parent_id}")
 async def list_children(
+    request: Request,
     parent_id: str,
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
     """List child_ids owned by the calling parent."""
     if parent.id != parent_id:
+        await _audit_parent_mismatch(
+            request, parent, parent_id, f"list/{parent_id}"
+        )
         raise HTTPException(
             status_code=403,
             detail={

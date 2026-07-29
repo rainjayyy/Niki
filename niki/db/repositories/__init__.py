@@ -16,6 +16,14 @@ from niki.db.repositories.account_repo import (
     InMemoryAccountRepository,
     PostgresAccountRepository,
 )
+from niki.db.repositories.auth_audit_repo import (
+    AuthAuditEvent,
+    AuthAuditLogRepository,
+    InMemoryAuthAuditLogRepository,
+    PostgresAuthAuditLogRepository,
+    get_auth_audit_log_repository,
+    set_auth_audit_log_repository,
+)
 from niki.db.repositories.dashboard_repo import (
     DashboardRepository,
     InMemoryDashboardRepository,
@@ -42,6 +50,12 @@ __all__ = [
     "AccountRepository",
     "InMemoryAccountRepository",
     "PostgresAccountRepository",
+    "AuthAuditEvent",
+    "AuthAuditLogRepository",
+    "InMemoryAuthAuditLogRepository",
+    "PostgresAuthAuditLogRepository",
+    "get_auth_audit_log_repository",
+    "set_auth_audit_log_repository",
     "TreeholeRepository",
     "InMemoryTreeholeRepository",
     "PostgresTreeholeRepository",

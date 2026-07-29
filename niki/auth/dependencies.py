@@ -13,9 +13,9 @@ Niki §6.3 style:
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from niki.auth.account import ParentAccount
@@ -25,6 +25,7 @@ from niki.auth.jwt_service import (
     verify_token,
 )
 from niki.auth.token_blacklist import get_blacklist
+from niki.services.auth_audit import get_auth_audit_logger
 
 # `auto_error=False` so we can return a structured 401 payload
 # rather than FastAPI's default `{"detail": "..."}` shape.
@@ -77,6 +78,7 @@ async def get_current_parent(
 
 
 async def get_owned_child_id(
+    request: Request,
     child_id: str,
     parent: "ParentAccount" = Depends(get_current_parent),
 ) -> str:
@@ -85,6 +87,10 @@ async def get_owned_child_id(
     Looks up the registered parent for `child_id` and compares it
     against the token's parent.id. Returns the verified `child_id` so
     downstream handlers don't need to re-check.
+
+    Every rejection (CHILD_NOT_FOUND, PARENT_CHILD_MISMATCH) is
+    recorded via AuthAuditLogger (BE-AUTH-001-rollout-audit) so
+    security teams can detect probing.
 
     Raises:
         404 CHILD_NOT_FOUND       - no record of this child_id
@@ -97,7 +103,21 @@ async def get_owned_child_id(
     if os.environ.get("NIKI_TEST_FAKE_AUTH") == "1":
         return child_id
 
+    endpoint = f"{request.method} {request.url.path}"
+    client_ip: Optional[str] = (
+        request.client.host if request.client else None
+    )
+
     if registered_parent is None:
+        await get_auth_audit_logger().log_violation(
+            "child_not_found",
+            actor_parent_id=parent.id,
+            target_child_id=child_id,
+            reason=f"Child {child_id!r} not registered",
+            endpoint=endpoint,
+            method=request.method,
+            client_ip=client_ip,
+        )
         raise HTTPException(
             status_code=404,
             detail={
@@ -106,6 +126,19 @@ async def get_owned_child_id(
             },
         )
     if registered_parent != parent.id:
+        await get_auth_audit_logger().log_violation(
+            "parent_child_mismatch",
+            actor_parent_id=parent.id,
+            target_child_id=child_id,
+            target_parent_id=registered_parent,
+            reason=(
+                f"Parent {parent.id!r} tried to access child "
+                f"{child_id!r} owned by {registered_parent!r}"
+            ),
+            endpoint=endpoint,
+            method=request.method,
+            client_ip=client_ip,
+        )
         raise HTTPException(
             status_code=403,
             detail={

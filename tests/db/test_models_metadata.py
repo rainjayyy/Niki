@@ -1,4 +1,4 @@
-"""Asserts Base.metadata has exactly the 8 Niki tables registered.
+"""Asserts Base.metadata has exactly the expected Niki tables registered.
 
 This is a guard against adding/removing models without updating
 Alembic migrations (§7.1.6). If this test fails, you likely need to
@@ -24,11 +24,12 @@ EXPECTED_TABLES = {
     "tutoring_events",
     "knowledge_queries",
     "emotion_baseline_records",
+    "auth_audit_logs",  # BE-AUTH-001-rollout-audit
 }
 
 
 class TestMetadataShape:
-    def test_has_eight_tables(self) -> None:
+    def test_has_expected_tables(self) -> None:
         actual = set(Base.metadata.tables.keys())
         assert actual == EXPECTED_TABLES, (
             f"schema drift: expected {EXPECTED_TABLES}, got {actual}"
