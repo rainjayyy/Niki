@@ -49,6 +49,11 @@ def _reset_auth_audit():
         InMemoryAuthAuditLogRepository,
         set_auth_audit_log_repository,
     )
+    from niki.security import (
+        ConsoleAlertDispatcher,
+        ViolationRateTracker,
+        set_alert_dispatcher,
+    )
     from niki.services.auth_audit import (
         AuthAuditLogger,
         set_auth_audit_logger,
@@ -56,7 +61,17 @@ def _reset_auth_audit():
 
     repo = InMemoryAuthAuditLogRepository()
     set_auth_audit_log_repository(repo)
-    set_auth_audit_logger(AuthAuditLogger(repo=repo))
+    tracker = ViolationRateTracker(
+        window_seconds=300, burst_count=3
+    )
+    set_alert_dispatcher(ConsoleAlertDispatcher())
+    set_auth_audit_logger(
+        AuthAuditLogger(
+            repo=repo,
+            rate_tracker=tracker,
+            dispatcher=ConsoleAlertDispatcher(),
+        )
+    )
 
 
 

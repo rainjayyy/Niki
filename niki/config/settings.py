@@ -81,6 +81,17 @@ class Settings(BaseSettings):
     emotion_baseline_window_days: int = 7
     emotion_anomaly_zscore_threshold: float = 1.5
 
+    # --- BE-AUTH-001-rollout-alerts ---
+    # Lateral-auth violation burst detection. If the same actor
+    # accumulates `auth_alert_burst_count` violations within
+    # `auth_alert_window_seconds`, dispatch a SecurityAlert. Set
+    # `auth_alert_webhook_url` to fan out to Feishu/Slack/etc.;
+    # empty string = log only.
+    auth_alert_burst_count: int = 3
+    auth_alert_window_seconds: int = 300
+    auth_alert_webhook_url: str = ""
+    auth_alert_webhook_timeout_s: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -3,6 +3,9 @@
 Wraps the AuthAuditLogRepository with a high-level API that
     1. Persists the event to the audit log
     2. Emits a structured structlog record (for ELK / Loki)
+    3. BE-AUTH-001-rollout-alerts: feeds the ViolationRateTracker
+       and dispatches a SecurityAlert when a burst threshold is
+       crossed for the same actor.
 
 Call sites use `log_violation()` for the common lateral-auth case
 or `log_event()` for generic info-level events. Audit-write
@@ -12,6 +15,7 @@ must not change the 4xx response the user already saw.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
@@ -19,23 +23,55 @@ import structlog
 from niki.db.repositories.auth_audit_repo import (
     AuthAuditEvent,
     AuthAuditLogRepository,
+    SEVERITY_WARNING,
     get_auth_audit_log_repository,
 )
+from niki.security.alerts import (
+    AlertDispatcher,
+    SecurityAlert,
+    get_alert_dispatcher,
+)
+from niki.security.rate_tracker import ViolationRateTracker
 
 logger = structlog.get_logger(__name__)
 
 
 class AuthAuditLogger:
-    """Persist auth audit events + emit structured log lines."""
+    """Persist auth audit events + emit structured log lines + alert."""
 
-    def __init__(self, repo: AuthAuditLogRepository | None = None) -> None:
+    def __init__(
+        self,
+        repo: AuthAuditLogRepository | None = None,
+        *,
+        rate_tracker: ViolationRateTracker | None = None,
+        dispatcher: AlertDispatcher | None = None,
+    ) -> None:
         self._repo = repo
+        self._dispatcher = dispatcher
+        self._rate_tracker = rate_tracker
 
     @property
     def repo(self) -> AuthAuditLogRepository:
         if self._repo is None:
             self._repo = get_auth_audit_log_repository()
         return self._repo
+
+    @property
+    def dispatcher(self) -> AlertDispatcher:
+        if self._dispatcher is None:
+            self._dispatcher = get_alert_dispatcher()
+        return self._dispatcher
+
+    @property
+    def rate_tracker(self) -> ViolationRateTracker:
+        if self._rate_tracker is None:
+            from niki.config.settings import get_settings
+            s = get_settings()
+            self._rate_tracker = ViolationRateTracker(
+                window_seconds=s.auth_alert_window_seconds,
+                burst_count=s.auth_alert_burst_count,
+            )
+        return self._rate_tracker
 
     async def log_violation(
         self,
@@ -95,7 +131,7 @@ class AuthAuditLogger:
         return await self._safe_add(event)
 
     async def _safe_add(self, event: AuthAuditEvent) -> Optional[str]:
-        """Persist + log; never raise."""
+        """Persist + log + maybe alert; never raise."""
         # 1. Structured log first so even if the DB write fails
         # the record reaches stdout / log shipper.
         log_fn = (
@@ -120,14 +156,67 @@ class AuthAuditLogger:
         # 2. Persist — swallow exceptions so the caller can still
         # return its 4xx / continue.
         try:
-            return await self.repo.add(event)
+            row_id = await self.repo.add(event)
         except Exception as exc:  # pragma: no cover — DB failure path
             logger.error(
                 "auth.audit.persist_failed",
                 error=str(exc),
                 event_type=event.event_type,
             )
-            return None
+            row_id = None
+
+        # 3. NEW (BE-AUTH-001-rollout-alerts): feed the rate tracker
+        # for warning-severity events and dispatch an alert when
+        # the burst threshold is crossed.
+        if event.severity == SEVERITY_WARNING and event.actor_parent_id:
+            await self._maybe_alert(event)
+
+        return row_id
+
+    async def _maybe_alert(self, event: AuthAuditEvent) -> None:
+        """Record violation in rate tracker; dispatch alert if burst."""
+        try:
+            count = self.rate_tracker.record(event.actor_parent_id or "")
+            if count < self.rate_tracker.burst_count:
+                return
+            # Re-check should_alert in case two violations land on
+            # the same threshold tick — only fire once per crossing.
+            if not self.rate_tracker.should_alert(
+                event.actor_parent_id or ""
+            ):
+                return
+            alert = SecurityAlert(
+                alert_type="lateral_auth_burst",
+                severity="critical",
+                actor_parent_id=event.actor_parent_id,
+                target_parent_id=event.target_parent_id,
+                target_child_id=event.target_child_id,
+                client_ip=event.client_ip,
+                event_count=count,
+                window_seconds=self.rate_tracker.window_seconds,
+                detected_at=datetime.now(timezone.utc),
+                title=(
+                    f"Lateral-auth burst: "
+                    f"{event.actor_parent_id} x{count}"
+                ),
+                detail=(
+                    f"Actor {event.actor_parent_id!r} accumulated "
+                    f"{count} lateral-auth violations within "
+                    f"{self.rate_tracker.window_seconds}s. "
+                    f"Latest: {event.event_type} via {event.method} "
+                    f"{event.endpoint} (target_parent="
+                    f"{event.target_parent_id!r}, target_child="
+                    f"{event.target_child_id!r}, client_ip="
+                    f"{event.client_ip!r})."
+                ),
+            )
+            await self.dispatcher.dispatch(alert)
+        except Exception as exc:  # pragma: no cover
+            logger.error(
+                "auth.audit.alert_dispatch_failed",
+                error=str(exc),
+                event_type=event.event_type,
+            )
 
 
 # ---------------------------------------------------------------------------
