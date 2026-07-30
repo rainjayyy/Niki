@@ -22,7 +22,9 @@ from niki.api._stub_llm import _StubLLM
 from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
-router = APIRouter(prefix="/tutoring", tags=["tutoring"])
+router = APIRouter(prefix="/tutoring", tags=[
+    {"name": "tutoring", "description": "Tutoring Agent API endpoints — child-facing homework help."}
+])
 
 # ISS-02: shared input gateway for direct agent endpoints
 _input_gateway = InputSafetyGateway()
@@ -50,7 +52,23 @@ def _get_agent(child_age: int) -> TutoringAgent:
     return _agent_cache[child_age]
 
 
-@router.post("/ask")
+@router.post(
+    "/ask",
+    summary="Ask for help with a stuck problem",
+    description="""
+            Ask for help with a stuck problem.
+            
+            Request body:
+                {
+                  "problem": "...",
+                  "child_age": 7,
+                  "subtype": "pure_calculation" (optional),
+                  "session_id": "..." (optional, for state continuity)
+                }
+            
+            ISS-02: run through InputSafetyGateway first.
+            """,
+)
 async def ask_tutor(payload: dict) -> dict:
     """Ask for help with a stuck problem.
 
@@ -105,7 +123,11 @@ async def ask_tutor(payload: dict) -> dict:
     }
 
 
-@router.get("/strategies")
+@router.get(
+    "/strategies",
+    summary="List the 4-round guided-discovery strategy templates",
+    description="List the 4-round guided-discovery strategy templates.",
+)
 async def list_strategies() -> dict:
     """List the 4-round guided-discovery strategy templates."""
     return {
@@ -126,7 +148,11 @@ async def list_strategies() -> dict:
     }
 
 
-@router.get("/difficulty")
+@router.get(
+    "/difficulty",
+    summary="Show the per-subtype difficulty discount matrix",
+    description="Show the per-subtype difficulty discount matrix.",
+)
 async def difficulty_matrix() -> dict:
     """Show the per-subtype difficulty discount matrix."""
     return {

@@ -23,7 +23,18 @@ from niki.knowledge.knowledge_base import (
 from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
-router = APIRouter(prefix="/encyclopedia", tags=["encyclopedia"])
+router = APIRouter(
+    prefix="/encyclopedia",
+    tags=[
+        {
+            "name": "encyclopedia",
+            "description": (
+                "Encyclopedia Agent API endpoints — child-facing "
+                "knowledge Q&A."
+            ),
+        },
+    ],
+)
 
 # Module-level singletons
 _kb = KnowledgeBase()
@@ -60,7 +71,19 @@ def _get_agent(child_age: int) -> EncyclopediaAgent:
     return _agent_cache[child_age]
 
 
-@router.post("/ask")
+@router.post(
+    "/ask",
+    summary="Ask an encyclopedia question",
+    description="""
+            Ask an encyclopedia question.
+            
+            Request body: {"question": "...", "child_age": 7}
+            
+            ISS-02: run the text through InputSafetyGateway first so that
+            self-harm / blacklisted topics trigger the same parent alert
+            as the orchestrator path.
+            """,
+)
 async def ask_question(payload: dict) -> dict:
     """Ask an encyclopedia question.
 
@@ -107,7 +130,11 @@ async def ask_question(payload: dict) -> dict:
     }
 
 
-@router.get("/knowledge")
+@router.get(
+    "/knowledge",
+    summary="List L1 knowledge entries (debugging endpoint)",
+    description="List L1 knowledge entries (debugging endpoint).",
+)
 async def list_knowledge() -> dict:
     """List L1 knowledge entries (debugging endpoint)."""
     return {
@@ -124,7 +151,11 @@ async def list_knowledge() -> dict:
     }
 
 
-@router.post("/search")
+@router.post(
+    "/search",
+    summary="Search the KB (debugging endpoint)",
+    description="Search the KB (debugging endpoint).",
+)
 async def search_kb(payload: dict) -> dict:
     """Search the KB (debugging endpoint)."""
     query = payload.get("query", "")

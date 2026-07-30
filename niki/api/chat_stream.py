@@ -27,7 +27,9 @@ from typing import Annotated
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=[
+    {"name": "chat", "description": "SSE chat streaming endpoint (BE-RT-001)."}
+])
 
 
 def _format_sse(data: dict | str) -> bytes:
@@ -77,7 +79,21 @@ async def _sse_generator(
     yield _format_sse("[DONE]")
 
 
-@router.post("/stream")
+@router.post(
+    "/stream",
+    summary="Stream a chat reply via Server-Sent Events",
+    description="""
+            Stream a chat reply via Server-Sent Events.
+            
+            Body fields:
+                text       (required) — child's input
+                session_id (optional)
+                child_age  (optional) — int
+                persona    (optional) — string
+            
+            Response: text/event-stream (see docs/be-issues/BE-RT-001.md).
+            """,
+)
 @limiter.limit("30/minute")
 async def chat_stream(
     request: Request,

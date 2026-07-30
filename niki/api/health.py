@@ -16,10 +16,29 @@ from niki.middleware.rate_limit import (
 )
 from niki.schemas.common import HealthResponse, HealthStatus
 
-router = APIRouter(tags=["health"])
+router = APIRouter(
+    tags=[
+        {
+            "name": "health",
+            "description": (
+                "Health check endpoint — returns status of all "
+                "infrastructure components."
+            ),
+        },
+    ],
+)
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get(
+    "/health",
+    summary="Check the health of all infrastructure components",
+    description="""
+            Check the health of all infrastructure components.
+            
+            Returns:
+                HealthResponse with overall status and per-component details.
+            """,
+)
 async def health_check() -> HealthResponse:
     """Check the health of all infrastructure components.
 
@@ -65,13 +84,29 @@ async def health_check() -> HealthResponse:
     )
 
 
-@router.get("/health/live")
+@router.get(
+    "/health/live",
+    summary="""
+            Kubernetes-style liveness probe — just checks the process is alive
+            """,
+    description="""
+            Kubernetes-style liveness probe — just checks the process is alive.
+            """,
+)
 async def liveness_check() -> dict[str, str]:
     """Kubernetes-style liveness probe — just checks the process is alive."""
     return {"status": "alive"}
 
 
-@router.get("/health/ready")
+@router.get(
+    "/health/ready",
+    summary="""
+            Kubernetes-style readiness probe — checks if the app can serve traffic
+            """,
+    description="""
+            Kubernetes-style readiness probe — checks if the app can serve traffic.
+            """,
+)
 async def readiness_check() -> dict[str, str | bool]:
     """Kubernetes-style readiness probe — checks if the app can serve traffic."""
     try:

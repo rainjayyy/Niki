@@ -8,10 +8,23 @@ from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 from niki.services.data_export import build_export_zip
 
-router = APIRouter(prefix="/parents", tags=["data-portability"])
+router = APIRouter(prefix="/parents", tags=[
+    {"name": "data-portability", "description": "Data export API endpoint (BE-COMP-001)."}
+])
 
 
-@router.get("/{parent_id}/data-export")
+@router.get(
+    "/{parent_id}/data-export",
+    summary="Download a ZIP of all of a parent's data (PIPL Art",
+    description="""
+            Download a ZIP of all of a parent's data (PIPL Art. 44).
+            
+            The token's `sub` claim must match `parent_id` (lateral-isolation
+            guard). Returns 403 PARENT_MISMATCH otherwise.
+            
+            Optional `child_id` filters the export to a single child.
+            """,
+)
 async def export_data(
     parent_id: str,
     child_id: str | None = Query(default=None),

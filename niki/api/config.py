@@ -26,7 +26,9 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/config", tags=["config"])
+router = APIRouter(prefix="/config", tags=[
+    {"name": "config", "description": "Client configuration endpoint (BE-MISC-001 + BE-MISC-002)."}
+])
 
 
 # Non-flag defaults — static across versions and deploys.
@@ -73,7 +75,16 @@ def _resolve_feature_flags(
     return {name: bool(value) for name, value in sorted(snapshot.items())}
 
 
-@router.get("/client")
+@router.get(
+    "/client",
+    summary="Return the client-facing runtime config",
+    description="""
+            Return the client-facing runtime config.
+            
+            v1.0 ignores `client_type` / `version` and returns the
+            same blob to everyone. v1.1 will filter by these.
+            """,
+)
 async def get_client_config(
     client_type: str | None = Query(
         None,

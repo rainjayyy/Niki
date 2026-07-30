@@ -28,14 +28,20 @@ from niki.dashboard.service import DashboardService
 
 from niki.api._i18n import localized_error_response
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=[
+    {"name": "dashboard", "description": "Parent dashboard API endpoints — PRD #24-#29."}
+])
 
 # Module-level singletons
 _dashboard = DashboardService()
 _baseline = EmotionBaseline()
 
 
-@router.get("/weekly-report/{child_id}")
+@router.get(
+    "/weekly-report/{child_id}",
+    summary="Get the weekly emotion report (PRD #24)",
+    description="Get the weekly emotion report (PRD #24).",
+)
 async def weekly_report(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
@@ -48,7 +54,24 @@ async def weekly_report(
     return report.to_dict()
 
 
-@router.get("/weekly-report/{child_id}/pdf")
+@router.get(
+    "/weekly-report/{child_id}/pdf",
+    summary="""
+            Get the weekly emotion report as a downloadable PDF (BE-DASH-001)
+            """,
+    description="""
+            Get the weekly emotion report as a downloadable PDF (BE-DASH-001).
+            
+            Frontend can present this as a single `<a href="…">` link;
+            the server does the rendering so the layout is consistent
+            across browsers / OSes. A4 portrait, single page for the
+            common case.
+            
+            BE-DASH-001-rollout: ?template=child|preschool|school picks
+            the report variant. The default `child` is the balanced
+            tone for ages 7-10.
+            """,
+)
 async def weekly_report_pdf(
         request: Request,
         child_id: str = Depends(get_owned_child_id),
@@ -115,7 +138,11 @@ async def weekly_report_pdf(
     )
 
 
-@router.get("/interest/{child_id}")
+@router.get(
+    "/interest/{child_id}",
+    summary="Get the interest graph (PRD #25)",
+    description="Get the interest graph (PRD #25).",
+)
 async def interest_graph(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
@@ -125,7 +152,11 @@ async def interest_graph(
     return graph.to_dict()
 
 
-@router.get("/learning/{child_id}")
+@router.get(
+    "/learning/{child_id}",
+    summary="Get the learning whitepaper (PRD #26)",
+    description="Get the learning whitepaper (PRD #26).",
+)
 async def learning_whitepaper(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
@@ -135,7 +166,11 @@ async def learning_whitepaper(
     return paper.to_dict()
 
 
-@router.get("/alerts/{child_id}")
+@router.get(
+    "/alerts/{child_id}",
+    summary="Get pending alerts (PRD #27, #29)",
+    description="Get pending alerts (PRD #27, #29).",
+)
 async def get_alerts(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
@@ -161,7 +196,11 @@ async def get_alerts(
     }
 
 
-@router.post("/alerts/record/safety-valve")
+@router.post(
+    "/alerts/record/safety-valve",
+    summary="Record a tutoring safety-valve trigger",
+    description="Record a tutoring safety-valve trigger.",
+)
 async def record_safety_valve(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring safety-valve trigger."""
@@ -180,7 +219,11 @@ async def record_safety_valve(payload: dict,
     }
 
 
-@router.post("/alerts/record/high-risk")
+@router.post(
+    "/alerts/record/high-risk",
+    summary="Record a high-risk signal (self-harm, etc.)",
+    description="Record a high-risk signal (self-harm, etc.).",
+)
 async def record_high_risk(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a high-risk signal (self-harm, etc.)."""
@@ -203,7 +246,11 @@ async def record_high_risk(payload: dict,
     }
 
 
-@router.post("/alerts/{alert_id}/delivered")
+@router.post(
+    "/alerts/{alert_id}/delivered",
+    summary="Mark a high-risk alert as delivered",
+    description="Mark a high-risk alert as delivered.",
+)
 async def mark_alert_delivered(alert_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Mark a high-risk alert as delivered."""
@@ -211,7 +258,24 @@ async def mark_alert_delivered(alert_id: str,
     return {"alert_id": alert_id, "delivered": success}
 
 
-@router.post("/alerts/batch/dismiss")
+@router.post(
+    "/alerts/batch/dismiss",
+    summary="Dismiss many alerts in a single round trip (BE-API-005)",
+    description="""
+            Dismiss many alerts in a single round trip (BE-API-005).
+            
+            Lets the parent dashboard bulk-ack alerts ("全部已读") without
+            firing N parallel `POST /alerts/{id}/delivered` calls. Each id
+            is independent: missing ids land in `skipped` with
+            `reason: "not_found"` and the rest are still dismissed.
+            
+            Body:
+                {"alert_ids": ["a-1", "a-2", "a-3"]}
+            Response:
+                {"dismissed": 2,
+                 "skipped":   [{"alert_id": "a-3", "reason": "not_found"}, ...]}
+            """,
+)
 async def dismiss_alerts_batch(request: Request, payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Dismiss many alerts in a single round trip (BE-API-005).
@@ -238,7 +302,16 @@ async def dismiss_alerts_batch(request: Request, payload: dict,
     return await _dashboard.dismiss_alerts_batch(alert_ids)
 
 
-@router.post("/baseline/add")
+@router.post(
+    "/baseline/add",
+    summary="Add a baseline record (for testing/demo)",
+    description="""
+            Add a baseline record (for testing/demo).
+            
+            Persisted via the active EmotionBaselineRepository so the
+            7-day rolling window survives process restarts.
+            """,
+)
 async def add_baseline_record(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a baseline record (for testing/demo).
@@ -256,7 +329,11 @@ async def add_baseline_record(payload: dict,
     return {"status": "added", "record_count": len(_baseline.records())}
 
 
-@router.post("/events/tutoring")
+@router.post(
+    "/events/tutoring",
+    summary="Record a tutoring event (for whitepaper generation)",
+    description="Record a tutoring event (for whitepaper generation).",
+)
 async def record_tutoring_event(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
@@ -270,7 +347,11 @@ async def record_tutoring_event(payload: dict,
     return {"status": "recorded"}
 
 
-@router.post("/events/knowledge")
+@router.post(
+    "/events/knowledge",
+    summary="Record a knowledge-base query",
+    description="Record a knowledge-base query.",
+)
 async def record_knowledge_query(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a knowledge-base query."""

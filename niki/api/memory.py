@@ -46,7 +46,9 @@ from niki.memory import (
     ShortTermMemory,
 )
 
-router = APIRouter(prefix="/memory", tags=["memory"])
+router = APIRouter(prefix="/memory", tags=[
+    {"name": "memory", "description": "Memory system API endpoints — PRD #45-#51."}
+])
 
 # Module-level singletons
 _short_term = ShortTermMemory()
@@ -101,7 +103,11 @@ def _turn_to_dict(turn: ConversationTurn) -> dict[str, Any]:
     }
 
 
-@router.get("/short-term/{session_id}")
+@router.get(
+    "/short-term/{session_id}",
+    summary="Get recent conversation turns for a session",
+    description="Get recent conversation turns for a session.",
+)
 async def get_recent_turns(session_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get recent conversation turns for a session."""
@@ -113,7 +119,11 @@ async def get_recent_turns(session_id: str,
     }
 
 
-@router.post("/short-term/{session_id}")
+@router.post(
+    "/short-term/{session_id}",
+    summary="Append a turn to the session's recent memory",
+    description="Append a turn to the session's recent memory.",
+)
 async def append_turn(session_id: str, payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Append a turn to the session's recent memory."""
@@ -131,7 +141,11 @@ async def append_turn(session_id: str, payload: dict,
     }
 
 
-@router.delete("/short-term/{session_id}")
+@router.delete(
+    "/short-term/{session_id}",
+    summary="Clear a session's recent memory",
+    description="Clear a session's recent memory.",
+)
 async def clear_session(session_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Clear a session's recent memory."""
@@ -139,7 +153,11 @@ async def clear_session(session_id: str,
     return {"session_id": session_id, "cleared": True}
 
 
-@router.post("/long-term/add")
+@router.post(
+    "/long-term/add",
+    summary="Add a memory record to long-term storage",
+    description="Add a memory record to long-term storage.",
+)
 async def add_long_term_record(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a memory record to long-term storage."""
@@ -161,7 +179,11 @@ async def add_long_term_record(payload: dict,
     return {"id": record_id, "stored": True}
 
 
-@router.post("/long-term/search")
+@router.post(
+    "/long-term/search",
+    summary="Semantic search over long-term memory",
+    description="Semantic search over long-term memory.",
+)
 async def search_long_term(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Semantic search over long-term memory."""
@@ -177,7 +199,21 @@ async def search_long_term(payload: dict,
     }
 
 
-@router.get("/graph/entities")
+@router.get(
+    "/graph/entities",
+    summary="List entities in the cognitive graph (BE-API-003: paginated)",
+    description="""
+            List entities in the cognitive graph (BE-API-003: paginated).
+            
+            BE-API-004: ?keyword= case-insensitive substring over name +
+            aliases; ?sort= picks `first_seen` (default), `last_seen`,
+            or `name`; ?order= `asc` | `desc`. Since this endpoint does
+            not store a created_at on entities, `since`/`until` are not
+            applied — the helper still parses them so callers can use
+            the same URL convention across endpoints, but they are
+            silently ignored here (with a documented note).
+            """,
+)
 async def list_entities(
     parent: ParentAccount = Depends(get_current_parent),
     pagination: tuple[int, int] = Depends(parse_pagination),
@@ -210,7 +246,11 @@ async def list_entities(
     return payload
 
 
-@router.post("/graph/entities")
+@router.post(
+    "/graph/entities",
+    summary="Add an entity (with automatic alignment/dedup)",
+    description="Add an entity (with automatic alignment/dedup).",
+)
 async def add_entity(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add an entity (with automatic alignment/dedup)."""
@@ -224,7 +264,11 @@ async def add_entity(payload: dict,
     return {"entity": entity.to_dict(), "aligned": entity.name == payload["name"]}
 
 
-@router.post("/graph/relations")
+@router.post(
+    "/graph/relations",
+    summary="Add a relation between two entities",
+    description="Add a relation between two entities.",
+)
 async def add_relation(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a relation between two entities."""
@@ -237,7 +281,27 @@ async def add_relation(payload: dict,
     return {"edge": edge.to_dict()}
 
 
-@router.post("/graph/entities/batch")
+@router.post(
+    "/graph/entities/batch",
+    summary="Add many entities in a single round trip (BE-API-005)",
+    description="""
+            Add many entities in a single round trip (BE-API-005).
+            
+            Replaces the 5+ sequential POSTs the parent dashboard used to
+            do to init a new child's cognitive graph (~200-500ms over
+            mobile). Each item is independent; well-formed items go into
+            `created`, malformed or duplicate names go into `skipped`
+            with a `reason`. The 100-item cap is enforced up front so a
+            pathological request can't tie up the server.
+            
+            Body:
+                {"items": [{"name": "A", "entity_type": "concept",
+                            "aliases": []}, ...]}
+            Response:
+                {"created":  [entity.to_dict(), ...],
+                 "skipped":  [{"name": "...", "reason": "..."}, ...]}
+            """,
+)
 async def add_entities_batch(request: Request, payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add many entities in a single round trip (BE-API-005).
@@ -262,7 +326,20 @@ async def add_entities_batch(request: Request, payload: dict,
     return _graph.add_entities_batch(items)
 
 
-@router.post("/graph/relations/batch")
+@router.post(
+    "/graph/relations/batch",
+    summary="Add many relations in a single round trip (BE-API-005)",
+    description="""
+            Add many relations in a single round trip (BE-API-005).
+            
+            Body:
+                {"items": [{"source": "A", "target": "B",
+                            "relation": "related_to"}, ...]}
+            Response:
+                {"created":  [edge.to_dict(), ...],
+                 "skipped":  [{"source": "...", "reason": "..."}, ...]}
+            """,
+)
 async def add_relations_batch(request: Request, payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add many relations in a single round trip (BE-API-005).
@@ -280,14 +357,22 @@ async def add_relations_batch(request: Request, payload: dict,
     return _graph.add_relations_batch(items)
 
 
-@router.post("/graph/apply-decay")
+@router.post(
+    "/graph/apply-decay",
+    summary="Apply PRD #50 time decay to all relations",
+    description="Apply PRD #50 time decay to all relations.",
+)
 async def apply_time_decay(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Apply PRD #50 time decay to all relations."""
     count = _graph.apply_decay()
     return {"decayed_edges": count}
 
 
-@router.post("/hook/process")
+@router.post(
+    "/hook/process",
+    summary="Run the daytime memory hook on a child message",
+    description="Run the daytime memory hook on a child message.",
+)
 async def hook_process(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Run the daytime memory hook on a child message."""
@@ -309,20 +394,32 @@ async def hook_process(payload: dict,
     }
 
 
-@router.get("/pipeline/run")
+@router.get(
+    "/pipeline/run",
+    summary="Trigger a pipeline run (for testing/admin)",
+    description="Trigger a pipeline run (for testing/admin).",
+)
 async def run_pipeline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Trigger a pipeline run (for testing/admin)."""
     run = await _pipeline.run()
     return run.to_dict()
 
 
-@router.get("/pipeline/health")
+@router.get(
+    "/pipeline/health",
+    summary="Get pipeline health status (PRD #47)",
+    description="Get pipeline health status (PRD #47).",
+)
 async def pipeline_health(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get pipeline health status (PRD #47)."""
     return _pipeline.health_check()
 
 
-@router.get("/pipeline/dead-letter")
+@router.get(
+    "/pipeline/dead-letter",
+    summary="Get the dead-letter queue contents (PRD #47)",
+    description="Get the dead-letter queue contents (PRD #47).",
+)
 async def pipeline_dead_letter(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the dead-letter queue contents (PRD #47)."""
     return {"items": _pipeline.get_dead_letter()}

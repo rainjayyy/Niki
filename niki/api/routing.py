@@ -23,7 +23,18 @@ from niki.routing import (
     PersonaInjector,
 )
 
-router = APIRouter(prefix="/routing", tags=["routing"])
+router = APIRouter(
+    prefix="/routing",
+    tags=[
+        {
+            "name": "routing",
+            "description": (
+                "Routing API endpoints — intent classification, "
+                "routing decisions, persona management."
+            ),
+        },
+    ],
+)
 
 # Module-level singletons (cheap to construct, safe to reuse)
 _classifier = IntentClassifier()
@@ -80,7 +91,15 @@ def _routing_decision_to_dict(decision) -> dict:
     }
 
 
-@router.post("/classify")
+@router.post(
+    "/classify",
+    summary="Classify input text into intent categories",
+    description="""
+            Classify input text into intent categories.
+            
+            Request body: {"text": "..."}
+            """,
+)
 async def classify(payload: dict) -> dict:
     """Classify input text into intent categories.
 
@@ -91,7 +110,15 @@ async def classify(payload: dict) -> dict:
     return _intent_result_to_dict(result)
 
 
-@router.post("/route")
+@router.post(
+    "/route",
+    summary="Classify and route to the appropriate agent(s)",
+    description="""
+            Classify and route to the appropriate agent(s).
+            
+            Request body: {"text": "..."}
+            """,
+)
 async def route(payload: dict) -> dict:
     """Classify and route to the appropriate agent(s).
 
@@ -103,7 +130,11 @@ async def route(payload: dict) -> dict:
     return _routing_decision_to_dict(decision)
 
 
-@router.get("/personas")
+@router.get(
+    "/personas",
+    summary="List all available personas with their TTS parameters",
+    description="List all available personas with their TTS parameters.",
+)
 async def list_personas() -> dict:
     """List all available personas with their TTS parameters."""
     return {
@@ -124,7 +155,15 @@ async def list_personas() -> dict:
     }
 
 
-@router.post("/persona/inject")
+@router.post(
+    "/persona/inject",
+    summary="Inject the persona fragment into a base system prompt",
+    description="""
+            Inject the persona fragment into a base system prompt.
+            
+            Request body: {"base_prompt": "...", "persona": "lively|gentle|rigorous"}
+            """,
+)
 async def inject_persona(payload: dict) -> dict:
     """Inject the persona fragment into a base system prompt.
 
@@ -155,7 +194,19 @@ async def inject_persona(payload: dict) -> dict:
     }
 
 
-@router.post("/fuse")
+@router.post(
+    "/fuse",
+    summary="Demonstrate fusion of mocked agent outputs",
+    description="""
+            Demonstrate fusion of mocked agent outputs.
+            
+            Request body:
+                {
+                  "decision": {"primary_agent": "...", "parallel_agents": [...]},
+                  "outputs": {"agent_name": {"text": "...", "emotion": "...", ...}}
+                }
+            """,
+)
 async def fuse_agents(payload: dict) -> dict:
     """Demonstrate fusion of mocked agent outputs.
 

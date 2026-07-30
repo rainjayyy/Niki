@@ -50,7 +50,18 @@ from niki.middleware.rate_limit import limiter
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(
+    prefix="/auth",
+    tags=[
+        {
+            "name": "auth",
+            "description": (
+                "Parent authentication (PRD #30, #35, #36) — multi-step "
+                "signup, SMS-code login, JWT refresh, and account deletion."
+            ),
+        },
+    ],
+)
 
 # Module-level singleton
 _lifecycle = AccountLifecycle()
@@ -97,7 +108,15 @@ def _error_response(request: Request, exc: AuthError) -> dict:
     return {"error": exc.code, "message": exc.message}
 
 
-@router.post("/signup/start")
+@router.post(
+    "/signup/start",
+    summary="Begin parent signup",
+    description=(
+        "Begin parent signup (step 0). Creates a PENDING account and "
+        "returns the parent's progress through the multi-step "
+        "verification flow (real-name, face, consent)."
+    ),
+)
 async def signup_start(request: Request, payload: dict) -> dict:
     """Begin signup. Creates a PENDING account."""
     try:
@@ -127,7 +146,14 @@ async def signup_start(request: Request, payload: dict) -> dict:
     }
 
 
-@router.post("/signup/real-name")
+@router.post(
+    "/signup/real-name",
+    summary="Step 1: Real-name verification",
+    description=(
+        "Step 1 of the signup flow. Verifies the parent's name against "
+        "the supplied national ID number and advances progress."
+    ),
+)
 async def signup_real_name(request: Request, payload: dict) -> dict:
     """Step 1: Real-name verification."""
     try:
@@ -145,7 +171,14 @@ async def signup_real_name(request: Request, payload: dict) -> dict:
     return {"account": account.to_dict()}
 
 
-@router.post("/signup/face")
+@router.post(
+    "/signup/face",
+    summary="Step 2: Face verification",
+    description=(
+        "Step 2 of the signup flow. Compares a live selfie against the "
+        "reference image (e.g. extracted from the ID card) for liveness."
+    ),
+)
 async def signup_face(request: Request, payload: dict) -> dict:
     """Step 2: Face verification."""
     try:
@@ -163,7 +196,15 @@ async def signup_face(request: Request, payload: dict) -> dict:
     return {"account": account.to_dict()}
 
 
-@router.post("/signup/consent")
+@router.post(
+    "/signup/consent",
+    summary="Step 3: Sign consent document",
+    description=(
+        "Step 3 of the signup flow. Records the typed signature (e-sign) "
+        "against the parent (and optionally child) consent documents and "
+        "promotes the account to ACTIVE."
+    ),
+)
 async def signup_consent(request: Request, payload: dict) -> dict:
     """Step 3: Sign the consent document(s)."""
     try:
@@ -183,7 +224,15 @@ async def signup_consent(request: Request, payload: dict) -> dict:
     return {"account": account.to_dict()}
 
 
-@router.get("/whoami")
+@router.get(
+    "/whoami",
+    summary="Inspect current JWT",
+    description=(
+        "BE-AUTH-001 demo endpoint — proves the JWT dependency works. "
+        "Returns the authenticated caller's account id and status from "
+        "the JWT subject."
+    ),
+)
 async def whoami(
     parent: Annotated[ParentAccount, Depends(get_current_parent)],
 ) -> dict:
@@ -200,7 +249,15 @@ async def whoami(
     }
 
 
-@router.get("/me/{parent_id}")
+@router.get(
+    "/me/{parent_id}",
+    summary="Get parent account",
+    description=(
+        "Return a parent account record and its current signup "
+        "progress. Returns 404 NOT_FOUND if the parent_id has never "
+        "been registered."
+    ),
+)
 async def get_account(request: Request, parent_id: str) -> dict:
     account = await _lifecycle.get_account(parent_id)
     if account is None:
@@ -228,7 +285,15 @@ async def get_account(request: Request, parent_id: str) -> dict:
     }
 
 
-@router.post("/deletion/request")
+@router.post(
+    "/deletion/request",
+    summary="Request account deletion",
+    description=(
+        "Begin the 30-day deletion window. The account is immediately "
+        "flipped to DELETION_PENDING; calling /deletion/complete after "
+        "the grace period performs the irreversible purge."
+    ),
+)
 async def deletion_request(request: Request, payload: dict) -> dict:
     """Request account deletion (starts 30-day window)."""
     parent_id = payload["parent_id"]
@@ -245,7 +310,14 @@ async def deletion_request(request: Request, payload: dict) -> dict:
     }
 
 
-@router.post("/deletion/complete")
+@router.post(
+    "/deletion/complete",
+    summary="Complete account deletion",
+    description=(
+        "Complete the deletion (after the 30-day window). Wipes the "
+        "parent account, consent records, and audited side-tables."
+    ),
+)
 async def deletion_complete(request: Request, payload: dict) -> dict:
     """Complete the deletion (after 30 days)."""
     parent_id = payload["parent_id"]
@@ -259,7 +331,15 @@ async def deletion_complete(request: Request, payload: dict) -> dict:
     return {"account": account.to_dict()}
 
 
-@router.get("/consent/document/{consent_type}")
+@router.get(
+    "/consent/document/{consent_type}",
+    summary="Get consent document text",
+    description=(
+        "Return the human-readable consent document text (parent or "
+        "child version) plus its current version string. The frontend "
+        "renders this directly to the user before they e-sign."
+    ),
+)
 async def get_consent_document(request: Request, consent_type: str) -> dict:
     """Get the consent document text (parent or child version)."""
     if consent_type not in ("parent", "child"):
@@ -290,7 +370,15 @@ async def get_consent_document(request: Request, consent_type: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/captcha/challenge")
+@router.get(
+    "/captcha/challenge",
+    summary="Mint a captcha challenge",
+    description=(
+        "BE-COMP-006: mint a fresh captcha challenge for the client. "
+        "Returns the challenge id, the human-readable question, and "
+        "an expiry timestamp."
+    ),
+)
 async def captcha_challenge() -> dict:
     """Mint a fresh captcha challenge.
 
@@ -310,7 +398,15 @@ async def captcha_challenge() -> dict:
     }
 
 
-@router.post("/captcha/verify")
+@router.post(
+    "/captcha/verify",
+    summary="Verify a captcha answer",
+    description=(
+        "Verify a captcha answer. Returns `{valid: bool}` (no error "
+        "code) — idempotent and never 4xx so frontend retry / "
+        "shake-to-refresh flows compose cleanly."
+    ),
+)
 async def captcha_verify(payload: dict) -> dict:
     """Verify a captcha answer. Returns `{valid: bool}` (no error code).
 
@@ -331,7 +427,17 @@ async def captcha_verify(payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/sms/send")
+@router.post(
+    "/sms/send",
+    summary="Send a 6-digit SMS code",
+    description=(
+        "Send a 6-digit SMS code to `phone`. Dev mode echoes the code "
+        "back so the frontend can use it directly; production must "
+        "NEVER return the code. BE-COMP-006: captcha gating — when "
+        "Settings.sms_captcha_required is True a valid (captcha_id, "
+        "captcha_answer) pair is mandatory."
+    ),
+)
 @limiter.limit("3/minute")
 async def sms_send(request: Request, payload: dict) -> dict:
     """Send a 6-digit SMS code to `phone`.
@@ -415,7 +521,15 @@ async def sms_send(request: Request, payload: dict) -> dict:
     return body
 
 
-@router.post("/sms/login")
+@router.post(
+    "/sms/login",
+    summary="SMS-code login",
+    description=(
+        "Verify the SMS code and issue a JWT access + refresh pair. "
+        "On a brand-new phone the lifecycle auto-creates a PENDING "
+        "account so login doubles as first-time signup."
+    ),
+)
 @limiter.limit("10/minute")
 async def sms_login(request: Request, payload: dict) -> dict:
     """Verify the SMS code and issue a JWT access + refresh pair.
@@ -489,7 +603,16 @@ async def sms_login(request: Request, payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/refresh")
+@router.post(
+    "/refresh",
+    summary="Refresh access + refresh token",
+    description=(
+        "BE-AUTH-003: trade a refresh token for a fresh access + "
+        "refresh pair. The presented refresh token is verified "
+        "(signature + type + expiry) and immediately revoked so it "
+        "cannot be re-used (rotation)."
+    ),
+)
 @limiter.limit("60/minute")
 async def refresh(request: Request, payload: dict) -> dict:
     """Trade a refresh token for a fresh access + refresh pair.
@@ -546,7 +669,15 @@ async def refresh(request: Request, payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/logout")
+@router.post(
+    "/logout",
+    summary="Logout (revoke access JWT)",
+    description=(
+        "BE-AUTH-004: revoke the presented access token by jti. "
+        "Idempotent — re-logging-out the same token returns 200 "
+        "(already-revoked tokens are rejected upstream by the dep)."
+    ),
+)
 async def logout(
     request: Request,
     parent: Annotated[ParentAccount, Depends(get_current_parent)],

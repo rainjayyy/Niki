@@ -26,10 +26,22 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/deletion", tags=["deletion"])
+router = APIRouter(prefix="/deletion", tags=[
+    {"name": "deletion", "description": "Deletion receipt download endpoint (BE-COMP-005)."}
+])
 
 
-@router.get("/{request_id}/receipt")
+@router.get(
+    "/{request_id}/receipt",
+    summary="Download a parent-facing PDF certificate of deletion",
+    description="""
+            Download a parent-facing PDF certificate of deletion.
+            
+            The lookup validates that `request_id` belongs to the
+            calling parent; a stolen token cannot pull a victim's
+            certificate.
+            """,
+)
 async def download_receipt(
     request_id: str,
     parent: ParentAccount = Depends(get_current_parent),

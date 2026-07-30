@@ -26,7 +26,9 @@ from niki.db.repositories.auth_audit_repo import (
     get_auth_audit_log_repository,
 )
 
-router = APIRouter(prefix="/auth/audit", tags=["auth_audit"])
+router = APIRouter(prefix="/auth/audit", tags=[
+    {"name": "auth_audit", "description": "Auth audit query endpoints (BE-AUTH-001-rollout-audit)."}
+])
 
 
 _MAX_LIMIT = 200
@@ -37,7 +39,26 @@ _MAX_LIMIT = 200
 _AUDIT_ALLOWED_SORTS = ("created_at", "severity")
 
 
-@router.get("/recent")
+@router.get(
+    "/recent",
+    summary="""
+            Return the most recent audit events the caller is allowed to see
+            """,
+    description="""
+            Return the most recent audit events the caller is allowed to see.
+            
+            Security-aware default: `actor_parent_id` is forced to the
+            calling parent's id, regardless of any query parameter. This
+            blocks the obvious "look up someone else's audit" probe via
+            this endpoint. Cross-parent audit access will live behind an
+            admin role (BE-ADMIN-001).
+            
+            BE-API-004: ?since=&until= filter the time window,
+            ?keyword= case-insensitive substring over
+            actor_parent_id / target_parent_id / target_child_id /
+            endpoint, ?sort=&order= choose direction.
+            """,
+)
 async def list_recent_audit(
     request: Request,
     limit: int = Query(50, ge=1, le=_MAX_LIMIT),

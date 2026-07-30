@@ -23,10 +23,22 @@ from niki.infrastructure.redis import RedisClient
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="", tags=["status"])
+router = APIRouter(prefix="", tags=[
+    {"name": "status", "description": "Public status endpoint (BE-MISC-003)."}
+])
 
 
-@router.get("/status")
+@router.get(
+    "/status",
+    summary="Coarse-grained health for the public status page",
+    description="""
+            Coarse-grained health for the public status page.
+            
+            Returns 200 even when individual deps are degraded —
+            consumers (the marketing site, the support dashboard)
+            decide what to do with the body.
+            """,
+)
 async def public_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:

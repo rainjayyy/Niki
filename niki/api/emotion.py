@@ -21,7 +21,18 @@ from niki.dashboard.service import DashboardService
 from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
-router = APIRouter(prefix="/emotion", tags=["emotion"])
+router = APIRouter(
+    prefix="/emotion",
+    tags=[
+        {
+            "name": "emotion",
+            "description": (
+                "Emotion Agent API endpoints — child-facing "
+                "emotional support."
+            ),
+        },
+    ],
+)
 
 # ISS-02: a shared input gateway so self-harm / blacklisted topics
 # trigger parent alert even when calling the agent directly (not via /chat).
@@ -41,7 +52,19 @@ _orchestrator = EmotionAgent(
 )
 
 
-@router.post("/express")
+@router.post(
+    "/express",
+    summary="Child shares an emotional expression",
+    description="""
+            Child shares an emotional expression.
+            
+            Request body: {"text": "...", "child_age": 7}
+            
+            ISS-02: run the text through InputSafetyGateway first so that
+            self-harm / blacklisted topics trigger the same parent alert
+            as the orchestrator path.
+            """,
+)
 async def express_emotion(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Child shares an emotional expression.
@@ -94,7 +117,11 @@ async def express_emotion(payload: dict,
     }
 
 
-@router.get("/baseline")
+@router.get(
+    "/baseline",
+    summary="Get baseline statistics",
+    description="Get baseline statistics.",
+)
 async def get_baseline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get baseline statistics."""
     stats = _baseline.window_stats()
@@ -117,7 +144,11 @@ async def get_baseline(parent: ParentAccount = Depends(get_current_parent),) -> 
     }
 
 
-@router.post("/proactive-care")
+@router.post(
+    "/proactive-care",
+    summary="Run the 8pm proactive-care check (PRD #12)",
+    description="Run the 8pm proactive-care check (PRD #12).",
+)
 async def proactive_care_check(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Run the 8pm proactive-care check (PRD #12)."""
     care = _orchestrator.run_proactive_care()
@@ -140,7 +171,11 @@ async def proactive_care_check(parent: ParentAccount = Depends(get_current_paren
     }
 
 
-@router.get("/good-night")
+@router.get(
+    "/good-night",
+    summary="Short good-night greeting (PRD #16)",
+    description="Short good-night greeting (PRD #16).",
+)
 async def good_night(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Short good-night greeting (PRD #16)."""
     output = _orchestrator.good_night()
@@ -150,7 +185,11 @@ async def good_night(parent: ParentAccount = Depends(get_current_parent),) -> di
     }
 
 
-@router.post("/baseline/add")
+@router.post(
+    "/baseline/add",
+    summary="Add a record to the baseline (for testing/demo)",
+    description="Add a record to the baseline (for testing/demo).",
+)
 async def add_baseline_record(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a record to the baseline (for testing/demo)."""
@@ -164,7 +203,11 @@ async def add_baseline_record(payload: dict,
     return {"status": "added", "record_count": len(_baseline.records())}
 
 
-@router.post("/events/tutoring")
+@router.post(
+    "/events/tutoring",
+    summary="Record a tutoring event (for whitepaper generation)",
+    description="Record a tutoring event (for whitepaper generation).",
+)
 async def record_tutoring_event(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
@@ -177,7 +220,11 @@ async def record_tutoring_event(payload: dict,
     return {"status": "recorded"}
 
 
-@router.post("/events/knowledge")
+@router.post(
+    "/events/knowledge",
+    summary="Record a knowledge-base query",
+    description="Record a knowledge-base query.",
+)
 async def record_knowledge_query(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Record a knowledge-base query."""

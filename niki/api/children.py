@@ -25,7 +25,9 @@ from niki.auth.dependencies import get_current_parent
 from niki.services.auth_audit import get_auth_audit_logger
 from niki.services.child_registry import get_child_registry
 
-router = APIRouter(prefix="/children", tags=["children"])
+router = APIRouter(prefix="/children", tags=[
+    {"name": "children", "description": "Children API endpoints (BE-STOR-001-ext-E)."}
+])
 
 
 async def _audit_parent_mismatch(
@@ -53,7 +55,19 @@ async def _audit_parent_mismatch(
     )
 
 
-@router.post("/register/{parent_id}")
+@router.post(
+    "/register/{parent_id}",
+    summary="Register a child under a parent",
+    description="""
+            Register a child under a parent.
+            
+            Body: {"child_id": "<uuid>", "name": "<optional>"}
+            
+            Authorization: the path parent_id must equal the token's
+            parent.id; the child_id must not already be owned by another
+            parent.
+            """,
+)
 async def register_child(
     request: Request,
     parent_id: str,
@@ -107,7 +121,11 @@ async def register_child(
     }
 
 
-@router.get("/list/{parent_id}")
+@router.get(
+    "/list/{parent_id}",
+    summary="List child_ids owned by the calling parent",
+    description="List child_ids owned by the calling parent.",
+)
 async def list_children(
     request: Request,
     parent_id: str,

@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 
-from niki.api.router import api_router
+from niki.api.router import OPENAPI_TAGS, api_router
 from niki.config.logging_config import configure_logging
 from niki.config.settings import get_settings
 from niki.infrastructure.chroma import ChromaClient
@@ -119,6 +119,11 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.debug else None,
         redoc_url="/redoc" if settings.debug else None,
         lifespan=lifespan,
+        # BE-API-006: per-tag descriptions aggregated by
+        # `niki.api.router._collect_tag_metadata`. Drives the
+        # global `tags` block in `/openapi.json` so Swagger UI /
+        # ReDoc show a description per group.
+        openapi_tags=OPENAPI_TAGS,
     )
 
     # Test-only: install a fake parent override so existing tests don't

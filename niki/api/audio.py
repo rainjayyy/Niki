@@ -32,7 +32,9 @@ from typing import Annotated
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
-router = APIRouter(prefix="/audio", tags=["audio"])
+router = APIRouter(prefix="/audio", tags=[
+    {"name": "audio", "description": "Audio API endpoints (BE-MEDIA-002)."}
+])
 
 # 5 MB hard cap — covers ~30s of wav@8kHz mono, ~1m of opus.
 MAX_AUDIO_BYTES = 5 * 1024 * 1024
@@ -49,7 +51,24 @@ def _audio_too_large(size: int) -> HTTPException:
     )
 
 
-@router.post("/transcribe")
+@router.post(
+    "/transcribe",
+    summary="Run ASR on an uploaded audio blob and return recognised text",
+    description="""
+            Run ASR on an uploaded audio blob and return recognised text.
+            
+            Multipart fields:
+                audio       (required) — file part
+                language    (optional) — BCP-47 tag, default "zh-CN"
+                child_age   (optional) — int, helps bias acoustic models
+            
+            Responses:
+                200 — recognised text
+                400 — empty / invalid-format audio
+                413 — too large
+                503 — ASR backend unavailable
+            """,
+)
 @limiter.limit("30/minute")
 async def transcribe(
     request: Request,
@@ -112,7 +131,22 @@ async def transcribe(
 MAX_TEXT_CHARS = 1000
 
 
-@router.post("/synthesize")
+@router.post(
+    "/synthesize",
+    summary="Synthesise speech from text and return base64-encoded audio",
+    description="""
+            Synthesise speech from text and return base64-encoded audio.
+            
+            JSON body fields:
+                text     (required) — up to 1000 chars
+                voice    (optional) — default "child_friendly"
+                speed    (optional) — float, default 1.0
+                language (optional) — default "zh-CN"
+            
+            Response:
+                { audio_base64, mime_type, duration_ms, voice, text_hash, size_bytes }
+            """,
+)
 @limiter.limit("60/minute")
 async def synthesize(
     request: Request,

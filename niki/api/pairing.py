@@ -33,7 +33,9 @@ from niki.services.child_registry import get_child_registry
 
 from niki.api._i18n import localized_error_response
 
-router = APIRouter(prefix="/pairing", tags=["pairing"])
+router = APIRouter(prefix="/pairing", tags=[
+    {"name": "pairing", "description": "Parent ↔ Child pairing code endpoints (BE-DEV-004)."}
+])
 
 
 def _bad_request(
@@ -76,7 +78,22 @@ def _require_code(request: Request, payload: dict) -> str:
     return code
 
 
-@router.post("/code")
+@router.post(
+    "/code",
+    summary="Mint a 6-digit pairing code for one of the caller's children",
+    description="""
+            Mint a 6-digit pairing code for one of the caller's children.
+            
+            Body: ``{"child_id": "..."}``
+            
+            Returns ``{"code": "123456", "expires_at": "...", "ttl_seconds": 300}``.
+            
+            Errors:
+                400 BAD_REQUEST              - malformed body
+                403 PARENT_CHILD_MISMATCH    - child isn't owned by caller
+                404 CHILD_NOT_FOUND          - child isn't registered at all
+            """,
+)
 async def create_pairing_code(
     request: Request,
     payload: dict,
@@ -134,7 +151,25 @@ async def create_pairing_code(
     }
 
 
-@router.post("/consume")
+@router.post(
+    "/consume",
+    summary="""
+            Redeem a 6-digit code (called by the kid's H5 — unauthenticated)
+            """,
+    description="""
+            Redeem a 6-digit code (called by the kid's H5 — unauthenticated).
+            
+            Body: ``{"code": "123456"}``
+            
+            Returns ``{"parent_id": "...", "child_id": "...", "bound": true}``
+            on success. The code is marked consumed atomically inside the
+            store so two concurrent calls cannot both succeed.
+            
+            Errors:
+                400 BAD_REQUEST              - malformed body
+                404 PAIRING_CODE_INVALID     - code unknown, expired, or used
+            """,
+)
 async def consume_pairing_code(
     request: Request, payload: dict
 ) -> dict:

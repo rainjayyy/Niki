@@ -24,6 +24,7 @@ from niki.api.pairing import router as pairing_router
 from niki.api.push import router as push_router
 from niki.api.resilience import router as resilience_router
 from niki.api.routing import router as routing_router
+from niki.api.safety import chat_router as safety_chat_router
 from niki.api.safety import router as safety_router
 from niki.api.session import router as session_router
 from niki.api.tools import router as tools_router
@@ -31,6 +32,70 @@ from niki.api.treehole import router as treehole_router
 from niki.api.tutoring import router as tutoring_router
 
 api_router = APIRouter(prefix="/api/v1")
+
+
+def _collect_tag_metadata(*routers) -> list[dict]:
+    """Pull `{name, description}` entries from each router's tags list.
+
+    FastAPI lets us attach tag metadata either inline (each `tags`
+    entry is a dict) or globally via `app.openapi_tags`. We do both:
+    per-router so Swagger UI / ReDoc show the description next to
+    each tag group, and globally so a /openapi.json consumer can
+    surface the same descriptions in tooltips.
+
+    Routers' `tags` are sometimes plain strings (legacy) and
+    sometimes dicts (BE-API-006 sweep). We unify them here.
+    """
+    seen: dict[str, str] = {}
+    for router in routers:
+        for tag in getattr(router, "tags", []) or []:
+            if isinstance(tag, dict):
+                name = tag.get("name")
+                description = tag.get("description") or ""
+                if name:
+                    seen[name] = description
+            elif isinstance(tag, str):
+                seen.setdefault(tag, "")
+    return [
+        {"name": name, "description": description}
+        for name, description in sorted(seen.items())
+    ]
+
+
+# BE-API-006: aggregated tag metadata, used by `create_app()` to
+# populate `app.openapi_tags` (the global `tags` block in
+# `/openapi.json`). Order doesn't matter — `openapi` reorders by
+# appearance.
+OPENAPI_TAGS: list[dict] = _collect_tag_metadata(
+    health_router,
+    safety_router,
+    safety_chat_router,
+    audio_router,
+    media_router,
+    routing_router,
+    encyclopedia_router,
+    tutoring_router,
+    emotion_router,
+    chat_router,
+    chat_stream_router,
+    auth_router,
+    dashboard_router,
+    memory_router,
+    resilience_router,
+    treehole_router,
+    session_router,
+    content_policy_router,
+    tools_router,
+    data_export_router,
+    children_router,
+    pairing_router,
+    auth_audit_router,
+    alerts_router,
+    deletion_router,
+    config_router,
+    status_router,
+    push_router,
+)
 
 # Health & monitoring
 api_router.include_router(health_router)

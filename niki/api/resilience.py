@@ -19,7 +19,9 @@ from niki.resilience import (
     DegradationNotifier,
 )
 
-router = APIRouter(prefix="/resilience", tags=["resilience"])
+router = APIRouter(prefix="/resilience", tags=[
+    {"name": "resilience", "description": "Resilience API endpoints — PRD #57-#60."}
+])
 
 # Module-level singletons
 _breaker = CircuitBreaker()
@@ -65,13 +67,21 @@ _client = CircuitBreakerAwareClient(
 )
 
 
-@router.get("/breaker/stats")
+@router.get(
+    "/breaker/stats",
+    summary="Get current circuit-breaker statistics",
+    description="Get current circuit-breaker statistics.",
+)
 async def breaker_stats() -> dict:
     """Get current circuit-breaker statistics."""
     return _breaker.get_stats().to_dict()
 
 
-@router.post("/breaker/reset")
+@router.post(
+    "/breaker/reset",
+    summary="Manually reset the breaker to CLOSED",
+    description="Manually reset the breaker to CLOSED.",
+)
 async def breaker_reset() -> dict:
     """Manually reset the breaker to CLOSED."""
     _breaker.reset()
@@ -79,27 +89,49 @@ async def breaker_reset() -> dict:
     return _breaker.get_stats().to_dict()
 
 
-@router.post("/breaker/force-open")
+@router.post(
+    "/breaker/force-open",
+    summary="Manually trip the breaker (for testing/admin)",
+    description="Manually trip the breaker (for testing/admin).",
+)
 async def breaker_force_open() -> dict:
     """Manually trip the breaker (for testing/admin)."""
     _breaker.force_open("manual admin trigger")
     return _breaker.get_stats().to_dict()
 
 
-@router.get("/degradation")
+@router.get(
+    "/degradation",
+    summary="Get current degradation state (for the parent dashboard)",
+    description="Get current degradation state (for the parent dashboard).",
+)
 async def degradation_state() -> dict:
     """Get current degradation state (for the parent dashboard)."""
     return _notifier.state.to_dict()
 
 
-@router.post("/degradation/recover")
+@router.post(
+    "/degradation/recover",
+    summary="Mark degradation as recovered (e.g",
+    description="Mark degradation as recovered (e.g. when breaker closes).",
+)
 async def degradation_recover() -> dict:
     """Mark degradation as recovered (e.g. when breaker closes)."""
     await _notifier.notify_recovered()
     return _notifier.state.to_dict()
 
 
-@router.post("/chat")
+@router.post(
+    "/chat",
+    summary="Example call via the circuit-breaker-aware client",
+    description="""
+            Example call via the circuit-breaker-aware client.
+            
+            Request body: {"messages": [{"role": "user", "content": "..."}]}
+            
+            Tries the primary LLM first; falls back to doubao on failure.
+            """,
+)
 async def resilient_chat(payload: dict) -> dict:
     """Example call via the circuit-breaker-aware client.
 
@@ -119,7 +151,18 @@ async def resilient_chat(payload: dict) -> dict:
     }
 
 
-@router.post("/simulate-outage")
+@router.post(
+    "/simulate-outage",
+    summary="""
+            Simulate a DeepSeek-V4 outage by switching to the failing client
+            """,
+    description="""
+            Simulate a DeepSeek-V4 outage by switching to the failing client.
+            
+            This causes the next chat calls to fall back to doubao
+            (and the breaker to trip after enough failures).
+            """,
+)
 async def simulate_outage() -> dict:
     """Simulate a DeepSeek-V4 outage by switching to the failing client.
 
@@ -136,7 +179,11 @@ async def simulate_outage() -> dict:
     return {"status": "DeepSeek-V4 now failing — calls will use fallback"}
 
 
-@router.post("/simulate-recovery")
+@router.post(
+    "/simulate-recovery",
+    summary="Switch back to a working DeepSeek-V4 client",
+    description="Switch back to a working DeepSeek-V4 client.",
+)
 async def simulate_recovery() -> dict:
     """Switch back to a working DeepSeek-V4 client."""
     global _client

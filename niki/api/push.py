@@ -34,7 +34,9 @@ from niki.db.repositories import (
 from niki.i18n.translator import get_translator
 
 
-router = APIRouter(prefix="/push", tags=["push"])
+router = APIRouter(prefix="/push", tags=[
+    {"name": "push", "description": "Push notification registration endpoints (BE-PUSH-001)."}
+])
 
 
 # Token format is opaque — vendor-specific. Just enforce a sane
@@ -125,7 +127,11 @@ def _validate_register_payload(
     return device_id, channel, push_token, platform
 
 
-@router.post("/register")
+@router.post(
+    "/register",
+    summary="Register (or re-register) the calling parent's device",
+    description="Register (or re-register) the calling parent's device.",
+)
 async def register(
     request: Request,
     payload: dict,
@@ -155,7 +161,14 @@ async def register(
     }
 
 
-@router.post("/unregister")
+@router.post(
+    "/unregister",
+    summary="Remove a registered device",
+    description="""
+            Remove a registered device. Idempotent — returns
+            `unregistered: true` even if nothing matched.
+            """,
+)
 async def unregister(
     request: Request,
     payload: dict,
@@ -184,7 +197,16 @@ async def unregister(
     return {"unregistered": True, "removed": removed}
 
 
-@router.get("/devices")
+@router.get(
+    "/devices",
+    summary="List every device registered for the calling parent",
+    description="""
+            List every device registered for the calling parent.
+            
+            Push tokens are deliberately excluded from the projection —
+            the frontend never needs them and they shouldn't leak.
+            """,
+)
 async def list_devices(
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
@@ -253,7 +275,11 @@ def _validate_channels(request: Request, value: Any) -> list[str]:
     return list(value)
 
 
-@router.get("/prefs")
+@router.get(
+    "/prefs",
+    summary="Return notification preferences (defaults if unset)",
+    description="Return notification preferences (defaults if unset).",
+)
 async def get_prefs(
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
@@ -265,7 +291,16 @@ async def get_prefs(
     return row
 
 
-@router.patch("/prefs")
+@router.patch(
+    "/prefs",
+    summary="Partial update of notification preferences",
+    description="""
+            Partial update of notification preferences.
+            
+            Only the fields present in the body are touched; the rest
+            keep their previous values.
+            """,
+)
 async def update_prefs(
     request: Request,
     payload: dict,
@@ -313,7 +348,18 @@ async def update_prefs(
     return row
 
 # BE-DEV-002: device list + per-device unregister endpoints
-@router.get("/devices-full")
+@router.get(
+    "/devices-full",
+    summary="List every push device registered to the calling parent",
+    description="""
+            List every push device registered to the calling parent.
+            
+            `push_token` is NEVER returned (it would let a stolen JWT
+            spam the vendor push servers). Frontend only needs the
+            metadata (channel / platform / last_active_at) to show a
+            "我的设备" panel.
+            """,
+)
 async def list_my_devices(
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
@@ -341,7 +387,16 @@ async def list_my_devices(
     return {"count": len(safe), "devices": safe}
 
 
-@router.delete("/devices-full/{device_id}")
+@router.delete(
+    "/devices-full/{device_id}",
+    summary="Unregister a single device (logout-from-this-device flow)",
+    description="""
+            Unregister a single device (logout-from-this-device flow).
+            
+            Scoped to the calling parent so a stolen token can't
+            unregister a victim's device.
+            """,
+)
 async def unregister_my_device(
     device_id: str,
     parent: ParentAccount = Depends(get_current_parent),
@@ -360,7 +415,16 @@ async def unregister_my_device(
 
 
 # BE-DEV-003: active device list + kick endpoint
-@router.get("/active")
+@router.get(
+    "/active",
+    summary="List only the *enabled* devices for the calling parent",
+    description="""
+            List only the *enabled* devices for the calling parent.
+            
+            The frontend uses this to render a "currently signed-in"
+            panel and to expose a "踢下线" button per device.
+            """,
+)
 async def list_active_devices(
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
@@ -384,7 +448,18 @@ async def list_active_devices(
     return {"count": len(safe), "devices": safe}
 
 
-@router.post("/kick/{device_id}")
+@router.post(
+    "/kick/{device_id}",
+    summary="Disable a single device (BE-DEV-003: \"踢下线\" flow)",
+    description="""
+            Disable a single device (BE-DEV-003: "踢下线" flow).
+            
+            Disabling a device doesn't delete the row — the parent
+            can re-enable it later by re-registering via POST /push/
+            register. lateral-auth: device must belong to the calling
+            parent (the repo's set_enabled filters by parent_id).
+            """,
+)
 async def kick_device(
     device_id: str,
     parent: ParentAccount = Depends(get_current_parent),
@@ -402,7 +477,16 @@ async def kick_device(
     return {"kicked": updated}
 
 
-@router.post("/enable/{device_id}")
+@router.post(
+    "/enable/{device_id}",
+    summary="Re-enable a previously kicked device",
+    description="""
+            Re-enable a previously kicked device.
+            
+            Counterpart to /kick/{device_id}. lateral-auth: same
+            scoping as /kick.
+            """,
+)
 async def re_enable_device(
     device_id: str,
     parent: ParentAccount = Depends(get_current_parent),

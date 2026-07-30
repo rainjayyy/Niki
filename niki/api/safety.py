@@ -16,8 +16,29 @@ from fastapi import APIRouter, HTTPException, status
 from niki.safety.input_gateway import InputSafetyGateway
 from niki.safety.output_gateway import OutputAction, OutputSafetyGateway, OutputVerdict
 
-router = APIRouter(prefix="/safety", tags=["safety"])
-chat_router = APIRouter(tags=["chat"])
+router = APIRouter(
+    prefix="/safety",
+    tags=[
+        {
+            "name": "safety",
+            "description": (
+                "Safety API endpoints — child-facing chat with "
+                "input/output gateways."
+            ),
+        },
+    ],
+)
+chat_router = APIRouter(
+    tags=[
+        {
+            "name": "chat",
+            "description": (
+                "Safety API endpoints — child-facing chat with "
+                "input/output gateways."
+            ),
+        },
+    ],
+)
 
 # Singleton gateways (cheap to construct; safe to reuse)
 _input_gateway = InputSafetyGateway()
@@ -28,7 +49,19 @@ def _gateway_for_age(age: int) -> OutputSafetyGateway:
     return OutputSafetyGateway(child_age=age)
 
 
-@router.post("/check-input")
+@router.post(
+    "/check-input",
+    summary="Run the input safety gateway against arbitrary text",
+    description="""
+            Run the input safety gateway against arbitrary text.
+            
+            Request body:
+                {"text": "..."}
+            
+            Returns:
+                The InputVerdict serialised to JSON.
+            """,
+)
 async def check_input(payload: dict) -> dict:
     """Run the input safety gateway against arbitrary text.
 
@@ -55,7 +88,19 @@ async def check_input(payload: dict) -> dict:
     }
 
 
-@router.post("/check-output")
+@router.post(
+    "/check-output",
+    summary="Run the output safety gateway against arbitrary text",
+    description="""
+            Run the output safety gateway against arbitrary text.
+            
+            Request body:
+                {"text": "...", "child_age": 7, "is_tutoring_response": false}
+            
+            Returns:
+                The OutputVerdict serialised to JSON.
+            """,
+)
 async def check_output(payload: dict) -> dict:
     """Run the output safety gateway against arbitrary text.
 
@@ -87,7 +132,11 @@ async def check_output(payload: dict) -> dict:
     }
 
 
-@router.post("/chat")
+@router.post(
+    "/chat",
+    summary="Same as /chat but routed under /safety/chat for debugging",
+    description="Same as /chat but routed under /safety/chat for debugging.",
+)
 async def chat_under_safety(payload: dict) -> dict:
     """Same as /chat but routed under /safety/chat for debugging."""
     return await chat(payload)

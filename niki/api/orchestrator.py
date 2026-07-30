@@ -13,7 +13,9 @@ from fastapi import APIRouter
 
 from niki.agents.orchestrator import ChatOrchestrator, ChatResult
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=[
+    {"name": "chat", "description": "Chat orchestrator API endpoints — the end-to-end pipeline."}
+])
 
 # Module-level singleton (default config: 7-year-old, gentle persona)
 _orchestrator = ChatOrchestrator(child_age=7, persona="gentle")
@@ -36,7 +38,21 @@ def _chat_result_to_dict(result: ChatResult) -> dict:
     }
 
 
-@router.post("/full")
+@router.post(
+    "/full",
+    summary="Run the full chat pipeline end-to-end",
+    description="""
+            Run the full chat pipeline end-to-end.
+            
+            Request body:
+                {
+                  "text": "...",
+                  "child_age": 7,
+                  "persona": "gentle" | "lively" | "rigorous",
+                  "session_id": "..."
+                }
+            """,
+)
 async def chat_full(payload: dict) -> dict:
     """Run the full chat pipeline end-to-end.
 
@@ -62,7 +78,11 @@ async def chat_full(payload: dict) -> dict:
     return _chat_result_to_dict(result)
 
 
-@router.get("/stages")
+@router.get(
+    "/stages",
+    summary="List the stages of the chat pipeline (for debugging)",
+    description="List the stages of the chat pipeline (for debugging).",
+)
 async def list_stages() -> dict:
     """List the stages of the chat pipeline (for debugging)."""
     return {

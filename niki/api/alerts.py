@@ -45,7 +45,18 @@ from niki.realtime.alert_broker import get_alert_broker
 logger = structlog.get_logger(__name__)
 
 
-router = APIRouter(prefix="/alerts", tags=["alerts"])
+router = APIRouter(
+    prefix="/alerts",
+    tags=[
+        {
+            "name": "alerts",
+            "description": (
+                "Realtime alert streaming endpoint "
+                "(BE-RT-002 / BE-RT-002-rollout)."
+            ),
+        },
+    ],
+)
 
 
 # Heartbeat every 30s — keeps idle proxies / load balancers
@@ -90,7 +101,22 @@ def _parse_since(raw: str | None) -> datetime | None:
     return parsed
 
 
-@router.get("/stream/{child_id}")
+@router.get(
+    "/stream/{child_id}",
+    summary="SSE stream of high-risk alerts for the calling parent",
+    description="""
+            SSE stream of high-risk alerts for the calling parent.
+            
+            Lateral-auth: only the parent who owns `child_id` can open
+            this stream. Other parents' alerts are NEVER routed here
+            (the broker filters by `alert.actor_parent_id`).
+            
+            On connect the endpoint replays alerts from the in-memory
+            ring buffer that match the query filters (BE-RT-002-rollout)
+            as `event: replay`, then continues with new alerts as
+            `event: alert`.
+            """,
+)
 async def stream_alerts(
     child_id: str = Depends(get_owned_child_id),
     parent: ParentAccount = Depends(get_current_parent),

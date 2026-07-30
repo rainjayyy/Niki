@@ -30,14 +30,31 @@ from niki.treehole import (
     should_activate_treehole,
 )
 
-router = APIRouter(prefix="/treehole", tags=["treehole"])
+router = APIRouter(prefix="/treehole", tags=[
+    {"name": "treehole", "description": "Treehole API endpoints — PRD #13, #61-#64."}
+])
 
 # Module-level singletons
 _manager = TreeholeManager()
 _purger = TreeholePurger()
 
 
-@router.post("/engage")
+@router.post(
+    "/engage",
+    summary="Engage treehole mode for a child message",
+    description="""
+            Engage treehole mode for a child message.
+            
+            Request body:
+                {
+                  "child_id": "...",
+                  "text": "...",         # NEVER stored
+                  "emotion": "negative",  # optional, default neutral
+                  "intensity": 3,         # 1-5
+                  "category": "other"     # family | school | self | other
+                }
+            """,
+)
 async def engage(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Engage treehole mode for a child message.
@@ -77,7 +94,20 @@ async def engage(payload: dict,
     }
 
 
-@router.get("/summaries/{child_id}")
+@router.get(
+    "/summaries/{child_id}",
+    summary="""
+            List stored treehole summaries (parent dashboard, BE-API-003 paginated)
+            """,
+    description="""
+            List stored treehole summaries (parent dashboard, BE-API-003 paginated).
+            
+            BE-API-004: optional ?since=&until=&keyword=&sort=&order= filter
+            the summary list server-side. Default sort is `timestamp`
+            desc (newest first). Allowed sort fields: timestamp,
+            emotion_intensity.
+            """,
+)
 async def list_summaries(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
@@ -114,7 +144,20 @@ async def list_summaries(
     }
 
 
-@router.post("/aggregate")
+@router.post(
+    "/aggregate",
+    summary="""
+            Compute the aggregated baseline contribution from treehole data
+            """,
+    description="""
+            Compute the aggregated baseline contribution from treehole data.
+            
+            Optional body:
+                child_id   — scope to a child
+                window     — "daily" | "weekly" (BE-TREEHOLE-AGG-rollout);
+                            default "weekly" (back-compat)
+            """,
+)
 async def aggregate_baseline(payload: dict | None = None,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Compute the aggregated baseline contribution from treehole data.
@@ -141,7 +184,11 @@ async def aggregate_baseline(payload: dict | None = None,
     return result
 
 
-@router.post("/should-activate")
+@router.post(
+    "/should-activate",
+    summary="Check if a given text would activate treehole mode",
+    description="Check if a given text would activate treehole mode.",
+)
 async def should_activate(payload: dict | None = None,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Check if a given text would activate treehole mode."""
@@ -150,14 +197,27 @@ async def should_activate(payload: dict | None = None,
     return {"activates_treehole": should_activate_treehole(text)}
 
 
-@router.post("/purge-expired")
+@router.post(
+    "/purge-expired",
+    summary="Run the 7-day purge (normally called by cron job)",
+    description="Run the 7-day purge (normally called by cron job).",
+)
 async def purge_expired(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Run the 7-day purge (normally called by cron job)."""
     count = await _purger.purge_expired()
     return {"purged_count": count}
 
 
-@router.post("/purge-all")
+@router.post(
+    "/purge-all",
+    summary="Force-purge treehole records",
+    description="""
+            Force-purge treehole records. Optional body: {"child_id": "..."}.
+            
+            Without child_id, purges ALL records (debug/test only). With
+            child_id, purges only that child's (account deletion path).
+            """,
+)
 async def purge_all(payload: dict | None = None,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Force-purge treehole records. Optional body: {"child_id": "..."}.
@@ -174,7 +234,11 @@ async def purge_all(payload: dict | None = None,
     return {"purged_count": count}
 
 
-@router.get("/store-stats")
+@router.get(
+    "/store-stats",
+    summary="Get the current treehole repository statistics",
+    description="Get the current treehole repository statistics.",
+)
 async def store_stats(parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the current treehole repository statistics."""
     from niki.db.repositories import InMemoryTreeholeRepository

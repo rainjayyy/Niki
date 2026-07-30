@@ -25,7 +25,9 @@ from niki.content_policy import (
     FamilyBlacklist,
 )
 
-router = APIRouter(prefix="/policy", tags=["content-policy"])
+router = APIRouter(prefix="/policy", tags=[
+    {"name": "content-policy", "description": "Content policy API endpoints — PRD #32, #34."}
+])
 
 # Module-level state (per-family)
 _blacklists: dict[str, FamilyBlacklist] = {}
@@ -57,7 +59,11 @@ def _get_downgrader(family_id: str, child_id: str, child_age: int) -> ContentDow
 # ---- Blacklist endpoints ----
 
 
-@router.post("/blacklist/{family_id}/add")
+@router.post(
+    "/blacklist/{family_id}/add",
+    summary="Add a topic to the family blacklist",
+    description="Add a topic to the family blacklist.",
+)
 async def add_blacklist(family_id: str, payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Add a topic to the family blacklist."""
@@ -75,7 +81,11 @@ async def add_blacklist(family_id: str, payload: dict,
     return {"entry": entry.to_dict(), "blacklist_size": blacklist.size}
 
 
-@router.post("/blacklist/{family_id}/remove")
+@router.post(
+    "/blacklist/{family_id}/remove",
+    summary="Remove a topic from the family blacklist",
+    description="Remove a topic from the family blacklist.",
+)
 async def remove_blacklist(family_id: str, payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Remove a topic from the family blacklist."""
@@ -85,14 +95,22 @@ async def remove_blacklist(family_id: str, payload: dict,
     return {"removed": removed, "blacklist_size": blacklist.size}
 
 
-@router.get("/blacklist/{family_id}")
+@router.get(
+    "/blacklist/{family_id}",
+    summary="List all blacklisted topics for the family",
+    description="List all blacklisted topics for the family.",
+)
 async def get_blacklist(family_id: str,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """List all blacklisted topics for the family."""
     return _get_blacklist(family_id).to_dict()
 
 
-@router.post("/blacklist/{family_id}/evaluate")
+@router.post(
+    "/blacklist/{family_id}/evaluate",
+    summary="Evaluate text for blacklist matches",
+    description="Evaluate text for blacklist matches.",
+)
 async def evaluate_blacklist(family_id: str, payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Evaluate text for blacklist matches."""
@@ -107,7 +125,11 @@ async def evaluate_blacklist(family_id: str, payload: dict,
 # ---- Age grading endpoints ----
 
 
-@router.get("/age/{child_id}")
+@router.get(
+    "/age/{child_id}",
+    summary="Get the age band for a child",
+    description="Get the age band for a child.",
+)
 async def get_age_band(child_id: str, child_age: int = 7,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Get the age band for a child."""
@@ -118,7 +140,11 @@ async def get_age_band(child_id: str, child_age: int = 7,
     }
 
 
-@router.post("/age/grade")
+@router.post(
+    "/age/grade",
+    summary="Grade a concept for a child's age",
+    description="Grade a concept for a child's age.",
+)
 async def grade_concept(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Grade a concept for a child's age."""
@@ -129,7 +155,11 @@ async def grade_concept(payload: dict,
     return grade.to_dict()
 
 
-@router.post("/age/grade-text")
+@router.post(
+    "/age/grade-text",
+    summary="Grade all concepts mentioned in text",
+    description="Grade all concepts mentioned in text.",
+)
 async def grade_text(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Grade all concepts mentioned in text."""
@@ -146,7 +176,11 @@ async def grade_text(payload: dict,
 # ---- Combined downgrader endpoint ----
 
 
-@router.post("/downgrade/evaluate")
+@router.post(
+    "/downgrade/evaluate",
+    summary="Apply all downgrade rules (blacklist + age) to text",
+    description="Apply all downgrade rules (blacklist + age) to text.",
+)
 async def evaluate_downgrade(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
     """Apply all downgrade rules (blacklist + age) to text."""
