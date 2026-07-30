@@ -1,15 +1,34 @@
-"""Tests for the client-config endpoint (BE-MISC-001)."""
+"""Tests for the client-config endpoint (BE-MISC-001 + BE-MISC-002)."""
 
 from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
 
+from niki.feature_flags import (
+    FeatureFlagService,
+    set_feature_flag_service,
+)
 from niki.main import create_app
+
+
+# Pre-defined flags the BE-MISC-001 contract asserts on. The
+# endpoint now reads from the FeatureFlagService, so the test
+# fixture below seeds the in-process service with these values
+# before any request runs.
+EXPECTED_FLAGS = {
+    "new_dashboard": True,
+    "ocr_enabled": False,
+    "sse_alerts": True,
+}
 
 
 @pytest.fixture
 def client() -> TestClient:
+    # Seed the flag service BEFORE the app handles any request.
+    # Using a dedicated instance avoids bleed-over between
+    # test files (the cached singleton is module-global).
+    set_feature_flag_service(FeatureFlagService(defaults=EXPECTED_FLAGS))
     return TestClient(create_app())
 
 
@@ -31,6 +50,10 @@ class TestConfigEndpoint:
         # Pre-defined flags.
         assert "new_dashboard" in body["feature_flags"]
         assert "sse_alerts" in body["feature_flags"]
+        # And the values are bools — not arbitrary YAML strings.
+        assert isinstance(body["feature_flags"]["new_dashboard"], bool)
+        assert body["feature_flags"]["new_dashboard"] is True
+        assert body["feature_flags"]["ocr_enabled"] is False
 
     def test_query_params_accepted(self, client: TestClient) -> None:
         r = client.get(

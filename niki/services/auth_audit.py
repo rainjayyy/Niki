@@ -26,6 +26,7 @@ from niki.db.repositories.auth_audit_repo import (
     SEVERITY_WARNING,
     get_auth_audit_log_repository,
 )
+from niki.feature_flags import get_feature_flag_service
 from niki.security.alerts import (
     AlertDispatcher,
     SecurityAlert,
@@ -168,6 +169,12 @@ class AuthAuditLogger:
         # 3. NEW (BE-AUTH-001-rollout-alerts): feed the rate tracker
         # for warning-severity events and dispatch an alert when
         # the burst threshold is crossed.
+        #
+        # BE-MISC-002: the `silence_alerts` feature flag can
+        # short-circuit the dispatcher step (but never the audit
+        # write above). The rate tracker still updates so the
+        # moment the flag is flipped back on we resume from
+        # accurate counts.
         if event.severity == SEVERITY_WARNING and event.actor_parent_id:
             await self._maybe_alert(event)
 
@@ -184,6 +191,20 @@ class AuthAuditLogger:
             if not self.rate_tracker.should_alert(
                 event.actor_parent_id or ""
             ):
+                return
+            # BE-MISC-002: ops can flip `silence_alerts` to suppress
+            # outbound alert dispatch during incident response or
+            # staging-load tests. The rate tracker above is
+            # intentionally NOT skipped — when the flag flips back
+            # off we resume from accurate counts.
+            if get_feature_flag_service().is_enabled(
+                event.actor_parent_id, "silence_alerts",
+            ):
+                logger.info(
+                    "auth.audit.alert_silenced_by_flag",
+                    actor_parent_id=event.actor_parent_id,
+                    event_type=event.event_type,
+                )
                 return
             alert = SecurityAlert(
                 alert_type="lateral_auth_burst",

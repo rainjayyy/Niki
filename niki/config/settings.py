@@ -131,6 +131,14 @@ class Settings(BaseSettings):
     s3_multipart_threshold_bytes: int = 5 * 1024 * 1024  # 5 MB
     s3_addressing_style: str = "auto"  # "auto" | "path" | "virtual"
 
+    # --- BE-MISC-002: feature flags ---
+    # JSON-encoded dict of global flag defaults. Empty `{}` is
+    # safe. Example: `{"new_dashboard": true, "silence_alerts":
+    # false}`. Per-parent overrides (A/B targeting) are NOT
+    # configured here — those will arrive via a future ticket
+    # (see BE-MISC-002 followups).
+    feature_flags_default: str = "{}"
+
 
 @lru_cache
 def get_settings() -> Settings:
