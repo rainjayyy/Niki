@@ -25,6 +25,13 @@ from niki.auth.dependencies import get_current_parent, get_owned_child_id
 
 from niki.agents.emotion import EmotionBaseline, EmotionRecord
 from niki.dashboard.service import DashboardService
+from niki.db.models.audit_log import (
+    EVENT_HIGH_RISK_RECORDED,
+    EVENT_SAFETY_BLOCK,
+    SEVERITY_CRITICAL,
+    SEVERITY_WARNING,
+)
+from niki.services.audit_log import get_audit_log_service
 
 from niki.api._i18n import localized_error_response
 
@@ -210,6 +217,24 @@ async def record_safety_valve(payload: dict,
         problem_summary=payload["problem_summary"],
         round_reached=int(payload.get("round_reached", 4)),
     )
+    # BE-COMP-004: the safety valve firing is a "Niki stopped
+    # tutoring" moment the parent may ask about weeks later.
+    # `problem_summary` is child-adjacent free text so it stays in
+    # `dashboard_alerts` — the audit row keeps only the round count.
+    await get_audit_log_service().log_event(
+        EVENT_SAFETY_BLOCK,
+        severity=SEVERITY_WARNING,
+        actor_parent_id=parent.id,
+        target_parent_id=parent.id,
+        target_child_id=payload["child_id"],
+        endpoint="/api/v1/dashboard/alerts/record/safety-valve",
+        method="POST",
+        reason="Tutoring safety valve triggered",
+        metadata={
+            "alert_id": row_id,
+            "round_reached": int(payload.get("round_reached", 4)),
+        },
+    )
     return {
         "id": row_id,
         "child_id": payload["child_id"],
@@ -236,6 +261,21 @@ async def record_high_risk(payload: dict,
         parent_id=parent.id,
         original_text=payload["original_text"],
         niki_response_summary=niki_response_summary,
+    )
+    # BE-COMP-004: `critical` severity — this is the event class that
+    # triggers a parent push. Deliberately NOT carrying
+    # `original_text`: the child's own words live encrypted in
+    # `dashboard_alerts`, and the audit table is read far more widely.
+    await get_audit_log_service().log_event(
+        EVENT_HIGH_RISK_RECORDED,
+        severity=SEVERITY_CRITICAL,
+        actor_parent_id=parent.id,
+        target_parent_id=parent.id,
+        target_child_id=payload["child_id"],
+        endpoint="/api/v1/dashboard/alerts/record/high-risk",
+        method="POST",
+        reason="High-risk signal recorded for the child",
+        metadata={"alert_id": row_id},
     )
     return {
         "id": row_id,

@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from niki.api.alerts import router as alerts_router
+from niki.api.admin_audit import router as admin_audit_router
 from niki.api.audio import router as audio_router
 from niki.api.auth import router as auth_router
 from niki.api.auth_audit import router as auth_audit_router
@@ -90,6 +91,7 @@ OPENAPI_TAGS: list[dict] = _collect_tag_metadata(
     children_router,
     pairing_router,
     auth_audit_router,
+    admin_audit_router,
     alerts_router,
     deletion_router,
     config_router,
@@ -162,6 +164,9 @@ api_router.include_router(pairing_router)
 
 # BE-AUTH-001-rollout-audit: lateral-auth audit log query
 api_router.include_router(auth_audit_router)
+
+# BE-COMP-004: unified cross-domain audit log query
+api_router.include_router(admin_audit_router)
 
 # BE-RT-002: realtime alert SSE stream
 api_router.include_router(alerts_router)

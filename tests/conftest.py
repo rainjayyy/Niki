@@ -109,6 +109,26 @@ def _reset_auth_audit():
 
 
 
+@pytest.fixture(autouse=True)
+def _reset_unified_audit():
+    """BE-COMP-004: reset the unified `audit_logs` repo + service
+    between tests. Every domain now dual-writes here, so without a
+    reset a test asserting "exactly one safety_block row" would see
+    rows accumulated by the whole session."""
+    from niki.db.repositories import (
+        InMemoryAuditLogRepository,
+        set_audit_log_repository,
+    )
+    from niki.services.audit_log import (
+        AuditLogService,
+        set_audit_log_service,
+    )
+
+    repo = InMemoryAuditLogRepository()
+    set_audit_log_repository(repo)
+    set_audit_log_service(AuditLogService(repo=repo))
+
+
 @pytest.fixture(scope="session")
 def event_loop() -> Any:
     """Create a session-scoped event loop for async tests."""

@@ -9,6 +9,12 @@ Demonstration endpoints for the #7 vertical slice:
   POST /auth/deletion/request   — request account deletion
   POST /auth/deletion/complete  — complete deletion (after 30 days)
   GET  /auth/consent/document/{type}  — get the consent document text
+
+BE-COMP-004: consent signatures, SMS dispatch and successful logins
+are recorded in the unified `audit_logs` table (via
+`AuditLogService`) so the parent can see them alongside safety and
+deletion events in one history. Those writes never carry PII — no
+phone number, no signature text.
 """
 
 from __future__ import annotations
@@ -45,7 +51,13 @@ from niki.auth.token_blacklist import (
     get_blacklist,
 )
 from niki.config.settings import get_settings
+from niki.db.models.audit_log import (
+    EVENT_CONSENT_SIGNED,
+    EVENT_LOGIN_SUCCESS,
+    EVENT_SMS_SENT,
+)
 from niki.middleware.rate_limit import limiter
+from niki.services.audit_log import get_audit_log_service
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
@@ -106,6 +118,20 @@ def _error_response(request: Request, exc: AuthError) -> dict:
     # Unknown code → keep the exception's literal message so we
     # never regress existing error text.
     return {"error": exc.code, "message": exc.message}
+
+
+def _client_ip(request: Request) -> str | None:
+    """Best-effort caller IP for the audit trail.
+
+    `X-Forwarded-For` wins when present (we sit behind a proxy in
+    every deployed environment); its first hop is the real client.
+    Returns None rather than a placeholder so the audit row honestly
+    records "we don't know".
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or None
+    return request.client.host if request.client else None
 
 
 @router.post(
@@ -220,6 +246,30 @@ async def signup_consent(request: Request, payload: dict) -> dict:
             status_code=400,
             detail=_error_response(request, exc),
         ) from exc
+
+    # BE-COMP-004: consent is the single most compliance-relevant
+    # event on the account — PIPL Art. 14 requires we can show when
+    # and by whom it was given. Metadata carries the document
+    # versions, never the signature itself.
+    await get_audit_log_service().log_event(
+        EVENT_CONSENT_SIGNED,
+        actor_parent_id=account.id,
+        target_parent_id=account.id,
+        endpoint="/api/v1/auth/signup/consent",
+        method="POST",
+        reason="Parent e-signed the consent document(s)",
+        metadata={
+            "signed_child_consent": bool(
+                payload.get("sign_child_consent", True)
+            ),
+            "account_status": (
+                account.status.value
+                if hasattr(account.status, "value")
+                else str(account.status)
+            ),
+        },
+        client_ip=_client_ip(request),
+    )
 
     return {"account": account.to_dict()}
 
@@ -518,6 +568,19 @@ async def sms_send(request: Request, payload: dict) -> dict:
     if settings.debug:
         # Echo the code in DEBUG only; production must NEVER do this.
         body["dev_code"] = code
+
+    # BE-COMP-004: record that a code was sent. No parent id exists
+    # yet (this is pre-auth) and the phone number is PII, so the row
+    # carries only the fact + the captcha posture. Volume of these
+    # rows per IP is what makes SMS-pumping abuse visible.
+    await get_audit_log_service().log_event(
+        EVENT_SMS_SENT,
+        endpoint="/api/v1/auth/sms/send",
+        method="POST",
+        reason="SMS verification code dispatched",
+        metadata={"captcha_presented": captcha_id is not None},
+        client_ip=_client_ip(request),
+    )
     return body
 
 
@@ -568,6 +631,7 @@ async def sms_login(request: Request, payload: dict) -> dict:
 
     # Find or auto-create the account.
     account = await _lifecycle.find_by_phone(phone)
+    auto_created = account is None
     if account is None:
         # Auto-create PENDING parent. BE-AUTH-002 v1 placeholder: id_number
         # uses a fixed valid value to satisfy format validation; the
@@ -588,6 +652,24 @@ async def sms_login(request: Request, payload: dict) -> dict:
     settings = get_settings()
     access = issue_access_token(account.id)
     refresh = issue_refresh_token(account.id)
+
+    # BE-COMP-004: a successful login is the anchor event for every
+    # "was this me?" support conversation. `auto_created` tells the
+    # parent apart from a first-time signup on a fresh phone.
+    await get_audit_log_service().log_event(
+        EVENT_LOGIN_SUCCESS,
+        actor_parent_id=account.id,
+        target_parent_id=account.id,
+        endpoint="/api/v1/auth/sms/login",
+        method="POST",
+        reason="SMS-code login succeeded",
+        metadata={
+            "auto_created_account": auto_created,
+            "account_status": account.status.value,
+        },
+        client_ip=_client_ip(request),
+    )
+
     return {
         "access_token": access,
         "refresh_token": refresh,

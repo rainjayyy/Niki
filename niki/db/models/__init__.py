@@ -12,11 +12,24 @@ Tables:
     EmotionBaseline — 儿童情绪基线
     MemoryChunk — 长时记忆片段
     TreeholeSummary — 心洞模式加密聚合
+    AuditLog — 统一审计日志（BE-COMP-004，跨域只读历史）
 """
 
 from __future__ import annotations
 
 from niki.db.models.account_verification import AccountVerification
+from niki.db.models.audit_log import (
+    AuditLog,
+    EVENT_CONSENT_SIGNED,
+    EVENT_DELETION_COMPLETED,
+    EVENT_DELETION_REQUESTED,
+    EVENT_HIGH_RISK_RECORDED,
+    EVENT_LATERAL_AUTH_VIOLATION,
+    EVENT_LOGIN_SUCCESS,
+    EVENT_SAFETY_BLOCK,
+    EVENT_SMS_SENT,
+    VALID_SEVERITIES,
+)
 from niki.db.models.auth_audit_log import AuthAuditLog
 from niki.db.models.child import Child
 from niki.db.models.dashboard_record import (
@@ -61,4 +74,15 @@ __all__ = [
     "PushPrefs",
     "VALID_CHANNELS",
     "VALID_PLATFORMS",
+    # BE-COMP-004: unified cross-domain audit trail
+    "AuditLog",
+    "VALID_SEVERITIES",
+    "EVENT_CONSENT_SIGNED",
+    "EVENT_DELETION_REQUESTED",
+    "EVENT_DELETION_COMPLETED",
+    "EVENT_SAFETY_BLOCK",
+    "EVENT_HIGH_RISK_RECORDED",
+    "EVENT_LATERAL_AUTH_VIOLATION",
+    "EVENT_SMS_SENT",
+    "EVENT_LOGIN_SUCCESS",
 ]

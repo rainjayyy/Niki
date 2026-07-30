@@ -26,6 +26,7 @@ EXPECTED_TABLES = {
     "knowledge_queries",
     "emotion_baseline_records",
     "auth_audit_logs",  # BE-AUTH-001-rollout-audit
+    "audit_logs",        # BE-COMP-004 (unified cross-domain trail)
     "push_devices",      # BE-PUSH-001
     "push_prefs",        # BE-PUSH-001
 }

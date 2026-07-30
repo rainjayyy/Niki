@@ -6,6 +6,10 @@ Wraps the AuthAuditLogRepository with a high-level API that
     3. BE-AUTH-001-rollout-alerts: feeds the ViolationRateTracker
        and dispatches a SecurityAlert when a burst threshold is
        crossed for the same actor.
+    4. BE-COMP-004: mirrors the event into the unified `audit_logs`
+       table so consent / deletion / safety / auth all share one
+       queryable history. `auth_audit_logs` remains the fast path
+       for the alerting logic in this module.
 
 Call sites use `log_violation()` for the common lateral-auth case
 or `log_event()` for generic info-level events. Audit-write
@@ -166,6 +170,14 @@ class AuthAuditLogger:
             )
             row_id = None
 
+        # 2b. BE-COMP-004: dual-write to the unified `audit_logs`
+        # table so the parent-facing cross-domain history includes
+        # auth events alongside consent / deletion / safety. The
+        # narrow `auth_audit_logs` write above stays authoritative
+        # for the alerting path below — it is a single-table index
+        # scan and must not pay for the wider table.
+        await self._mirror_to_unified_audit(event)
+
         # 3. NEW (BE-AUTH-001-rollout-alerts): feed the rate tracker
         # for warning-severity events and dispatch an alert when
         # the burst threshold is crossed.
@@ -179,6 +191,39 @@ class AuthAuditLogger:
             await self._maybe_alert(event)
 
         return row_id
+
+    async def _mirror_to_unified_audit(
+        self, event: AuthAuditEvent
+    ) -> None:
+        """Copy an auth event into the BE-COMP-004 `audit_logs` table.
+
+        Best-effort and silent: the auth trail is already durable at
+        this point, so a failure here only costs the cross-domain
+        view a row. Imported lazily to keep the module import graph
+        acyclic (`AuditLogService` does not depend on auth, but the
+        two singletons are wired up in the same conftest fixture).
+        """
+        try:
+            from niki.services.audit_log import get_audit_log_service
+
+            await get_audit_log_service().log_event(
+                event.event_type,
+                severity=event.severity,
+                actor_parent_id=event.actor_parent_id,
+                target_parent_id=event.target_parent_id,
+                target_child_id=event.target_child_id,
+                endpoint=event.endpoint or None,
+                method=event.method or None,
+                reason=event.reason,
+                client_ip=event.client_ip,
+                metadata={"source": "auth_audit_logs"},
+            )
+        except Exception as exc:  # pragma: no cover — defence in depth
+            logger.warning(
+                "auth.audit.unified_mirror_failed",
+                error=str(exc),
+                event_type=event.event_type,
+            )
 
     async def _maybe_alert(self, event: AuthAuditEvent) -> None:
         """Record violation in rate tracker; dispatch alert if burst."""

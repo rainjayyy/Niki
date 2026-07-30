@@ -69,6 +69,9 @@ MESSAGES_ZH: dict[str, str] = {
     # ---- auth-audit.* (BE-AUTH-001-rollout-audit) ----
     "auth_audit.bad_request": "请求参数不合法",
     "auth_audit.invalid_sort": "排序字段不合法",
+
+    # ---- audit.* (BE-COMP-004 统一审计日志) ----
+    "audit.cross_parent_forbidden": "只能查询自己的审计记录",
 }
 
 
@@ -124,6 +127,11 @@ MESSAGES_EN: dict[str, str] = {
     # ---- auth-audit.* ----
     "auth_audit.bad_request": "Bad request",
     "auth_audit.invalid_sort": "Invalid sort field",
+
+    # ---- audit.* (BE-COMP-004 unified audit log) ----
+    "audit.cross_parent_forbidden": (
+        "You may only query your own audit history"
+    ),
 }
 
 

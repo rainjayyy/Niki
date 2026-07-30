@@ -16,6 +16,14 @@ from niki.db.repositories.account_repo import (
     InMemoryAccountRepository,
     PostgresAccountRepository,
 )
+from niki.db.repositories.audit_log_repo import (
+    AuditEvent,
+    AuditLogRepository,
+    InMemoryAuditLogRepository,
+    PostgresAuditLogRepository,
+    get_audit_log_repository,
+    set_audit_log_repository,
+)
 from niki.db.repositories.auth_audit_repo import (
     AuthAuditEvent,
     AuthAuditLogRepository,
@@ -105,6 +113,13 @@ __all__ = [
     "PostgresPushPrefsRepository",
     "get_push_prefs_repository",
     "set_push_prefs_repository",
+    # BE-COMP-004: unified cross-domain audit trail
+    "AuditEvent",
+    "AuditLogRepository",
+    "InMemoryAuditLogRepository",
+    "PostgresAuditLogRepository",
+    "get_audit_log_repository",
+    "set_audit_log_repository",
 ]
 
 from niki.db.repositories.child_repo import (
