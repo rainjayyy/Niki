@@ -47,12 +47,18 @@ from niki.media.storage import (
     _detect_mime,
     get_media_storage,
 )
+from niki.media.ocr import (
+    OcrError,
+    get_ocr_backend,
+)
 from niki.middleware.rate_limit import limiter
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
 
-router = APIRouter(prefix="/media", tags=["media"])
+router = APIRouter(prefix="/media", tags=[
+    {"name": "media", "description": "Media API endpoints (BE-MEDIA-001, BE-MEDIA-004)."}
+])
 
 
 # Accepts the bare id and the synthetic access_url scheme.
@@ -76,6 +82,116 @@ def _extract_file_id(raw: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# BE-MEDIA-005: OCR endpoint (mocked backend)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/ocr",
+    summary="Run OCR on an uploaded image and return extracted text",
+    description="""
+            Run OCR on an uploaded image and return extracted text.
+            
+            Multipart fields:
+                file     (required) — image bytes (png/jpg/webp/gif, ≤ 5 MB)
+                language (optional) — BCP-47 tag, default "zh-CN"
+            
+            Responses:
+                200 — recognised text + per-region bounding boxes
+                400 — empty file
+                413 — OCR_IMAGE_TOO_LARGE (> 5 MB)
+                415 — UNSUPPORTED_OCR_MIME (not an image)
+                503 — OCR backend unavailable
+            """,
+)
+@limiter.limit("30/minute")
+async def ocr(
+    request: Request,
+    file: UploadFile = File(...),
+    language: str = Form(default="zh-CN"),
+    *,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
+    """Run OCR on an uploaded image and return extracted text.
+
+    Multipart fields:
+        file     (required) — image bytes (png/jpg/webp/gif, ≤ 5 MB)
+        language (optional) — BCP-47 tag, default "zh-CN"
+
+    Responses:
+        200 — recognised text + per-region bounding boxes
+        400 — empty file
+        413 — OCR_IMAGE_TOO_LARGE (> 5 MB)
+        415 — UNSUPPORTED_OCR_MIME (not an image)
+        503 — OCR backend unavailable
+    """
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "EMPTY_FILE",
+                "message": "file is empty",
+            },
+        )
+
+    if len(raw) > OCR_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "error": "OCR_IMAGE_TOO_LARGE",
+                "message": f"image exceeds {OCR_MAX_BYTES} bytes",
+                "max_bytes": OCR_MAX_BYTES,
+                "size_bytes": len(raw),
+            },
+        )
+
+    detected = _detect_mime(raw, file.content_type)
+    if detected is None or detected not in (
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+    ):
+        raise HTTPException(
+            status_code=415,
+            detail={
+                "error": "UNSUPPORTED_OCR_MIME",
+                "message": (
+                    "file must be image/jpeg, image/png, "
+                    "image/webp, or image/gif"
+                ),
+                "mime_type": detected or file.content_type or "unknown",
+            },
+        )
+
+    try:
+        result = await get_ocr_backend().recognize(
+            raw,
+            language=language,
+        )
+    except OcrError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": exc.code, "message": exc.message},
+        ) from exc
+
+    return {
+        "text": result.text,
+        "language": result.language,
+        "confidence": result.confidence,
+        "regions": [
+            {
+                "text": r.text,
+                "confidence": r.confidence,
+                "bbox": list(r.bbox),
+            }
+            for r in result.regions
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
 # BE-MEDIA-004: avatar-specific upload shortcut
 # ---------------------------------------------------------------------------
 
@@ -84,6 +200,7 @@ def _extract_file_id(raw: str) -> str | None:
 # the 10 MB generic upload so a malicious frontend can't dump a
 # huge raw photo into the avatar slot.
 AVATAR_MAX_BYTES: int = 1_048_576  # 1 MiB
+OCR_MAX_BYTES: int = 5 * 1024 * 1024  # 5 MB
 
 
 def validate_image_for_avatar(
@@ -209,7 +326,23 @@ async def _assert_parent_owns_child(
     return child_id
 
 
-@router.post("/upload")
+@router.post(
+    "/upload",
+    summary="""
+            Receive a file upload and store it via the active MediaStorage
+            """,
+    description="""
+            Receive a file upload and store it via the active MediaStorage.
+            
+            Multipart form fields:
+                file (required) — file part; size ≤ 10 MB.
+            
+            Responses:
+                200 — {file_id, mime_type, size_bytes, sha1, access_url, ...}
+                400 — empty / unsupported MIME type
+                413 — too large
+            """,
+)
 @limiter.limit("20/minute")
 async def upload(
     request: Request,
@@ -303,7 +436,32 @@ async def upload(
 # BE-MEDIA-001-rollout: register the more specific /thumb
 # route FIRST so the bare /{file_id:path} doesn't gobble the
 # /thumb suffix into the :path capture group.
-@router.post("/avatar")
+@router.post(
+    "/avatar",
+    summary="Upload a child-profile avatar (BE-MEDIA-004)",
+    description="""
+            Upload a child-profile avatar (BE-MEDIA-004).
+            
+            A purpose-specific wrapper around the generic upload that:
+              - tightens the byte cap to 1 MB
+              - restricts the MIME allow-list to image/jpeg + image/png
+              - validates the caller's parent ownership of the optional
+                `child_id` form field
+              - returns an avatar-shaped response (with `kind: "avatar"`)
+            
+            Multipart form fields:
+                file     (required) — image bytes (jpg/png, ≤ 1 MB)
+                child_id (optional) — when present, the caller must own it
+            
+            Responses:
+                200 — avatar metadata
+                413 — AVATAR_TOO_LARGE
+                415 — INVALID_AVATAR_MIME
+                403 — PARENT_CHILD_MISMATCH (cross-parent)
+                404 — CHILD_NOT_FOUND
+                400 — EMPTY_FILE / BAD_REQUEST
+            """,
+)
 @limiter.limit("20/minute")
 async def upload_avatar(
     request: Request,
@@ -417,7 +575,17 @@ async def upload_avatar(
     }
 
 
-@router.get("/{file_id:path}/thumb")
+@router.get(
+    "/{file_id:path}/thumb",
+    summary="Return a server-resized thumbnail (BE-MEDIA-001-rollout)",
+    description="""
+            Return a server-resized thumbnail (BE-MEDIA-001-rollout).
+            
+            Bounds: 1 ≤ w,h ≤ 2048. Cached in-process (LRU 100
+            entries) keyed by `(file_id, w, h)`. CDN can cache the
+            result too (Cache-Control: public, max-age=86400).
+            """,
+)
 @limiter.limit("60/minute")
 async def get_thumbnail(
     request: Request,
@@ -487,7 +655,29 @@ async def get_thumbnail(
     )
 
 
-@router.get("/{file_id:path}")
+@router.get(
+    "/{file_id:path}",
+    summary="Read back a previously uploaded media file",
+    description="""
+            Read back a previously uploaded media file.
+            
+            The path accepts either:
+                - the bare id returned by /upload, e.g. `f-abc12345`
+                - the full `access_url` returned by /upload, e.g.
+                  `media://local/f-abc12345.png` (scheme + extension are
+                  stripped before lookup)
+            
+            The `:path` converter is needed so slashes in the synthetic URL
+            are captured; the regex in `_extract_file_id` then narrows the
+            value to a valid bare id.
+            
+            Responses:
+                200 — raw bytes with `Content-Type` matching the upload's MIME
+                404 — file not found (also returned for malformed ids — does
+                      not 500 on path-traversal attempts)
+                401 — missing / invalid Bearer token
+            """,
+)
 @limiter.limit("100/minute")
 async def retrieve(
     request: Request,
