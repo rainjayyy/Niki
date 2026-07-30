@@ -164,3 +164,39 @@ class HeartbeatService:
                 name=reg.name,
                 error=result.get("error"),
             )
+
+
+# ---------------------------------------------------------------------------
+# Periodic maintenance coroutine (BE-DEV-004)
+# ---------------------------------------------------------------------------
+
+
+async def cleanup_expired_pairing_codes() -> dict[str, Any]:
+    """Drop expired entries from the in-memory pairing code store.
+
+    Designed to be registered with `HeartbeatService.register(...)`
+    the same way infrastructure health checks are. Returns a
+    `ping_fn`-shaped dict so it slots into the heartbeat loop
+    without any special-casing.
+
+    Errors are swallowed (matching the heartbeat contract) and
+    surfaced via the `error` field so a transient failure never
+    crashes the loop.
+    """
+    from niki.auth.pairing import get_pairing_store
+
+    started = time.monotonic()
+    try:
+        removed = get_pairing_store().cleanup_expired()
+    except Exception as exc:
+        return {
+            "status": "unhealthy",
+            "latency_ms": None,
+            "error": f"cleanup raised: {exc}",
+        }
+    latency_ms = (time.monotonic() - started) * 1000.0
+    return {
+        "status": "healthy",
+        "latency_ms": latency_ms,
+        "removed": removed,
+    }

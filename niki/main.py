@@ -74,6 +74,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     heartbeat.register("redis", RedisClient.health_check, interval_seconds=30)
     heartbeat.register("chroma", ChromaClient.health_check, interval_seconds=60)
     heartbeat.register("neo4j", Neo4jClient.health_check, interval_seconds=30)
+    # BE-DEV-004: periodic cleanup of expired pairing codes (5-min TTL).
+    from niki.infrastructure.heartbeat import cleanup_expired_pairing_codes
+    heartbeat.register(
+        "pairing_cleanup",
+        cleanup_expired_pairing_codes,
+        interval_seconds=60,
+    )
     await heartbeat.start()
     app.state.heartbeat = heartbeat
 

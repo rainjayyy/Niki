@@ -20,6 +20,7 @@ from niki.api.health import router as health_router
 from niki.api.media import router as media_router
 from niki.api.memory import router as memory_router
 from niki.api.orchestrator import router as chat_router
+from niki.api.pairing import router as pairing_router
 from niki.api.push import router as push_router
 from niki.api.resilience import router as resilience_router
 from niki.api.routing import router as routing_router
@@ -90,6 +91,9 @@ api_router.include_router(data_export_router)
 
 # BE-STOR-001-ext-E: children registration
 api_router.include_router(children_router)
+
+# BE-DEV-004: parent-child pairing code
+api_router.include_router(pairing_router)
 
 # BE-AUTH-001-rollout-audit: lateral-auth audit log query
 api_router.include_router(auth_audit_router)
