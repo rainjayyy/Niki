@@ -131,6 +131,14 @@ class Settings(BaseSettings):
     s3_multipart_threshold_bytes: int = 5 * 1024 * 1024  # 5 MB
     s3_addressing_style: str = "auto"  # "auto" | "path" | "virtual"
 
+    # --- BE-COMP-006: SMS captcha gating ---
+    # When True, /auth/sms/send requires a valid captcha
+    # (captcha_id + captcha_answer) and rejects with 400
+    # CAPTCHA_INVALID otherwise. Default off so dev / tests
+    # don't need a captcha round-trip; flip on in production
+    # via NIKI_SMS_CAPTCHA_REQUIRED=true.
+    sms_captcha_required: bool = False
+
     # --- BE-MISC-002: feature flags ---
     # JSON-encoded dict of global flag defaults. Empty `{}` is
     # safe. Example: `{"new_dashboard": true, "silence_alerts":

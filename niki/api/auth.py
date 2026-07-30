@@ -40,24 +40,65 @@ from niki.auth.sms_service import (
     SMSRateLimited,
     get_sms_service,
 )
+from niki.auth.captcha import get_captcha_service
 from niki.auth.token_blacklist import (
     get_blacklist,
 )
 from niki.config.settings import get_settings
 from niki.middleware.rate_limit import limiter
 
+from niki.api._i18n import localized_error_response, resolve_lang
+from niki.i18n.translator import get_translator
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Module-level singleton
 _lifecycle = AccountLifecycle()
 
+# Translation-key map for the structured AuthError codes. The
+# `code` is what the frontend branches on (and what we test
+# against); the `key` is dotted and resolved by the i18n framework
+# per the request's Accept-Language.
+_AUTH_KEY_BY_CODE: dict[str, str] = {
+    "INVALID_PHONE_FORMAT": "auth.invalid_phone_format",
+    "TOKEN_EXPIRED": "auth.token_expired",
+    "TOKEN_INVALID": "auth.token_invalid",
+    "TOKEN_REVOKED": "auth.token_revoked",
+    "MISSING_TOKEN": "auth.missing_token",
+    "INVALID_REFRESH_TOKEN": "auth.invalid_refresh_token",
+    "WRONG_TOKEN_TYPE": "auth.wrong_token_type",
+    "SMS_RATE_LIMITED": "auth.sms_rate_limited",
+    "SMS_CODE_INVALID": "auth.sms_code_invalid",
+    "SMS_CODE_EXPIRED": "auth.sms_code_expired",
+    "SMS_TOO_MANY_ATTEMPTS": "auth.sms_too_many_attempts",
+    "NOT_FOUND": "auth.not_found",
+}
 
-def _error_response(exc: AuthError) -> dict:
+
+def _error_response(request: Request, exc: AuthError) -> dict:
+    """Render an AuthError using the localized `message` field.
+
+    Preserves the §6.3 contract: `error` is the machine-readable
+    CODE, `message` is rendered through the i18n catalog using the
+    request's resolved language. The exception's own `.message`
+    (English, set by `AuthError.__init__`) is used as the fallback
+    when no catalog entry exists yet for the code.
+    """
+    key = _AUTH_KEY_BY_CODE.get(exc.code)
+    if key is not None:
+        return localized_error_response(
+            request,
+            code=exc.code,
+            key=key,
+            fallback_message=exc.message,
+        )
+    # Unknown code → keep the exception's literal message so we
+    # never regress existing error text.
     return {"error": exc.code, "message": exc.message}
 
 
 @router.post("/signup/start")
-async def signup_start(payload: dict) -> dict:
+async def signup_start(request: Request, payload: dict) -> dict:
     """Begin signup. Creates a PENDING account."""
     try:
         account, progress = await _lifecycle.start_signup(
@@ -67,7 +108,10 @@ async def signup_start(payload: dict) -> dict:
             email=payload.get("email"),
         )
     except AuthError as exc:
-        raise HTTPException(status_code=400, detail=_error_response(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=f"Missing field: {exc}") from exc
 
@@ -84,7 +128,7 @@ async def signup_start(payload: dict) -> dict:
 
 
 @router.post("/signup/real-name")
-async def signup_real_name(payload: dict) -> dict:
+async def signup_real_name(request: Request, payload: dict) -> dict:
     """Step 1: Real-name verification."""
     try:
         account = await _lifecycle.verify_real_name(
@@ -93,13 +137,16 @@ async def signup_real_name(payload: dict) -> dict:
             id_number=payload["id_number"],
         )
     except AuthError as exc:
-        raise HTTPException(status_code=400, detail=_error_response(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
 
     return {"account": account.to_dict()}
 
 
 @router.post("/signup/face")
-async def signup_face(payload: dict) -> dict:
+async def signup_face(request: Request, payload: dict) -> dict:
     """Step 2: Face verification."""
     try:
         account = await _lifecycle.verify_face(
@@ -108,13 +155,16 @@ async def signup_face(payload: dict) -> dict:
             reference_image_url=payload.get("reference_image_url"),
         )
     except AuthError as exc:
-        raise HTTPException(status_code=400, detail=_error_response(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
 
     return {"account": account.to_dict()}
 
 
 @router.post("/signup/consent")
-async def signup_consent(payload: dict) -> dict:
+async def signup_consent(request: Request, payload: dict) -> dict:
     """Step 3: Sign the consent document(s)."""
     try:
         account = await _lifecycle.sign_consent(
@@ -125,7 +175,10 @@ async def signup_consent(payload: dict) -> dict:
             sign_child_consent=payload.get("sign_child_consent", True),
         )
     except AuthError as exc:
-        raise HTTPException(status_code=400, detail=_error_response(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
 
     return {"account": account.to_dict()}
 
@@ -148,10 +201,17 @@ async def whoami(
 
 
 @router.get("/me/{parent_id}")
-async def get_account(parent_id: str) -> dict:
+async def get_account(request: Request, parent_id: str) -> dict:
     account = await _lifecycle.get_account(parent_id)
     if account is None:
-        raise HTTPException(status_code=404, detail={"error": "NOT_FOUND"})
+        raise HTTPException(
+            status_code=404,
+            detail=localized_error_response(
+                request,
+                code="NOT_FOUND",
+                key="auth.not_found",
+            ),
+        )
     progress = await _lifecycle.get_progress(parent_id)
     return {
         "account": account.to_dict(),
@@ -169,13 +229,16 @@ async def get_account(parent_id: str) -> dict:
 
 
 @router.post("/deletion/request")
-async def deletion_request(payload: dict) -> dict:
+async def deletion_request(request: Request, payload: dict) -> dict:
     """Request account deletion (starts 30-day window)."""
     parent_id = payload["parent_id"]
     try:
         account = await _lifecycle.request_deletion(parent_id)
     except AuthError as exc:
-        raise HTTPException(status_code=400, detail=_error_response(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
     return {
         "account": account.to_dict(),
         "deletion_window_remaining_days": account.deletion_window_remaining_days,
@@ -183,21 +246,31 @@ async def deletion_request(payload: dict) -> dict:
 
 
 @router.post("/deletion/complete")
-async def deletion_complete(payload: dict) -> dict:
+async def deletion_complete(request: Request, payload: dict) -> dict:
     """Complete the deletion (after 30 days)."""
     parent_id = payload["parent_id"]
     try:
         account = await _lifecycle.complete_deletion(parent_id)
     except AuthError as exc:
-        raise HTTPException(status_code=400, detail=_error_response(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
     return {"account": account.to_dict()}
 
 
 @router.get("/consent/document/{consent_type}")
-async def get_consent_document(consent_type: str) -> dict:
+async def get_consent_document(request: Request, consent_type: str) -> dict:
     """Get the consent document text (parent or child version)."""
     if consent_type not in ("parent", "child"):
-        raise HTTPException(status_code=400, detail={"error": "INVALID_CONSENT_TYPE"})
+        raise HTTPException(
+            status_code=400,
+            detail=localized_error_response(
+                request,
+                code="INVALID_CONSENT_TYPE",
+                key="auth.invalid_consent_type",
+            ),
+        )
     consent = _lifecycle.get_consent_manager()
     if consent_type == "parent":
         return {
@@ -213,6 +286,47 @@ async def get_consent_document(consent_type: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# BE-COMP-006: captcha / Turnstile verification layer (v1 = arithmetic)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/captcha/challenge")
+async def captcha_challenge() -> dict:
+    """Mint a fresh captcha challenge.
+
+    Returns:
+        captcha_id  — opaque token; must be round-tripped through
+                      `/auth/captcha/verify` (or sent alongside
+                      `/auth/sms/send` when captcha is required).
+        question    — human-readable prompt, e.g. "3 + 4 = ?".
+        expires_at  — unix epoch seconds; clients should treat the
+                      challenge as stale past this point.
+    """
+    challenge = await get_captcha_service().create_challenge()
+    return {
+        "captcha_id": challenge.id,
+        "question": challenge.question,
+        "expires_at": challenge.expires_at,
+    }
+
+
+@router.post("/captcha/verify")
+async def captcha_verify(payload: dict) -> dict:
+    """Verify a captcha answer. Returns `{valid: bool}` (no error code).
+
+    The endpoint is intentionally idempotent and never 4xxs — the
+    client distinguishes a wrong answer by `valid: false`. This
+    keeps it composable for frontend retry / shake-to-refresh flows.
+    """
+    challenge_id = payload.get("captcha_id", "")
+    answer = payload.get("answer")
+    if not isinstance(challenge_id, str) or answer is None:
+        return {"valid": False}
+    valid = await get_captcha_service().verify(challenge_id, answer)
+    return {"valid": valid}
+
+
+# ---------------------------------------------------------------------------
 # BE-AUTH-002: SMS-code login (mock provider)
 # ---------------------------------------------------------------------------
 
@@ -224,13 +338,61 @@ async def sms_send(request: Request, payload: dict) -> dict:
 
     Dev mode echoes the code back so the frontend can use it directly;
     production deployments must NOT return the code in the response.
+
+    BE-COMP-006: captcha gating. When `Settings.sms_captcha_required`
+    is True, a valid (captcha_id, captcha_answer) MUST be present in
+    the request body — otherwise the call is rejected with 400
+    CAPTCHA_INVALID before the SMS provider is even touched. When
+    the flag is False (dev / tests / default), captcha is OPTIONAL:
+    if the client sends one we still verify it (so the round-trip
+    is exercisable), but absence is fine.
     """
     phone = payload.get("phone")
     if not phone or not validate_phone(phone):
         raise HTTPException(
             status_code=400,
-            detail={"error": "INVALID_PHONE_FORMAT"},
+            detail=localized_error_response(
+                request,
+                code="INVALID_PHONE_FORMAT",
+                key="auth.invalid_phone_format",
+            ),
         )
+
+    settings = get_settings()
+    captcha_id = payload.get("captcha_id")
+    captcha_answer = payload.get("captcha_answer")
+    if captcha_id is not None or captcha_answer is not None:
+        # Client opted into captcha — verify regardless of flag.
+        ok = await get_captcha_service().verify(
+            str(captcha_id) if captcha_id is not None else "",
+            captcha_answer if captcha_answer is not None else "",
+        )
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail=localized_error_response(
+                    request,
+                    code="CAPTCHA_INVALID",
+                    key="auth.captcha_invalid",
+                    fallback_message=(
+                        "Captcha challenge missing, expired, or wrong"
+                    ),
+                ),
+            )
+    elif settings.sms_captcha_required:
+        # Production mode: captcha is mandatory.
+        raise HTTPException(
+            status_code=400,
+            detail=localized_error_response(
+                request,
+                code="CAPTCHA_INVALID",
+                key="auth.captcha_required",
+                fallback_message=(
+                    "Captcha is required to send an SMS code"
+                ),
+            ),
+        )
+
     try:
         code = await get_sms_service().send(phone)
     except SMSRateLimited as exc:
@@ -238,11 +400,14 @@ async def sms_send(request: Request, payload: dict) -> dict:
             status_code=429,
             detail={
                 "error": exc.code,
-                "message": exc.message,
+                "message": get_translator().translate(
+                    _AUTH_KEY_BY_CODE.get(exc.code, "auth.sms_rate_limited"),
+                    resolve_lang(request),
+                    default=exc.message,
+                ),
                 "retry_after_seconds": int(exc.retry_after_seconds),
             },
         ) from exc
-    settings = get_settings()
     body: dict = {"phone": phone, "status": "sent"}
     if settings.debug:
         # Echo the code in DEBUG only; production must NEVER do this.
@@ -263,12 +428,20 @@ async def sms_login(request: Request, payload: dict) -> dict:
     if not phone or not validate_phone(phone):
         raise HTTPException(
             status_code=400,
-            detail={"error": "INVALID_PHONE_FORMAT"},
+            detail=localized_error_response(
+                request,
+                code="INVALID_PHONE_FORMAT",
+                key="auth.invalid_phone_format",
+            ),
         )
     if not code or not isinstance(code, str) or len(code) != 6:
         raise HTTPException(
             status_code=400,
-            detail={"error": "SMS_CODE_INVALID"},
+            detail=localized_error_response(
+                request,
+                code="SMS_CODE_INVALID",
+                key="auth.sms_code_invalid",
+            ),
         )
 
     try:
@@ -276,7 +449,7 @@ async def sms_login(request: Request, payload: dict) -> dict:
     except (SMSCodeInvalid, SMSCodeExpired, SMSTooManyAttempts) as exc:
         raise HTTPException(
             status_code=401,
-            detail={"error": exc.code, "message": exc.message},
+            detail=_error_response(request, exc),
         ) from exc
 
     # Find or auto-create the account.
@@ -295,7 +468,7 @@ async def sms_login(request: Request, payload: dict) -> dict:
         except AuthError as exc:
             raise HTTPException(
                 status_code=400,
-                detail={"error": exc.code, "message": exc.message},
+                detail=_error_response(request, exc),
             ) from exc
 
     settings = get_settings()
@@ -329,7 +502,12 @@ async def refresh(request: Request, payload: dict) -> dict:
     if not refresh_token or not isinstance(refresh_token, str):
         raise HTTPException(
             status_code=400,
-            detail={"error": "INVALID_REFRESH_TOKEN", "message": "refresh_token required"},
+            detail=localized_error_response(
+                request,
+                code="INVALID_REFRESH_TOKEN",
+                key="auth.invalid_refresh_token",
+                fallback_message="refresh_token required",
+            ),
         )
 
     try:
@@ -341,7 +519,7 @@ async def refresh(request: Request, payload: dict) -> dict:
     except JWTError as exc:
         raise HTTPException(
             status_code=401,
-            detail={"error": exc.code, "message": exc.message},
+            detail=_error_response(request, exc),
         ) from exc
 
     parent_id = claims["sub"]
@@ -370,6 +548,7 @@ async def refresh(request: Request, payload: dict) -> dict:
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     parent: Annotated[ParentAccount, Depends(get_current_parent)],
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> dict:
@@ -389,7 +568,12 @@ async def logout(
         # Should be impossible — the dep would have raised 401.
         raise HTTPException(
             status_code=401,
-            detail={"error": "MISSING_TOKEN", "message": "Bearer token required"},
+            detail=localized_error_response(
+                request,
+                code="MISSING_TOKEN",
+                key="auth.missing_token",
+                fallback_message="Bearer token required",
+            ),
         )
     token = authorization[7:].strip()
     try:
@@ -402,7 +586,11 @@ async def logout(
         # Dep already validated; this is purely defensive.
         raise HTTPException(
             status_code=401,
-            detail={"error": "INVALID_TOKEN"},
+            detail=localized_error_response(
+                request,
+                code="INVALID_TOKEN",
+                key="auth.token_invalid",
+            ),
         )
     jti = claims.get("jti")
     if jti:
