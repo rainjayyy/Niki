@@ -211,6 +211,20 @@ class AuthAuditLogger:
                 ),
             )
             await self.dispatcher.dispatch(alert)
+            # BE-RT-002: also publish to the in-process SSE
+            # broker so subscribed parents see the alert in
+            # < 5s. Failures are non-fatal — the broker is a
+            # best-effort side-channel.
+            try:
+                from niki.realtime.alert_broker import (
+                    get_alert_broker,
+                )
+                get_alert_broker().publish(alert)
+            except Exception as broker_exc:  # pragma: no cover
+                logger.warning(
+                    "auth.audit.broker_publish_failed",
+                    error=str(broker_exc),
+                )
         except Exception as exc:  # pragma: no cover
             logger.error(
                 "auth.audit.alert_dispatch_failed",

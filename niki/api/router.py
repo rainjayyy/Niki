@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from niki.api.alerts import router as alerts_router
 from niki.api.audio import router as audio_router
 from niki.api.auth import router as auth_router
 from niki.api.auth_audit import router as auth_audit_router
@@ -89,6 +90,9 @@ api_router.include_router(children_router)
 
 # BE-AUTH-001-rollout-audit: lateral-auth audit log query
 api_router.include_router(auth_audit_router)
+
+# BE-RT-002: realtime alert SSE stream
+api_router.include_router(alerts_router)
 
 # BE-PUSH-001: push channel registration + preferences
 api_router.include_router(push_router)
