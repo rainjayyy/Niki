@@ -11,6 +11,7 @@ from niki.api.content_policy import router as content_policy_router
 from niki.api.dashboard import router as dashboard_router
 from niki.api.children import router as children_router
 from niki.api.data_export import router as data_export_router
+from niki.api.deletion import router as deletion_router
 from niki.api.emotion import router as emotion_router
 from niki.api.encyclopedia import router as encyclopedia_router
 from niki.api.health import router as health_router
@@ -94,8 +95,10 @@ api_router.include_router(auth_audit_router)
 # BE-RT-002: realtime alert SSE stream
 api_router.include_router(alerts_router)
 
+# BE-COMP-005: deletion receipt PDF
+api_router.include_router(deletion_router)
+
 # BE-PUSH-001: push channel registration + preferences
 api_router.include_router(push_router)
 
-# Future routers will be added here:
-# api_router.include_router(admin_router)      # Admin & pipeline management
+
