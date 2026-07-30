@@ -24,51 +24,61 @@ Authorization model:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 from niki.auth.pairing import get_pairing_store
 from niki.services.child_registry import get_child_registry
 
+from niki.api._i18n import localized_error_response
+
 router = APIRouter(prefix="/pairing", tags=["pairing"])
 
 
-def _bad_request(code: str, message: str) -> HTTPException:
+def _bad_request(
+    request: Request, code: str, message: str
+) -> HTTPException:
     return HTTPException(
         status_code=400,
-        detail={"error": code, "message": message},
+        detail=localized_error_response(
+            request,
+            code=code,
+            key="auth.signup_missing_field",
+            fallback_message=message,
+        ),
     )
 
 
-def _require_child_id(payload: dict) -> str:
+def _require_child_id(request: Request, payload: dict) -> str:
     if not isinstance(payload, dict):
-        raise _bad_request("BAD_REQUEST", "body must be a JSON object")
+        raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
     child_id = payload.get("child_id")
     if not isinstance(child_id, str) or not child_id:
         raise _bad_request(
-            "BAD_REQUEST", "child_id is required and must be a string"
+            request, "BAD_REQUEST", "child_id is required and must be a string"
         )
     return child_id
 
 
-def _require_code(payload: dict) -> str:
+def _require_code(request: Request, payload: dict) -> str:
     if not isinstance(payload, dict):
-        raise _bad_request("BAD_REQUEST", "body must be a JSON object")
+        raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
     code = payload.get("code")
     if not isinstance(code, str) or not code:
         raise _bad_request(
-            "BAD_REQUEST", "code is required and must be a string"
+            request, "BAD_REQUEST", "code is required and must be a string"
         )
     if len(code) != 6 or not code.isdigit():
         raise _bad_request(
-            "BAD_REQUEST", "code must be a 6-digit numeric string"
+            request, "BAD_REQUEST", "code must be a 6-digit numeric string"
         )
     return code
 
 
 @router.post("/code")
 async def create_pairing_code(
+    request: Request,
     payload: dict,
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
@@ -83,25 +93,31 @@ async def create_pairing_code(
         403 PARENT_CHILD_MISMATCH    - child isn't owned by caller
         404 CHILD_NOT_FOUND          - child isn't registered at all
     """
-    child_id = _require_child_id(payload)
+    child_id = _require_child_id(request, payload)
 
     registry = get_child_registry()
     registered_parent = registry.get_parent_of(child_id)
     if registered_parent is None:
         raise HTTPException(
             status_code=404,
-            detail={
-                "error": "CHILD_NOT_FOUND",
-                "message": f"No child registered with id {child_id!r}",
-            },
+            detail=localized_error_response(
+                request,
+                code="CHILD_NOT_FOUND",
+                key="auth.child_not_found",
+                fallback_message=(
+                    f"No child registered with id {child_id!r}"
+                ),
+            ),
         )
     if registered_parent != parent.id:
         raise HTTPException(
             status_code=403,
-            detail={
-                "error": "PARENT_CHILD_MISMATCH",
-                "message": "Token does not own this child_id",
-            },
+            detail=localized_error_response(
+                request,
+                code="PARENT_CHILD_MISMATCH",
+                key="auth.parent_child_mismatch",
+                fallback_message="Token does not own this child_id",
+            ),
         )
 
     record = get_pairing_store().create(
@@ -119,7 +135,9 @@ async def create_pairing_code(
 
 
 @router.post("/consume")
-async def consume_pairing_code(payload: dict) -> dict:
+async def consume_pairing_code(
+    request: Request, payload: dict
+) -> dict:
     """Redeem a 6-digit code (called by the kid's H5 — unauthenticated).
 
     Body: ``{"code": "123456"}``
@@ -132,15 +150,19 @@ async def consume_pairing_code(payload: dict) -> dict:
         400 BAD_REQUEST              - malformed body
         404 PAIRING_CODE_INVALID     - code unknown, expired, or used
     """
-    code = _require_code(payload)
+    code = _require_code(request, payload)
     record = get_pairing_store().consume(code)
     if record is None:
         raise HTTPException(
             status_code=404,
-            detail={
-                "error": "PAIRING_CODE_INVALID",
-                "message": "Code is unknown, expired, or already used",
-            },
+            detail=localized_error_response(
+                request,
+                code="PAIRING_CODE_INVALID",
+                key="auth.signup_missing_field",
+                fallback_message=(
+                    "Code is unknown, expired, or already used"
+                ),
+            ),
         )
     # NOTE: confirmation push to parent's existing devices lives in
     # BE-PUSH-002 (real vendor delivery) — this ticket only flips

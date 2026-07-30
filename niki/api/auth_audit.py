@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from niki.api._i18n import localized_error_response
 from niki.api._pagination import (
     ListQueryParams,
     list_query_params,
@@ -38,6 +39,7 @@ _AUDIT_ALLOWED_SORTS = ("created_at", "severity")
 
 @router.get("/recent")
 async def list_recent_audit(
+    request: Request,
     limit: int = Query(50, ge=1, le=_MAX_LIMIT),
     event_type: Optional[str] = Query(None, max_length=64),
     params: ListQueryParams = Depends(list_query_params),
@@ -62,23 +64,27 @@ async def list_recent_audit(
         # ever bypassed.
         raise HTTPException(
             status_code=400,
-            detail={
-                "error": "BAD_REQUEST",
-                "message": f"limit must be <= {_MAX_LIMIT}",
-            },
+            detail=localized_error_response(
+                request,
+                code="BAD_REQUEST",
+                key="auth_audit.bad_request",
+                fallback_message=f"limit must be <= {_MAX_LIMIT}",
+            ),
         )
 
     # Whitelist sort field (helper itself does not enforce it).
     if params.sort not in _AUDIT_ALLOWED_SORTS:
         raise HTTPException(
             status_code=400,
-            detail={
-                "error": "INVALID_SORT",
-                "message": (
+            detail=localized_error_response(
+                request,
+                code="INVALID_SORT",
+                key="auth_audit.invalid_sort",
+                fallback_message=(
                     f"sort must be one of "
                     f"{sorted(_AUDIT_ALLOWED_SORTS)}"
                 ),
-            },
+            ),
         )
 
     repo = get_auth_audit_log_repository()

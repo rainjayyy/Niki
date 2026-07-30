@@ -19,6 +19,7 @@ from niki.infrastructure.heartbeat import HeartbeatService
 from niki.infrastructure.neo4j import Neo4jClient
 from niki.infrastructure.postgres import PostgresClient
 from niki.infrastructure.redis import RedisClient
+from niki.i18n.middleware import LanguageMiddleware
 from niki.middleware.cors import setup_cors
 from niki.middleware.error_handler import setup_error_handlers
 from niki.middleware.min_client_version import (
@@ -141,6 +142,12 @@ def create_app() -> FastAPI:
     setup_cors(app)
     setup_error_handlers(app)
     setup_rate_limit(app)
+
+    # BE-I18N-001: stash the resolved language on `request.state.lang`
+    # so handlers can render localized error messages via the
+    # `Translator`. Runs after CORS so the response `Vary` header is
+    # added to CORS-decorated responses too.
+    app.add_middleware(LanguageMiddleware)
 
     # BE-COMP-003: reject clients older than the minimum
     # supported version. Reads `X-Client-Version`.

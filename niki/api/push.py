@@ -18,8 +18,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from niki.api._i18n import localized_error_response, resolve_lang
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 from niki.db.models import (
@@ -30,6 +31,7 @@ from niki.db.repositories import (
     get_push_device_repository,
     get_push_prefs_repository,
 )
+from niki.i18n.translator import get_translator
 
 
 router = APIRouter(prefix="/push", tags=["push"])
@@ -42,16 +44,48 @@ _DEVICE_ID_MAX_LEN = 64
 _DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
-def _bad_request(code: str, message: str) -> HTTPException:
+# Map of structured error code -> dotted i18n key. Codes that
+# don't have a catalog entry yet fall back to the literal message.
+_PUSH_KEY_BY_CODE: dict[str, str] = {
+    "INVALID_DEVICE_ID": "media.invalid_device_id",
+    "INVALID_CHANNEL": "media.invalid_channel",
+    "INVALID_PLATFORM": "media.invalid_platform",
+    "INVALID_PUSH_TOKEN": "media.invalid_push_token",
+    "INVALID_QUIET_HOUR": "media.invalid_quiet_hour",
+    "INVALID_ENABLED_CHANNELS": "media.invalid_enabled_channels",
+    "INVALID_HIGH_RISK_ONLY": "media.invalid_high_risk_only",
+    "BAD_REQUEST": "auth.signup_missing_field",
+}
+
+
+def _bad_request(
+    request: Request,
+    code: str,
+    message: str,
+) -> HTTPException:
+    """Render a 400 with the localized `message` field."""
+    key = _PUSH_KEY_BY_CODE.get(code)
+    if key is not None:
+        return HTTPException(
+            status_code=400,
+            detail=localized_error_response(
+                request,
+                code=code,
+                key=key,
+                fallback_message=message,
+            ),
+        )
     return HTTPException(
         status_code=400,
         detail={"error": code, "message": message},
     )
 
 
-def _validate_register_payload(payload: dict) -> tuple[str, str, str, str]:
+def _validate_register_payload(
+    request: Request, payload: dict
+) -> tuple[str, str, str, str]:
     if not isinstance(payload, dict):
-        raise _bad_request("BAD_REQUEST", "body must be a JSON object")
+        raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
 
     device_id = payload.get("device_id", "")
     channel = payload.get("channel", "")
@@ -60,26 +94,31 @@ def _validate_register_payload(payload: dict) -> tuple[str, str, str, str]:
 
     if not isinstance(device_id, str) or not _DEVICE_ID_RE.match(device_id):
         raise _bad_request(
+            request,
             "INVALID_DEVICE_ID",
             "device_id must be 1-64 chars of [A-Za-z0-9._-]",
         )
     if channel not in VALID_CHANNELS:
         raise _bad_request(
+            request,
             "INVALID_CHANNEL",
             f"channel must be one of {sorted(VALID_CHANNELS)}",
         )
     if platform not in VALID_PLATFORMS:
         raise _bad_request(
+            request,
             "INVALID_PLATFORM",
             f"platform must be one of {sorted(VALID_PLATFORMS)}",
         )
     if not isinstance(push_token, str) or not push_token:
         raise _bad_request(
+            request,
             "INVALID_PUSH_TOKEN",
             "push_token is required",
         )
     if len(push_token) > _TOKEN_MAX_LEN:
         raise _bad_request(
+            request,
             "INVALID_PUSH_TOKEN",
             f"push_token exceeds {_TOKEN_MAX_LEN} chars",
         )
@@ -88,12 +127,13 @@ def _validate_register_payload(payload: dict) -> tuple[str, str, str, str]:
 
 @router.post("/register")
 async def register(
+    request: Request,
     payload: dict,
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
     """Register (or re-register) the calling parent's device."""
     device_id, channel, push_token, platform = _validate_register_payload(
-        payload
+        request, payload
     )
     repo = get_push_device_repository()
     row = await repo.upsert(
@@ -117,17 +157,19 @@ async def register(
 
 @router.post("/unregister")
 async def unregister(
+    request: Request,
     payload: dict,
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
     """Remove a registered device. Idempotent — returns
     `unregistered: true` even if nothing matched."""
     if not isinstance(payload, dict):
-        raise _bad_request("BAD_REQUEST", "body must be a JSON object")
+        raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
     device_id = payload.get("device_id")
     push_token = payload.get("push_token")
     if not device_id and not push_token:
         raise _bad_request(
+            request,
             "BAD_REQUEST",
             "either device_id or push_token is required",
         )
@@ -170,35 +212,41 @@ async def list_devices(
     }
 
 
-def _validate_quiet_hour(value: Any, field: str) -> int | None:
+def _validate_quiet_hour(
+    request: Request, value: Any, field: str
+) -> int | None:
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool):
         raise _bad_request(
+            request,
             "INVALID_QUIET_HOUR",
             f"{field} must be an integer 0-23",
         )
     if not 0 <= value <= 23:
         raise _bad_request(
+            request,
             "INVALID_QUIET_HOUR",
             f"{field} must be 0-23",
         )
     return value
 
 
-def _validate_channels(value: Any) -> list[str]:
+def _validate_channels(request: Request, value: Any) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list) or not all(
         isinstance(c, str) for c in value
     ):
         raise _bad_request(
+            request,
             "INVALID_ENABLED_CHANNELS",
             "enabled_channels must be a list of strings",
         )
     unknown = [c for c in value if c not in VALID_CHANNELS]
     if unknown:
         raise _bad_request(
+            request,
             "INVALID_ENABLED_CHANNELS",
             f"unknown channels: {unknown}",
         )
@@ -219,6 +267,7 @@ async def get_prefs(
 
 @router.patch("/prefs")
 async def update_prefs(
+    request: Request,
     payload: dict,
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
@@ -228,19 +277,26 @@ async def update_prefs(
     keep their previous values.
     """
     if not isinstance(payload, dict):
-        raise _bad_request("BAD_REQUEST", "body must be a JSON object")
-    quiet_start = _validate_quiet_hour(payload.get("quiet_start"), "quiet_start")
-    quiet_end = _validate_quiet_hour(payload.get("quiet_end"), "quiet_end")
+        raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
+    quiet_start = _validate_quiet_hour(
+        request, payload.get("quiet_start"), "quiet_start"
+    )
+    quiet_end = _validate_quiet_hour(
+        request, payload.get("quiet_end"), "quiet_end"
+    )
     if (
         "enabled_channels" in payload
         and payload["enabled_channels"] is not None
     ):
-        enabled_channels = _validate_channels(payload["enabled_channels"])
+        enabled_channels = _validate_channels(
+            request, payload["enabled_channels"]
+        )
     else:
         enabled_channels = None
     high_risk_only = payload.get("high_risk_only")
     if high_risk_only is not None and not isinstance(high_risk_only, bool):
         raise _bad_request(
+            request,
             "INVALID_HIGH_RISK_ONLY",
             "high_risk_only must be a boolean",
         )

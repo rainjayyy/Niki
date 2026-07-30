@@ -17,6 +17,7 @@ from datetime import datetime
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Request
 from fastapi.responses import Response
 
 from niki.auth.account import ParentAccount
@@ -24,6 +25,8 @@ from niki.auth.dependencies import get_current_parent, get_owned_child_id
 
 from niki.agents.emotion import EmotionBaseline, EmotionRecord
 from niki.dashboard.service import DashboardService
+
+from niki.api._i18n import localized_error_response
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -47,6 +50,7 @@ async def weekly_report(
 
 @router.get("/weekly-report/{child_id}/pdf")
 async def weekly_report_pdf(
+        request: Request,
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
         template: str = "child",
@@ -75,13 +79,15 @@ async def weekly_report_pdf(
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail={
-                "error": "INVALID_TEMPLATE",
-                "message": (
+            detail=localized_error_response(
+                request,
+                code="INVALID_TEMPLATE",
+                key="dashboard.invalid_template",
+                fallback_message=(
                     f"template must be one of "
                     f"{[t.value for t in ReportTemplate]}"
                 ),
-            },
+            ),
         )
 
     report = await _dashboard.generate_weekly_report(
