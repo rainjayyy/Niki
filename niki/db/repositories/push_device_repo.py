@@ -89,6 +89,28 @@ class PushDeviceRepository(ABC):
         """Lookup by push_token (used by future BE-PUSH-002 to
         route a delivery)."""
 
+    @abstractmethod
+    async def set_enabled(
+        self, parent_id: str, device_id: str, enabled: bool
+    ) -> bool:
+        """Enable / disable a single device. Returns True if
+        the row was updated, False if no such device.
+
+        BE-DEV-003: the "kick" path uses this. Disabling a
+        device doesn't delete it; the row stays so the
+        frontend can show "已登出" + a re-enable button.
+        """
+
+    @abstractmethod
+    async def list_active_for_parent(
+        self, parent_id: str
+    ) -> list[dict[str, Any]]:
+        """List only the enabled devices for `parent_id`.
+
+        Used by GET /devices/active (BE-DEV-003) and by
+        future BE-PUSH-002 to pick delivery targets.
+        """
+
 
 # ---------------------------------------------------------------------------
 # In-memory implementation
@@ -191,6 +213,26 @@ class InMemoryPushDeviceRepository(PushDeviceRepository):
             row = self._rows.get((parent_id, device_id))
             return deepcopy(row) if row else None
 
+    async def set_enabled(
+        self, parent_id: str, device_id: str, enabled: bool
+    ) -> bool:
+        with self._lock:
+            row = self._rows.get((parent_id, device_id))
+            if row is None:
+                return False
+            row["enabled"] = enabled
+            return True
+
+    async def list_active_for_parent(
+        self, parent_id: str
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                deepcopy(row)
+                for (pid, _did), row in self._rows.items()
+                if pid == parent_id and row.get("enabled", True)
+            ]
+
     def __len__(self) -> int:
         return len(self._rows)
 
@@ -285,6 +327,34 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
         )
         row = result.scalar_one_or_none()
         return row.to_dict() if row else None
+
+    async def set_enabled(
+        self, parent_id: str, device_id: str, enabled: bool
+    ) -> bool:
+        from sqlalchemy import update
+        result = await self._session.execute(
+            update(PushDevice)
+            .where(
+                PushDevice.parent_id == parent_id,
+                PushDevice.device_id == device_id,
+            )
+            .values(enabled=enabled)
+        )
+        await self._session.flush()
+        return (result.rowcount or 0) > 0
+
+    async def list_active_for_parent(
+        self, parent_id: str
+    ) -> list[dict[str, Any]]:
+        result = await self._session.execute(
+            select(PushDevice)
+            .where(
+                PushDevice.parent_id == parent_id,
+                PushDevice.enabled.is_(True),
+            )
+            .order_by(PushDevice.last_active_at.desc())
+        )
+        return [r.to_dict() for r in result.scalars().all()]
 
 
 # ---------------------------------------------------------------------------

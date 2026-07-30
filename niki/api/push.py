@@ -301,3 +301,62 @@ async def unregister_my_device(
     # separate method needed.
     removed = await repo.delete_by_device_id(parent.id, device_id)
     return {"unregistered": True, "removed": removed}
+
+
+# BE-DEV-003: active device list + kick endpoint
+@router.get("/active")
+async def list_active_devices(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
+    """List only the *enabled* devices for the calling parent.
+
+    The frontend uses this to render a "currently signed-in"
+    panel and to expose a "踢下线" button per device.
+    """
+    from niki.db.repositories import get_push_device_repository
+    repo = get_push_device_repository()
+    devices = await repo.list_active_for_parent(parent.id)
+    safe = [
+        {
+            "device_id": d["device_id"],
+            "channel": d["channel"],
+            "platform": d["platform"],
+            "last_active_at": d["last_active_at"],
+        }
+        for d in devices
+    ]
+    return {"count": len(safe), "devices": safe}
+
+
+@router.post("/kick/{device_id}")
+async def kick_device(
+    device_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
+    """Disable a single device (BE-DEV-003: "踢下线" flow).
+
+    Disabling a device doesn't delete the row — the parent
+    can re-enable it later by re-registering via POST /push/
+    register. lateral-auth: device must belong to the calling
+    parent (the repo's set_enabled filters by parent_id).
+    """
+    from niki.db.repositories import get_push_device_repository
+    repo = get_push_device_repository()
+    updated = await repo.set_enabled(parent.id, device_id, False)
+    return {"kicked": updated}
+
+
+@router.post("/enable/{device_id}")
+async def re_enable_device(
+    device_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
+    """Re-enable a previously kicked device.
+
+    Counterpart to /kick/{device_id}. lateral-auth: same
+    scoping as /kick.
+    """
+    from niki.db.repositories import get_push_device_repository
+    repo = get_push_device_repository()
+    updated = await repo.set_enabled(parent.id, device_id, True)
+    return {"enabled": updated}
