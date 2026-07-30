@@ -9,6 +9,7 @@ from niki.api.auth_audit import router as auth_audit_router
 from niki.api.chat_stream import router as chat_stream_router
 from niki.api.content_policy import router as content_policy_router
 from niki.api.dashboard import router as dashboard_router
+from niki.api.config import router as config_router
 from niki.api.children import router as children_router
 from niki.api.data_export import router as data_export_router
 from niki.api.deletion import router as deletion_router
@@ -97,6 +98,9 @@ api_router.include_router(alerts_router)
 
 # BE-COMP-005: deletion receipt PDF
 api_router.include_router(deletion_router)
+
+# BE-MISC-001: client runtime config
+api_router.include_router(config_router)
 
 # BE-PUSH-001: push channel registration + preferences
 api_router.include_router(push_router)
