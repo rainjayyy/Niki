@@ -1,7 +1,7 @@
 # Niki — Makefile
 # Quick reference for common development commands.
 
-.PHONY: help install dev test lint format typecheck clean docker-up docker-down
+.PHONY: help install dev test lint format typecheck clean docker-up docker-down ts-sdk ts-sdk-check
 
 # Default target
 help:
@@ -20,6 +20,10 @@ help:
 	@echo "  make format       Auto-format code with ruff"
 	@echo "  make typecheck    Run mypy type checking"
 	@echo "  make check        Run all checks (lint + typecheck + test)"
+	@echo ""
+	@echo "Codegen:"
+	@echo "  make ts-sdk        Generate the TypeScript SDK into frontend/src/api"
+	@echo "  make ts-sdk-check  Fail if the checked-in SDK is stale"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean        Remove build artifacts and cache files"
@@ -64,6 +68,17 @@ format:
 
 typecheck:
 	mypy niki/ --show-error-codes
+
+# ---- Codegen (BE-API-007) ----
+
+# Regenerate the TypeScript client from the FastAPI OpenAPI schema.
+# Zero dependencies: stdlib + the already-installed FastAPI, no npm.
+ts-sdk:
+	python -m scripts.gen_ts_sdk
+
+# CI guard: exits 1 when frontend/src/api/ no longer matches the routes.
+ts-sdk-check:
+	python -m scripts.gen_ts_sdk --check
 
 # ---- Full check ----
 

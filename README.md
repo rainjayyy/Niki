@@ -284,7 +284,47 @@ make format     # Auto-format code
 make typecheck  # mypy
 make docker-up  # Start infrastructure
 make docker-down # Stop infrastructure
+make ts-sdk     # Regenerate the TypeScript SDK (BE-API-007)
 ```
+
+### TypeScript SDK generation (BE-API-007)
+
+The frontend does not hand-write `fetch()` calls or response types. Instead,
+`scripts/gen_ts_sdk.py` reads the OpenAPI document FastAPI already builds
+(`app.openapi()`, in-process — no server, no database) and emits a typed
+TypeScript client into `frontend/src/api/`: one module per OpenAPI tag
+(`dashboard.ts`, `memory.ts`, …) holding one `async function` per endpoint,
+a `models.ts` with the interfaces derived from `components.schemas`, a
+~200-line zero-dependency `client.ts` runtime (base URL, query encoding,
+bearer token, §6.3 error shape → `ApiError`), and an `index.ts` barrel.
+The generator itself has no third-party Python dependency and adds **no npm
+dependency** — deliberately not `openapi-typescript-codegen`, whose output
+drags in axios and a mutable global config singleton. Generation is one-shot
+with no runtime reflection, and output is deterministic, so re-running after
+a backend change produces a reviewable diff. `make ts-sdk-check` fails when
+the checked-in SDK has drifted from the routes.
+
+```bash
+make ts-sdk                                   # → frontend/src/api/
+python -m scripts.gen_ts_sdk --out /tmp/api    # somewhere else
+python -m scripts.gen_ts_sdk --dry-run         # manifest only
+make ts-sdk-check                              # CI staleness guard
+```
+
+Then in the frontend:
+
+```ts
+import { configure, getHealth, getDashboardWeeklyReport } from "@/api";
+
+configure({ baseUrl: "https://api.niki.example", getToken: () => authToken });
+
+const health = await getHealth();                       // HealthResponse
+const report = await getDashboardWeeklyReport(childId);  // typed, cancellable
+```
+
+Known gap: `multipart/form-data` bodies (4 upload/OCR/transcribe endpoints)
+are not generated yet — those methods take the form body via `options.body`
+until BE-API-008. See `docs/be-issues/BE-API-007.md`.
 
 ### Testing
 
