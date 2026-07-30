@@ -140,10 +140,46 @@ class CognitiveGraph:
     def get_entity(self, name: str) -> EntityNode | None:
         return self._entities.get(name)
 
-    def list_entities(self, entity_type: str | None = None) -> list[EntityNode]:
+    def list_entities(
+        self,
+        entity_type: str | None = None,
+        *,
+        sort: str = "first_seen",
+        order: str = "desc",
+        keyword: str | None = None,
+    ) -> list[EntityNode]:
+        """List entities, optionally filtered by type + keyword.
+
+        BE-API-004: `keyword` is a case-insensitive substring match
+        over `name` and the joined aliases. `sort` is whitelisted
+        below: an unrecognised field falls back to `first_seen`
+        so a bad caller can't 500 the endpoint. `order='asc'`
+        reverses the default (newest first).
+        """
         entities = list(self._entities.values())
         if entity_type:
             entities = [e for e in entities if e.entity_type == entity_type]
+        normalised = (
+            keyword.strip().lower()
+            if isinstance(keyword, str) and keyword.strip()
+            else None
+        )
+        if normalised is not None:
+            def _matches(node: EntityNode) -> bool:
+                if normalised in node.name.lower():
+                    return True
+                for alias in node.aliases:
+                    if normalised in alias.lower():
+                        return True
+                return False
+            entities = [e for e in entities if _matches(e)]
+        allowed_sorts = {"first_seen", "last_seen", "name"}
+        sort_field = sort if sort in allowed_sorts else "first_seen"
+        entities = sorted(
+            entities,
+            key=lambda n: getattr(n, sort_field, None) or "",
+            reverse=(order == "desc"),
+        )
         return entities
 
     # ---- Relation management ----

@@ -21,7 +21,12 @@ from typing import Any
 from fastapi import APIRouter
 from fastapi import Depends
 
-from niki.api._pagination import paginate, parse_pagination
+from niki.api._pagination import (
+    ListQueryParams,
+    list_query_params,
+    paginate,
+    parse_pagination,
+)
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
@@ -138,10 +143,24 @@ async def search_long_term(payload: dict,
 async def list_entities(
     parent: ParentAccount = Depends(get_current_parent),
     pagination: tuple[int, int] = Depends(parse_pagination),
+    params: ListQueryParams = Depends(list_query_params),
 ) -> dict:
-    """List entities in the cognitive graph (BE-API-003: paginated)."""
+    """List entities in the cognitive graph (BE-API-003: paginated).
+
+    BE-API-004: ?keyword= case-insensitive substring over name +
+    aliases; ?sort= picks `first_seen` (default), `last_seen`,
+    or `name`; ?order= `asc` | `desc`. Since this endpoint does
+    not store a created_at on entities, `since`/`until` are not
+    applied — the helper still parses them so callers can use
+    the same URL convention across endpoints, but they are
+    silently ignored here (with a documented note).
+    """
     page, page_size = pagination
-    entities = _graph.list_entities()
+    entities = _graph.list_entities(
+        sort=params.sort,
+        order=params.order,
+        keyword=params.keyword,
+    )
     payload = paginate(
         [e.to_dict() for e in entities],
         page,

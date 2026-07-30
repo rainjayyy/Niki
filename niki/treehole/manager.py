@@ -253,13 +253,30 @@ class TreeholeManager:
         return TreeholeSummary.from_dict(json.loads(plaintext))
 
     async def list_summaries(
-        self, child_id: str | None = None
+        self,
+        child_id: str | None = None,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        sort: str = "timestamp",
+        order: str = "desc",
+        keyword: str | None = None,
     ) -> list[TreeholeSummary]:
         """List summaries for a child (or all children if child_id is None).
 
         Decrypts on the fly. For dashboard reads only — never
         decodes for the engage() / baseline() path (those use
         aggregated forms).
+
+        BE-API-004: optional `since` (inclusive) / `until`
+        (exclusive) / `keyword` (case-insensitive substring over
+        the serialised summary, so it covers emotion_valence /
+        emotion_intensity / emotion_category) / `sort` /
+        `order` (defaults to timestamp desc — newest first).
+        The caller (endpoint) is expected to whitelist `sort`
+        against its allowed set; this method will fall back to
+        `timestamp` if asked to sort by an unknown field so it
+        never raises on bad input.
         """
         if child_id is None:
             rows = await self._repo.list_all()
@@ -280,6 +297,31 @@ class TreeholeManager:
                     row_id=row.get("id"),
                     error=str(exc),
                 )
+        # ---- BE-API-004: time-window + keyword + sort ----
+        if since is not None or until is not None:
+            out = [
+                s for s in out
+                if _summary_in_window(s, since, until)
+            ]
+        normalised_keyword = (
+            keyword.strip().lower()
+            if isinstance(keyword, str) and keyword.strip()
+            else None
+        )
+        if normalised_keyword is not None:
+            out = [
+                s for s in out
+                if normalised_keyword in json.dumps(s.to_dict(),
+                                                     ensure_ascii=False).lower()
+            ]
+        # Whitelist sort field; fall back to timestamp so the
+        # response is still deterministic on bad input.
+        allowed_sorts = {"timestamp", "emotion_intensity"}
+        sort_field = sort if sort in allowed_sorts else "timestamp"
+        out.sort(
+            key=lambda s: s.to_dict().get(sort_field) or "",
+            reverse=(order == "desc"),
+        )
         return out
 
     async def aggregate_for_baseline(
@@ -347,3 +389,29 @@ class TreeholeManager:
         dropped_engagements = await self._repo.delete_all_for_child(child_id)
         await self._agg_repo.drop_all_for_child(child_id)
         return dropped_engagements
+
+
+def _summary_in_window(
+    summary: TreeholeSummary,
+    since: datetime | None,
+    until: datetime | None,
+) -> bool:
+    """Return True if `summary` falls inside `[since, until)`.
+
+    The summary's `timestamp` is an ISO 8601 string; we
+    parse it lazily so a malformed row never crashes a list
+    query.
+    """
+    try:
+        ts = datetime.fromisoformat(summary.timestamp)
+    except (TypeError, ValueError):
+        # Bad row — drop it from any filtered result rather
+        # than 500 the caller.
+        return False
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    if since is not None and ts < since:
+        return False
+    if until is not None and ts >= until:
+        return False
+    return True

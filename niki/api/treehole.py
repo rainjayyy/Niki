@@ -15,7 +15,12 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from niki.api._pagination import paginate, parse_pagination
+from niki.api._pagination import (
+    ListQueryParams,
+    list_query_params,
+    paginate,
+    parse_pagination,
+)
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent, get_owned_child_id
 
@@ -77,10 +82,24 @@ async def list_summaries(
         child_id: str = Depends(get_owned_child_id),
         parent: ParentAccount = Depends(get_current_parent),
         pagination: tuple[int, int] = Depends(parse_pagination),
+        params: ListQueryParams = Depends(list_query_params),
     ) -> dict:
-    """List stored treehole summaries (parent dashboard, BE-API-003 paginated)."""
+    """List stored treehole summaries (parent dashboard, BE-API-003 paginated).
+
+    BE-API-004: optional ?since=&until=&keyword=&sort=&order= filter
+    the summary list server-side. Default sort is `timestamp`
+    desc (newest first). Allowed sort fields: timestamp,
+    emotion_intensity.
+    """
     page, page_size = pagination
-    summaries = await _manager.list_summaries(child_id=child_id)
+    summaries = await _manager.list_summaries(
+        child_id=child_id,
+        since=params.since,
+        until=params.until,
+        sort=params.sort,
+        order=params.order,
+        keyword=params.keyword,
+    )
     payload = paginate(
         [s.to_dict() for s in summaries],
         page,
