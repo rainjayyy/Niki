@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_version: str = "v1"
+    # BE-COMP-003: clients older than this version get 426
+    # Upgrade Required. Frontend reports its version via the
+    # X-Client-Version header.
+    min_supported_version: str = "1.0.0"
 
     # --- DeepSeek-V4 (deep reasoning — child-facing output generation) ---
     deepseek_api_key: str = ""

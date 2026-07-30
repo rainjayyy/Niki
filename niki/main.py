@@ -21,6 +21,9 @@ from niki.infrastructure.postgres import PostgresClient
 from niki.infrastructure.redis import RedisClient
 from niki.middleware.cors import setup_cors
 from niki.middleware.error_handler import setup_error_handlers
+from niki.middleware.min_client_version import (
+    MinClientVersionMiddleware,
+)
 from niki.middleware.rate_limit import setup_rate_limit
 
 logger = structlog.get_logger(__name__)
@@ -131,6 +134,13 @@ def create_app() -> FastAPI:
     setup_cors(app)
     setup_error_handlers(app)
     setup_rate_limit(app)
+
+    # BE-COMP-003: reject clients older than the minimum
+    # supported version. Reads `X-Client-Version`.
+    app.add_middleware(
+        MinClientVersionMiddleware,
+        min_supported_version=settings.min_supported_version,
+    )
 
     # Routes
     app.include_router(api_router)
