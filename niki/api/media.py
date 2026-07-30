@@ -1,4 +1,4 @@
-"""Media API endpoints (BE-MEDIA-001).
+"""Media API endpoints (BE-MEDIA-001, BE-MEDIA-004).
 
 Currently exposes:
     POST /api/v1/media/upload
@@ -7,6 +7,15 @@ Currently exposes:
         - delegates to MediaStorage.put(...)
         - returns {file_id, mime_type, size_bytes, sha1, access_url,
                    uploaded_at, category}
+    POST /api/v1/media/avatar           (BE-MEDIA-004)
+        - multipart/form-data with field `file`
+        - optional form field `child_id` — when present, the caller
+          must own that child (lateral-auth gate)
+        - validates size ≤ 1 MB + image MIME via magic bytes
+        - delegates to MediaStorage.put(...)
+        - returns the avatar-specific shape
+          {child_id, file_id, access_url, mime_type, size_bytes,
+           sha1, category: "image", kind: "avatar"}
     GET /api/v1/media/{file_id}
         - reads back a previously uploaded file
         - accepts either the bare file_id (`f-abc12345`) or the
@@ -17,28 +26,31 @@ Currently exposes:
 
 from __future__ import annotations
 
-import base64
+import os
 import re
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
-
-from typing import Annotated
-
-from fastapi import Depends
 
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
+from niki.services.auth_audit import get_auth_audit_logger
+from niki.services.child_registry import get_child_registry
 
 from niki.media.storage import (
     EmptyFileError,
     FileTooLargeError,
     MediaStorageError,
     UnsupportedMimeError,
-    get_media_storage,
     _category_for,
+    _detect_mime,
+    get_media_storage,
 )
 from niki.middleware.rate_limit import limiter
+
+from niki.api._i18n import localized_error_response, resolve_lang
+from niki.i18n.translator import get_translator
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -63,6 +75,140 @@ def _extract_file_id(raw: str) -> str | None:
     return m.group(0) if m else None
 
 
+# ---------------------------------------------------------------------------
+# BE-MEDIA-004: avatar-specific upload shortcut
+# ---------------------------------------------------------------------------
+
+
+# Avatars are tiny: 1 MB cap (BE-MEDIA-004). This is tighter than
+# the 10 MB generic upload so a malicious frontend can't dump a
+# huge raw photo into the avatar slot.
+AVATAR_MAX_BYTES: int = 1_048_576  # 1 MiB
+
+
+def validate_image_for_avatar(
+    content: bytes,
+    mime_type: str | None,
+    max_bytes: int = AVATAR_MAX_BYTES,
+) -> str:
+    """Validate avatar bytes for the BE-MEDIA-004 endpoint.
+
+    Returns the magic-detected MIME if the file is `image/jpeg` or
+    `image/png` and the byte length is within `max_bytes`. The
+    tighter allow-list (jpg + png only — no webp/gif) keeps avatar
+    rendering predictable across clients.
+
+    Raises:
+        HTTPException(413) — bytes exceed max_bytes
+        HTTPException(415) — not a jpg/png image (magic-byte fail)
+
+    The check is deliberately order-sensitive: size first (cheap),
+    then MIME (magic-byte probe). Returning a string rather than
+    raising for the happy path lets the endpoint log the resolved
+    MIME once.
+    """
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "error": "AVATAR_TOO_LARGE",
+                "message": (
+                    f"avatar exceeds {max_bytes} bytes"
+                ),
+                "max_bytes": max_bytes,
+                "size_bytes": len(content),
+            },
+        )
+
+    detected = _detect_mime(content, mime_type)
+    if detected not in ("image/jpeg", "image/png"):
+        raise HTTPException(
+            status_code=415,
+            detail={
+                "error": "INVALID_AVATAR_MIME",
+                "message": (
+                    "avatar must be image/jpeg or image/png"
+                ),
+                "mime_type": detected or mime_type or "unknown",
+                "allowed": ["image/jpeg", "image/png"],
+            },
+        )
+    return detected
+
+
+async def _assert_parent_owns_child(
+    request: Request,
+    parent: ParentAccount,
+    child_id: str,
+) -> str:
+    """Lateral-auth gate for the avatar endpoint.
+
+    Mirrors the audit-aware logic in `auth.dependencies.get_owned_child_id`
+    but accepts `child_id` from the multipart form rather than the
+    path (the BE-MEDIA-004 endpoint doesn't put it in the URL).
+
+    - CHILD_NOT_FOUND  → 404
+    - PARENT_CHILD_MISMATCH → 403 (with audit event)
+    - returns the verified child_id
+
+    In test mode (`NIKI_TEST_FAKE_AUTH=1`), skips the parent match
+    so existing test infrastructure passes through.
+    """
+    if os.environ.get("NIKI_TEST_FAKE_AUTH") == "1":
+        return child_id
+
+    registered = get_child_registry().get_parent_of(child_id)
+    endpoint = f"{request.method} {request.url.path}"
+    client_ip: Optional[str] = (
+        request.client.host if request.client else None
+    )
+    if registered is None:
+        await get_auth_audit_logger().log_violation(
+            "child_not_found",
+            actor_parent_id=parent.id,
+            target_child_id=child_id,
+            reason=f"Child {child_id!r} not registered",
+            endpoint=endpoint,
+            method=request.method,
+            client_ip=client_ip,
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=localized_error_response(
+                request,
+                code="CHILD_NOT_FOUND",
+                key="auth.child_not_found",
+                fallback_message=(
+                    f"No child registered with id {child_id!r}"
+                ),
+            ),
+        )
+    if registered != parent.id:
+        await get_auth_audit_logger().log_violation(
+            "parent_child_mismatch",
+            actor_parent_id=parent.id,
+            target_child_id=child_id,
+            target_parent_id=registered,
+            reason=(
+                f"Parent {parent.id!r} tried to upload avatar for "
+                f"child {child_id!r} owned by {registered!r}"
+            ),
+            endpoint=endpoint,
+            method=request.method,
+            client_ip=client_ip,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=localized_error_response(
+                request,
+                code="PARENT_CHILD_MISMATCH",
+                key="auth.parent_child_mismatch",
+                fallback_message="Token does not own this child_id",
+            ),
+        )
+    return child_id
+
+
 @router.post("/upload")
 @limiter.limit("20/minute")
 async def upload(
@@ -85,21 +231,35 @@ async def upload(
     if not raw:
         raise HTTPException(
             status_code=400,
-            detail={"error": "EMPTY_FILE", "message": "file is empty"},
+            detail=localized_error_response(
+                request,
+                code="EMPTY_FILE",
+                key="media.empty_file",
+                fallback_message="file is empty",
+            ),
         )
 
     try:
         stored = get_media_storage().put(raw, mime_type=file.content_type)
     except EmptyFileError as exc:
         raise HTTPException(
-            status_code=400, detail={"error": "EMPTY_FILE"}
+            status_code=400,
+            detail=localized_error_response(
+                request,
+                code="EMPTY_FILE",
+                key="media.empty_file",
+            ),
         ) from exc
     except UnsupportedMimeError as exc:
         raise HTTPException(
             status_code=415,
             detail={
                 "error": "INVALID_MIME_TYPE",
-                "message": str(exc),
+                "message": get_translator().translate(
+                    "media.invalid_mime_type",
+                    resolve_lang(request),
+                    default=str(exc),
+                ),
                 "mime_type": exc.mime,
             },
         ) from exc
@@ -108,6 +268,10 @@ async def upload(
             status_code=413,
             detail={
                 "error": "FILE_TOO_LARGE",
+                "message": get_translator().translate(
+                    "media.file_too_large",
+                    resolve_lang(request),
+                ),
                 "max_bytes": exc.max_bytes,
                 "size_bytes": exc.size,
             },
@@ -117,7 +281,11 @@ async def upload(
             status_code=503,
             detail={
                 "error": "STORAGE_UNAVAILABLE",
-                "message": str(exc),
+                "message": get_translator().translate(
+                    "media.storage_unavailable",
+                    resolve_lang(request),
+                    default=str(exc),
+                ),
             },
         ) from exc
 
@@ -135,6 +303,120 @@ async def upload(
 # BE-MEDIA-001-rollout: register the more specific /thumb
 # route FIRST so the bare /{file_id:path} doesn't gobble the
 # /thumb suffix into the :path capture group.
+@router.post("/avatar")
+@limiter.limit("20/minute")
+async def upload_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    child_id: Annotated[
+        Optional[str],
+        Form(description="Optional child the avatar belongs to"),
+    ] = None,
+    *,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
+    """Upload a child-profile avatar (BE-MEDIA-004).
+
+    A purpose-specific wrapper around the generic upload that:
+      - tightens the byte cap to 1 MB
+      - restricts the MIME allow-list to image/jpeg + image/png
+      - validates the caller's parent ownership of the optional
+        `child_id` form field
+      - returns an avatar-shaped response (with `kind: "avatar"`)
+
+    Multipart form fields:
+        file     (required) — image bytes (jpg/png, ≤ 1 MB)
+        child_id (optional) — when present, the caller must own it
+
+    Responses:
+        200 — avatar metadata
+        413 — AVATAR_TOO_LARGE
+        415 — INVALID_AVATAR_MIME
+        403 — PARENT_CHILD_MISMATCH (cross-parent)
+        404 — CHILD_NOT_FOUND
+        400 — EMPTY_FILE / BAD_REQUEST
+    """
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(
+            status_code=400,
+            detail=localized_error_response(
+                request,
+                code="EMPTY_FILE",
+                key="media.empty_file",
+                fallback_message="file is empty",
+            ),
+        )
+
+    if child_id:
+        child_id = await _assert_parent_owns_child(
+            request, parent, child_id
+        )
+
+    mime = validate_image_for_avatar(raw, file.content_type)
+
+    try:
+        stored = get_media_storage().put(raw, mime_type=mime)
+    except EmptyFileError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=localized_error_response(
+                request,
+                code="EMPTY_FILE",
+                key="media.empty_file",
+            ),
+        ) from exc
+    except FileTooLargeError as exc:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "error": "AVATAR_TOO_LARGE",
+                "message": get_translator().translate(
+                    "media.file_too_large",
+                    resolve_lang(request),
+                ),
+                "max_bytes": exc.max_bytes,
+                "size_bytes": exc.size,
+            },
+        ) from exc
+    except UnsupportedMimeError as exc:
+        raise HTTPException(
+            status_code=415,
+            detail={
+                "error": "INVALID_AVATAR_MIME",
+                "message": get_translator().translate(
+                    "media.invalid_mime_type",
+                    resolve_lang(request),
+                    default="avatar must be image/jpeg or image/png",
+                ),
+                "mime_type": exc.mime,
+            },
+        ) from exc
+    except MediaStorageError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "STORAGE_UNAVAILABLE",
+                "message": get_translator().translate(
+                    "media.storage_unavailable",
+                    resolve_lang(request),
+                    default=str(exc),
+                ),
+            },
+        ) from exc
+
+    return {
+        "child_id": child_id,
+        "file_id": stored.file_id,
+        "access_url": stored.access_url,
+        "mime_type": stored.mime_type,
+        "size_bytes": stored.size_bytes,
+        "sha1": stored.sha1,
+        "category": _category_for(stored.mime_type),
+        "kind": "avatar",
+    }
+
+
 @router.get("/{file_id:path}/thumb")
 @limiter.limit("60/minute")
 async def get_thumbnail(
@@ -161,26 +443,36 @@ async def get_thumbnail(
     ):
         raise HTTPException(
             status_code=422,
-            detail={
-                "error": "INVALID_THUMB_SIZE",
-                "message": (
+            detail=localized_error_response(
+                request,
+                code="INVALID_THUMB_SIZE",
+                key="media.invalid_thumb_size",
+                fallback_message=(
                     f"w and h must be in [{MIN_DIM}, {MAX_DIM}]"
                 ),
-            },
+            ),
         )
 
     bare_id = _extract_file_id(file_id)
     if bare_id is None:
         raise HTTPException(
             status_code=404,
-            detail={"error": "FILE_NOT_FOUND"},
+            detail=localized_error_response(
+                request,
+                code="FILE_NOT_FOUND",
+                key="media.file_not_found",
+            ),
         )
 
     result = build_thumbnail(file_id=bare_id, w=w, h=h)
     if result is None:
         raise HTTPException(
             status_code=404,
-            detail={"error": "FILE_NOT_FOUND"},
+            detail=localized_error_response(
+                request,
+                code="FILE_NOT_FOUND",
+                key="media.file_not_found",
+            ),
         )
     out, output_mime = result
 
@@ -225,14 +517,22 @@ async def retrieve(
     if bare_id is None:
         raise HTTPException(
             status_code=404,
-            detail={"error": "FILE_NOT_FOUND"},
+            detail=localized_error_response(
+                request,
+                code="FILE_NOT_FOUND",
+                key="media.file_not_found",
+            ),
         )
 
     stored = get_media_storage().get_with_meta(bare_id)
     if stored is None:
         raise HTTPException(
             status_code=404,
-            detail={"error": "FILE_NOT_FOUND"},
+            detail=localized_error_response(
+                request,
+                code="FILE_NOT_FOUND",
+                key="media.file_not_found",
+            ),
         )
 
     # BE-MEDIA-001-rollout: public Cache-Control so a CDN or
