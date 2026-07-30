@@ -277,7 +277,10 @@ class TestMediaRetrievalHappyPath:
         assert r.headers["content-type"].startswith("image/png")
         assert r.headers["content-length"] == str(len(PNG))
         assert "cache-control" in r.headers
-        assert "private" in r.headers["cache-control"]
+        # BE-MEDIA-001-rollout: switched to public so a CDN can
+        # cache the bytes for 24h.
+        assert "public" in r.headers["cache-control"]
+        assert "max-age=86400" in r.headers["cache-control"]
         assert r.headers.get("x-niki-file-id") == file_id
 
     def test_get_jpg(self, client: TestClient) -> None:

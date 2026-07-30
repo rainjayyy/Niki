@@ -47,9 +47,10 @@ router = APIRouter(prefix="/media", tags=["media"])
 # `:path` converter is required because the synthetic URL
 # `media://local/<id>.<ext>` contains `/` and `:` (URL-encoded or
 # collapsed by httpx normalisation). Defense in depth: this regex
-# rejects anything that isn't a bare `f-<hex>` token, regardless of
-# what's around it.
-_FILE_ID_PATTERN = re.compile(r"f-[0-9a-f]{1,32}")
+# rejects anything that isn't a bare `f-<hex>[-N]?` token,
+# regardless of what's around it. The optional `-N` suffix
+# accounts for the InMemoryS3Storage sequence number.
+_FILE_ID_PATTERN = re.compile(r"f-[0-9a-f]{1,32}(?:-\d+)?")
 
 
 def _extract_file_id(raw: str) -> str | None:
@@ -131,6 +132,69 @@ async def upload(
     }
 
 
+# BE-MEDIA-001-rollout: register the more specific /thumb
+# route FIRST so the bare /{file_id:path} doesn't gobble the
+# /thumb suffix into the :path capture group.
+@router.get("/{file_id:path}/thumb")
+@limiter.limit("60/minute")
+async def get_thumbnail(
+    request: Request,
+    file_id: str,
+    w: int = 200,
+    h: int = 200,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> Response:
+    """Return a server-resized thumbnail (BE-MEDIA-001-rollout).
+
+    Bounds: 1 ≤ w,h ≤ 2048. Cached in-process (LRU 100
+    entries) keyed by `(file_id, w, h)`. CDN can cache the
+    result too (Cache-Control: public, max-age=86400).
+    """
+    from niki.media.thumbnail import (
+        MAX_DIM,
+        MIN_DIM,
+        build_thumbnail,
+    )
+
+    if not (MIN_DIM <= w <= MAX_DIM) or not (
+        MIN_DIM <= h <= MAX_DIM
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "INVALID_THUMB_SIZE",
+                "message": (
+                    f"w and h must be in [{MIN_DIM}, {MAX_DIM}]"
+                ),
+            },
+        )
+
+    bare_id = _extract_file_id(file_id)
+    if bare_id is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "FILE_NOT_FOUND"},
+        )
+
+    result = build_thumbnail(file_id=bare_id, w=w, h=h)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "FILE_NOT_FOUND"},
+        )
+    out, output_mime = result
+
+    return Response(
+        content=out,
+        media_type=output_mime,
+        headers={
+            "Content-Length": str(len(out)),
+            "Cache-Control": "public, max-age=86400",
+            "ETag": f'"{bare_id}:{w}x{h}"',
+        },
+    )
+
+
 @router.get("/{file_id:path}")
 @limiter.limit("100/minute")
 async def retrieve(
@@ -171,12 +235,17 @@ async def retrieve(
             detail={"error": "FILE_NOT_FOUND"},
         )
 
+    # BE-MEDIA-001-rollout: public Cache-Control so a CDN or
+    # browser can cache media for 24h. The original access_url
+    # returned by /upload points at this same endpoint, so
+    # signed URLs are unnecessary for our deployment.
     return Response(
         content=stored.content,
         media_type=stored.mime_type,
         headers={
             "Content-Length": str(len(stored.content)),
-            "Cache-Control": "private, max-age=86400",
+            "Cache-Control": "public, max-age=86400",
+            "ETag": f'"{getattr(stored, "file_id", bare_id)}"',
             "X-Niki-File-Id": stored.file_id,
         },
     )

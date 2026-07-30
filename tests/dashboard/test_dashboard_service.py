@@ -70,15 +70,20 @@ class TestWeeklyReport:
         service: DashboardService,
     ) -> None:
         baseline = EmotionBaseline()
+        # Pin today so the window slides are date-stable.
+        from datetime import datetime, timezone
+        today = datetime(2026, 7, 30, tzinfo=timezone.utc)
         for d in range(3):
             baseline.add(
                 EmotionRecord(
-                    date=f"2026-07-{22 - d:02d}",
+                    date=f"2026-07-{(today.day - 1) - d:02d}",
                     valence=0.5,
                     intensity=4,
                 )
             )
-        report = await service.generate_weekly_report("c1", baseline=baseline)
+        report = await service.generate_weekly_report(
+            "c1", baseline=baseline, today=today
+        )
         assert "🌞" in report.headline or "积极" in report.headline
 
     async def test_negative_trend_uses_action_headline(
@@ -86,15 +91,19 @@ class TestWeeklyReport:
         service: DashboardService,
     ) -> None:
         baseline = EmotionBaseline()
+        from datetime import datetime, timezone
+        today = datetime(2026, 7, 30, tzinfo=timezone.utc)
         for d in range(3):
             baseline.add(
                 EmotionRecord(
-                    date=f"2026-07-{22 - d:02d}",
+                    date=f"2026-07-{(today.day - 1) - d:02d}",
                     valence=-0.5,
                     intensity=2,
                 )
             )
-        report = await service.generate_weekly_report("c1", baseline=baseline)
+        report = await service.generate_weekly_report(
+            "c1", baseline=baseline, today=today
+        )
         assert "🌧" in report.headline or "建议" in report.headline
 
 

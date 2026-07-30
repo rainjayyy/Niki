@@ -1,101 +1,89 @@
-# BE-MEDIA-001-rollout：文件下载端点
+# BE-MEDIA-001-rollout：CDN 缓存 + 图片处理
 
 | 字段 | 值 |
 |------|-----|
 | **优先级** | 🟡 P1 |
-| **域** | MEDIA |
-| **来源** | BE-MEDIA-001 后续工单（README §后续） |
-| **工作量** | 半天 |
+| **域** | MEDIA / PERFORMANCE |
+| **来源** | 前端对接文档 §7.2.6（OSS 后续优化） |
+| **工作量** | 0.5 天 |
 | **状态** | 🚧 进行中（2026-07-29） |
-| **依赖** | BE-MEDIA-001 ✅ |
-| **后续** | BE-MEDIA-001-real（OSS / COS 适配） |
+| **依赖** | BE-MEDIA-001-real ✅（OSS provider 已上） |
+| **后续** | WebP 转换 / 缩略图 → BE-MEDIA-001-rollout-rollout |
 
 ## 背景
 
-BE-MEDIA-001 实现了上传 `POST /api/v1/media/upload`，返回 `access_url = "media://local/<file_id>.<ext>"`。这个 URL 是**合成 scheme**，demo 前端能渲染但浏览器 / 实际场景拿不到内容。**真实下载链路没有补全**：
+BE-MEDIA-001-real 给了生产**对象存储后端**（S3 / 阿里云 OSS），但**下载体验**还没优化：
 
-- 前端拿到 `media://local/f-abc.png` 想 `<img src=...>` → 浏览器不认识 scheme → ❌
-- 百科图片 / 头像 / 活体照片需要可被 HTTP 检索
-- PRD 文档 §7.2.4 要求前端"接 `image_url` 直接渲染"
+- 家长端 / 儿童端每次拉图片都从 OSS 重新取 → OSS 流量费 = `月活用户数 × 图片数 × 平均大小`
+- 没有 `Cache-Control` header，浏览器无法缓存 → 用户反复看同一张图，每次都打 OSS
+- 没有图片处理（缩略图 / WebP / 旋转）→ 用户下 5MB 的原图只为了显示 200×200 缩略图
 
-本工单补齐 GET 端点，让上传后的 `access_url` 能在浏览器 / 跨域场景直接被拉取。
+本工单做 2 件事：
+1. **CDN 缓存 headers** —— `Cache-Control: public, max-age=86400` 让浏览器/CDN 缓存 24h
+2. **服务端图片处理** —— 缩略图端点 `?w=200` 按需返回缩小版
 
 ## 验收标准（AC）
 
-- [ ] AC-1：`GET /api/v1/media/{file_id}` 接受两种入参：
-    - 裸 file_id：`f-abc12345`
-    - 完整 access_url：`media://local/f-abc12345.png`
-- [ ] AC-2：返回 `200` + 二进制 + 正确 `Content-Type`（按上传时的 mime）
-- [ ] AC-3：`Content-Length` 与 `Cache-Control: private, max-age=86400` 头存在
-- [ ] AC-4：不存在的 file_id → `404 {error: FILE_NOT_FOUND}`
-- [ ] AC-5：path-traversal 类输入（`../../etc/passwd`）→ `404`（不冒 500）
-- [ ] AC-6：未鉴权 → `401`（与 upload 端点一致的 Bearer 要求）
-- [ ] AC-7：`MediaStorage` ABC 新增 `get_with_meta() -> StoredContent | None` 方法，`LocalDiskStorage` 默认实现
-- [ ] AC-8：单元 + 集成测试 ≥ 6 个，全绿
-- [ ] AC-9：现有 1097 passed 测试**零回归**
+- [ ] AC-1：`GET /api/v1/media/{file_id}` 响应加 `Cache-Control: public, max-age=86400`
+- [ ] AC-2：缩略图端点 `GET /api/v1/media/{file_id}/thumb?w=200&h=200` 走 OSS GetObject
+- [ ] AC-3：缩略图尺寸限制 `1 ≤ w ≤ 2048` / `1 ≤ h ≤ 2048`（防滥用）
+- [ ] AC-4：缩略图用 `BytesIO` 缓存 100 张（LRU，in-process）
+- [ ] AC-5：原图缓存**不**经过缩略图端点（保持原样）
+- [ ] AC-6：测试覆盖 ≥ 6 个，含：cache header / thumb 生成 / 尺寸校验 / LRU eviction
+- [ ] AC-7：现有 1318 passed 测试**零回归**
 
 ## 设计
 
-### 1. 端点
+### 1. CDN Headers
 
+`/api/v1/media/{file_id}` 响应添加：
 ```
-GET /api/v1/media/f-7e9a1b3c
-Authorization: Bearer <token>
-
-→ 200 <binary>
-   Content-Type: image/jpeg
-   Content-Length: 12345
-   Cache-Control: private, max-age=86400
-
-GET /api/v1/media/media://local/f-7e9a1b3c.png
-→ 200 同上（自动剥离 scheme + 扩展名）
-
-GET /api/v1/media/f-deadbeef
-→ 404 { "error": "FILE_NOT_FOUND" }
-
-GET /api/v1/media/../../etc/passwd
-→ 404 { "error": "FILE_NOT_FOUND" }   # 防 path traversal
-
-(无 token)
-→ 401 { "error": "MISSING_TOKEN" }
+Cache-Control: public, max-age=86400
+ETag: "<sha1>"
+Vary: Accept-Encoding
 ```
 
-### 2. 存储契约扩展
+ETag 用 sha1（已在 StoredFile 里），让浏览器走 304 Not Modified。
 
-新增 `StoredContent` dataclass + ABC 方法：
+### 2. 缩略图端点
+
+```
+GET /api/v1/media/{file_id}/thumb?w=200&h=200
+→ 200 image/jpeg (or original mime)
+   Cache-Control: public, max-age=86400
+```
+
+实现：用 Pillow (PIL) 的 `thumbnail()` 方法。
+- 读取原图（走 OSS GetObject）
+- 缩放到 (w, h) 边界内
+- 编码回 bytes
+- 缓存到 in-memory LRU
+
+### 3. LRU 缓存
 
 ```python
-@dataclass(frozen=True)
-class StoredContent:
-    content: bytes
-    mime_type: str
+from functools import lru_cache
 
-class MediaStorage(ABC):
-    @abstractmethod
-    def put(...) -> StoredFile: ...
-    @abstractmethod
-    def get(self, file_id: str) -> bytes | None: ...
-    # 默认实现按扩展名反查 mime；OSS 实现可重写以查询对象元数据
-    def get_with_meta(self, file_id: str) -> StoredContent | None: ...
+# 用 functools.lru_cache 不行（参数不可哈希 → bytes），
+# 自实现：
+class LRU(Generic[T]):
+    def __init__(self, maxsize: int = 100): ...
+    def get(self, key: str) -> T | None: ...
+    def set(self, key: str, value: T) -> None: ...
 ```
 
-`LocalDiskStorage.get_with_meta()` 按 `f-xxx.<ext>` glob → 读 bytes → 按扩展名反查 `_MIME_BY_EXT`。
+Key = `{file_id}:{w}:{h}`；Value = bytes（缩略图）。
 
-### 3. 安全
+### 4. 风险
 
-- **鉴权**：与 upload 一致，依赖 `get_current_parent`；未登录 `401`
-- **path traversal**：`LocalDiskStorage.get_with_meta()` 用 `re.fullmatch(r"f-[0-9a-f]{1,32}", file_id)` 严格校验
-- **大小**：上限继承 10 MB（已在 put 时校验，get 不重新查）
-- **CDN 未来**：本期用 `private, max-age=86400`，生产替换为签名 URL（→ BE-MEDIA-001-real）
+| 风险 | 缓解 |
+|------|------|
+| 缩略图内存爆 | LRU 100 张 + 限 max w/h 2048 |
+| 恶意请求耗资源 | rate limit 复用 `BE-API-002`（同 endpoint 池） |
+| 缓存陈旧 | ETag / Cache-Control 控制 |
 
-### 4. 不在本工单
+### 5. 不在本工单
 
-- ❌ OSS / COS provider（→ BE-MEDIA-001-real）
-- ❌ 缩略图（→ BE-MEDIA-001-ext-A）
-- ❌ HEAD 请求（→ 后续需要时再补）
-- ❌ 公开访问（无 token）——所有读都需 auth
-
-## 后续工单
-
-- **BE-MEDIA-001-real**：OSSStorage 实现 `get_with_meta` 通过对象元数据
-- **BE-MEDIA-001-ext-A**：服务端缩略图（GET /{id}/thumb.jpg）
+- ❌ WebP 转换（→ 后续）
+- ❌ CDN 真实接入（依赖运维提供 CDN 域名）
+- ❌ 图片 EXIF 旋转（→ 后续）
