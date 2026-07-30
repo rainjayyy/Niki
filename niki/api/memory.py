@@ -20,7 +20,10 @@ from typing import Any
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Request
 
+from niki.api._i18n import localized_error_response
 from niki.api._pagination import (
     ListQueryParams,
     list_query_params,
@@ -51,6 +54,41 @@ _long_term = LongTermMemory()
 _graph = CognitiveGraph()
 _pipeline = NightlyPipeline(_long_term, _graph)
 _hook = DaytimeMemoryHook(_long_term, _graph)
+
+# BE-API-005: cap on items per batch request (memory + dashboard).
+BATCH_MAX_ITEMS = 100
+
+
+def _enforce_batch_cap(
+    request: Request, items: list[Any] | None, *, field_name: str = "items"
+) -> list[Any]:
+    """Return `items` if within cap; raise 400 BATCH_TOO_LARGE otherwise.
+
+    Shared by the 3 batch endpoints (entities / relations / alerts).
+    A `None` payload is treated as an empty list so callers can
+    distinguish "no items" (allowed) from "missing field" (caller
+    is responsible for the req schema).
+    """
+    payload = items or []
+    if len(payload) > BATCH_MAX_ITEMS:
+        raise HTTPException(
+            status_code=400,
+            detail=localized_error_response(
+                request,
+                code="BATCH_TOO_LARGE",
+                key="api.batch_too_large",
+                extra={
+                    "limit": BATCH_MAX_ITEMS,
+                    "received": len(payload),
+                    "field": field_name,
+                },
+                fallback_message=(
+                    f"batch {field_name} accepts at most "
+                    f"{BATCH_MAX_ITEMS} items"
+                ),
+            ),
+        )
+    return payload
 
 
 def _turn_to_dict(turn: ConversationTurn) -> dict[str, Any]:
@@ -197,6 +235,49 @@ async def add_relation(payload: dict,
         weight_delta=float(payload.get("weight_delta", 0.1)),
     )
     return {"edge": edge.to_dict()}
+
+
+@router.post("/graph/entities/batch")
+async def add_entities_batch(request: Request, payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+    """Add many entities in a single round trip (BE-API-005).
+
+    Replaces the 5+ sequential POSTs the parent dashboard used to
+    do to init a new child's cognitive graph (~200-500ms over
+    mobile). Each item is independent; well-formed items go into
+    `created`, malformed or duplicate names go into `skipped`
+    with a `reason`. The 100-item cap is enforced up front so a
+    pathological request can't tie up the server.
+
+    Body:
+        {"items": [{"name": "A", "entity_type": "concept",
+                    "aliases": []}, ...]}
+    Response:
+        {"created":  [entity.to_dict(), ...],
+         "skipped":  [{"name": "...", "reason": "..."}, ...]}
+    """
+    items = _enforce_batch_cap(
+        request, payload.get("items"), field_name="items",
+    )
+    return _graph.add_entities_batch(items)
+
+
+@router.post("/graph/relations/batch")
+async def add_relations_batch(request: Request, payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+    """Add many relations in a single round trip (BE-API-005).
+
+    Body:
+        {"items": [{"source": "A", "target": "B",
+                    "relation": "related_to"}, ...]}
+    Response:
+        {"created":  [edge.to_dict(), ...],
+         "skipped":  [{"source": "...", "reason": "..."}, ...]}
+    """
+    items = _enforce_batch_cap(
+        request, payload.get("items"), field_name="items",
+    )
+    return _graph.add_relations_batch(items)
 
 
 @router.post("/graph/apply-decay")

@@ -219,6 +219,97 @@ class CognitiveGraph:
         """Get all relations touching the entity."""
         return [e for e in self._edges if e.source == entity or e.target == entity]
 
+    # ---- Batch helpers (BE-API-005) ----
+
+    def add_entities_batch(
+        self,
+        items: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Add many entities in one logical call (BE-API-005).
+
+        Each item is independent: a malformed or duplicate item
+        is skipped with a `reason` and the others still go through.
+        The cap (100 items per request) is enforced by the API layer;
+        this helper just iterates and returns the partial-success
+        shape expected by the endpoint.
+
+        Returns:
+            {
+                "created": [entity.to_dict(), ...],
+                "skipped": [{"name": ..., "reason": "..."}, ...],
+            }
+        """
+        created: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for item in items:
+            name = item.get("name") if isinstance(item, dict) else None
+            if not isinstance(name, str) or not name.strip():
+                skipped.append({"name": name, "reason": "invalid"})
+                continue
+            if name in self._entities:
+                skipped.append({"name": name, "reason": "duplicate"})
+                continue
+            entity = self.add_entity(
+                name=name,
+                entity_type=item.get("entity_type", "concept"),
+                aliases=item.get("aliases") or [],
+            )
+            created.append(entity.to_dict())
+        return {"created": created, "skipped": skipped}
+
+    def add_relations_batch(
+        self,
+        items: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Add many relations in one logical call (BE-API-005).
+
+        Each item is independent; the underlying `add_relation`
+        is idempotent (re-adding the same edge just bumps weight),
+        so we treat all well-formed items as `created`. Items
+        missing required fields are skipped with a `reason`.
+
+        Returns:
+            {
+                "created": [edge.to_dict(), ...],
+                "skipped": [{"source": ..., "target": ..., "reason": "..."}, ...],
+            }
+        """
+        created: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                skipped.append({"reason": "invalid"})
+                continue
+            source = item.get("source")
+            target = item.get("target")
+            relation = item.get("relation")
+            if not (isinstance(source, str) and source
+                    and isinstance(target, str) and target
+                    and isinstance(relation, str) and relation):
+                skipped.append({
+                    "source": source,
+                    "target": target,
+                    "reason": "invalid",
+                })
+                continue
+            try:
+                relation_enum = RelationType(relation)
+            except ValueError:
+                skipped.append({
+                    "source": source,
+                    "target": target,
+                    "reason": "invalid_relation",
+                })
+                continue
+            edge = self.add_relation(
+                source=source,
+                target=target,
+                relation=relation_enum,
+                weight_delta=float(item.get("weight_delta", 0.1)),
+            )
+            created.append(edge.to_dict())
+        return {"created": created, "skipped": skipped}
+
     # ---- Time decay (PRD #50) ----
 
     def apply_decay(self, now: datetime | None = None) -> int:

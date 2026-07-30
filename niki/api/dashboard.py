@@ -211,6 +211,33 @@ async def mark_alert_delivered(alert_id: str,
     return {"alert_id": alert_id, "delivered": success}
 
 
+@router.post("/alerts/batch/dismiss")
+async def dismiss_alerts_batch(request: Request, payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+    """Dismiss many alerts in a single round trip (BE-API-005).
+
+    Lets the parent dashboard bulk-ack alerts ("全部已读") without
+    firing N parallel `POST /alerts/{id}/delivered` calls. Each id
+    is independent: missing ids land in `skipped` with
+    `reason: "not_found"` and the rest are still dismissed.
+
+    Body:
+        {"alert_ids": ["a-1", "a-2", "a-3"]}
+    Response:
+        {"dismissed": 2,
+         "skipped":   [{"alert_id": "a-3", "reason": "not_found"}, ...]}
+    """
+    # Cap is shared with the memory batch endpoints (BE-API-005).
+    from niki.api.memory import BATCH_MAX_ITEMS, _enforce_batch_cap
+
+    alert_ids = _enforce_batch_cap(
+        request,
+        payload.get("alert_ids"),
+        field_name="alert_ids",
+    )
+    return await _dashboard.dismiss_alerts_batch(alert_ids)
+
+
 @router.post("/baseline/add")
 async def add_baseline_record(payload: dict,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:

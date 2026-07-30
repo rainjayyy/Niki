@@ -373,6 +373,34 @@ class DashboardService:
         """Mark an alert as delivered."""
         return await self._repo.mark_alert_delivered(alert_id)
 
+    async def dismiss_alerts_batch(
+        self, alert_ids: list[str]
+    ) -> dict[str, Any]:
+        """Dismiss many alerts in one logical call (BE-API-005).
+
+        Each id is independent: a missing id is skipped with a
+        `reason` of `not_found`. The cap (100 ids per request) is
+        enforced by the API layer.
+
+        Returns:
+            {
+                "dismissed": <int>,
+                "skipped": [{"alert_id": "...", "reason": "..."}, ...],
+            }
+        """
+        dismissed = 0
+        skipped: list[dict[str, Any]] = []
+        for alert_id in alert_ids:
+            if not isinstance(alert_id, str) or not alert_id:
+                skipped.append({"alert_id": alert_id, "reason": "invalid"})
+                continue
+            ok = await self._repo.mark_alert_delivered(alert_id)
+            if ok:
+                dismissed += 1
+            else:
+                skipped.append({"alert_id": alert_id, "reason": "not_found"})
+        return {"dismissed": dismissed, "skipped": skipped}
+
     # ---- Internals ----
 
     def _build_trend(
