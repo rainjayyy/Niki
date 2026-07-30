@@ -255,3 +255,49 @@ async def update_prefs(
     )
     row.pop("parent_id", None)
     return row
+
+# BE-DEV-002: device list + per-device unregister endpoints
+@router.get("/devices-full")
+async def list_my_devices(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
+    """List every push device registered to the calling parent.
+
+    `push_token` is NEVER returned (it would let a stolen JWT
+    spam the vendor push servers). Frontend only needs the
+    metadata (channel / platform / last_active_at) to show a
+    "我的设备" panel.
+    """
+    from niki.db.repositories import get_push_device_repository
+    repo = get_push_device_repository()
+    devices = await repo.list_for_parent(parent.id)
+    safe = [
+        {
+            "device_id": d["device_id"],
+            "channel": d["channel"],
+            "platform": d["platform"],
+            "enabled": d["enabled"],
+            "last_active_at": d["last_active_at"],
+            "created_at": d["created_at"],
+        }
+        for d in devices
+    ]
+    return {"count": len(safe), "devices": safe}
+
+
+@router.delete("/devices-full/{device_id}")
+async def unregister_my_device(
+    device_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
+    """Unregister a single device (logout-from-this-device flow).
+
+    Scoped to the calling parent so a stolen token can't
+    unregister a victim's device.
+    """
+    from niki.db.repositories import get_push_device_repository
+    repo = get_push_device_repository()
+    # delete_by_device_id already filters by parent_id; no
+    # separate method needed.
+    removed = await repo.delete_by_device_id(parent.id, device_id)
+    return {"unregistered": True, "removed": removed}
