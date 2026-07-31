@@ -18,7 +18,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.auth.account import ParentAccount
@@ -32,6 +34,18 @@ from niki.db.repositories import (
     get_push_prefs_repository,
 )
 from niki.i18n.translator import get_translator
+from niki.middleware.rate_limit import get_limiter
+from niki.services.audit_log import (
+    SEVERITY_INFO,
+    get_audit_log_service,
+)
+from niki.services.push_delivery import (
+    DEFAULT_HISTORY_LIMIT,
+    MAX_HISTORY_LIMIT,
+    PushPayload,
+    STATUS_DRY_RUN,
+    get_push_delivery_service,
+)
 
 
 router = APIRouter(prefix="/push", tags=[
@@ -500,3 +514,307 @@ async def re_enable_device(
     repo = get_push_device_repository()
     updated = await repo.set_enabled(parent.id, device_id, True)
     return {"enabled": updated}
+
+
+# ---------------------------------------------------------------------------
+# BE-PUSH-006: test push endpoint + history
+# ---------------------------------------------------------------------------
+
+# Rate-limit cap on POST /push/test. Per-IP because a runaway
+# retry loop == DoS against the parent's phone (real vendor
+# SDKs ring on each delivery). 5/minute is enough for a
+# support engineer to debug, tight enough that a broken script
+# can't fill a parent's notification shade.
+_PUSH_TEST_RATE: str = "5/minute"
+
+# Synthetic audit event type for /push/test firings. Picked a
+# short snake_case like the other constants in
+# `niki.db.models.audit_log` so a query like
+# `event_type='push_test_sent'` is greppable end-to-end.
+_EVENT_PUSH_TEST_SENT: str = "push_test_sent"
+
+
+# ---------------------------------------------------------------------------
+# BE-PUSH-006 response models — used to declare the OpenAPI schema for the
+# `/push/test` endpoints. We don't use a Pydantic body model because the
+# handler accepts a free-form `dict` (matching the convention of the rest
+# of the push router), but a response model is the cheapest way to make
+# `tests/api/test_openapi_docs.py` happy without re-architecting.
+# ---------------------------------------------------------------------------
+
+
+class _PushTestResultItem(BaseModel):
+    """One entry in the `GET /push/test/history` response."""
+
+    device_id: str = Field(..., description="Target device id.")
+    channel: str = Field(..., description="Push channel the device is on.")
+    status: str = Field(
+        ...,
+        description="One of delivered | dry_run | failed | skipped_no_token.",
+    )
+    error: str | None = Field(
+        default=None,
+        description="Failure reason when status != delivered/dry_run.",
+    )
+    latency_ms: int | None = Field(
+        default=None,
+        description="Wall-clock delivery latency (synthetic 5-50ms for dry_run).",
+    )
+    dry_run: bool = Field(
+        default=False,
+        description="Echoes the dry_run argument the caller passed.",
+    )
+    created_at: str = Field(
+        ...,
+        description="ISO-8601 timestamp the delivery was recorded.",
+    )
+
+
+class _PushTestResult(BaseModel):
+    """`POST /push/test` response body."""
+
+    device_id: str = Field(..., description="Device the test was fired at.")
+    status: str = Field(
+        default=STATUS_DRY_RUN,
+        description="Always `dry_run` until BE-PUSH-002 lands a real SDK.",
+    )
+    channel: str | None = Field(
+        default=None,
+        description="Push channel the device is on (apns/fcm/web/...).",
+    )
+    latency_ms: int | None = Field(
+        default=None,
+        description="Synthetic 5-50ms latency for dry-run deliveries.",
+    )
+
+
+class _PushTestHistory(BaseModel):
+    """`GET /push/test/history` response body."""
+
+    deliveries: list[_PushTestResultItem] = Field(
+        default_factory=list,
+        description="Recent deliveries, newest-first.",
+    )
+    count: int = Field(..., description="Number of deliveries returned.")
+
+
+# Module-local handle for the slowapi limiter so the @limiter.limit
+# decorator can resolve the singleton. `get_limiter()` is idempotent
+# and cheap.
+_limiter = get_limiter()
+
+
+def _push_device_not_found(request: Request) -> HTTPException:
+    """Return the uniform 404 for `device_id` not owned by caller.
+
+    Used by both POST /push/test (cross-parent 404) and any
+    future read paths. The body is i18n-localized via the
+    `push.device_not_found` key; the *same* message is returned
+    for "doesn't exist" and "exists but not yours" so an attacker
+    can't use the endpoint as a device-id oracle.
+    """
+    return HTTPException(
+        status_code=404,
+        detail=localized_error_response(
+            request,
+            code="DEVICE_NOT_FOUND",
+            key="push.device_not_found",
+        ),
+    )
+
+
+@router.post(
+    "/test",
+    summary="Send a test push to one of the caller's devices",
+    response_model=_PushTestResult,
+    responses={
+        200: {
+            "description": "Dry-run delivery accepted.",
+            "headers": {
+                "X-Push-Test-Mode": {
+                    "description": (
+                        "Always `dry-run` until BE-PUSH-002 wires real"
+                        " vendor SDKs."
+                    ),
+                    "schema": {"type": "string"},
+                },
+            },
+        },
+        404: {"description": "Device not found or not owned by this account."},
+        422: {"description": "Missing `device_id`."},
+        429: {"description": "Rate limit exceeded (5/minute/IP)."},
+    },
+    description="""
+            Send a test push to one of the caller's devices.
+
+            This is the "does my push actually work?" probe — it
+            walks the entire delivery chain (device lookup,
+            payload construction, vendor seam, audit log,
+            history buffer) without ringing a real phone. The
+            response carries `status="dry_run"` and an
+            `X-Push-Test-Mode: dry-run` header so callers can
+            distinguish a real delivery from a probe.
+
+            lateral-auth: `device_id` must belong to the calling
+            parent. Both "doesn't exist" and "exists but not
+            yours" return 404 with the same body to avoid being
+            used as a device-id oracle.
+
+            Rate-limited to 5/minute/IP (slowapi).
+            """,
+)
+@_limiter.limit(_PUSH_TEST_RATE)
+async def send_test_push(
+    request: Request,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> JSONResponse:
+    """Send a test push to one of the caller's devices.
+
+    See BE-PUSH-006.md for the full contract. Returns 200 +
+    `X-Push-Test-Mode: dry-run` on success, 404 on cross-parent
+    device_id, 422 on missing `device_id`, 429 on rate-limit.
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "BAD_REQUEST",
+                "message": "body must be a JSON object",
+            },
+        )
+
+    device_id = payload.get("device_id")
+    if not isinstance(device_id, str) or not device_id:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "VALIDATION_ERROR",
+                "message": "device_id is required (string, 1-64 chars)",
+            },
+        )
+
+    # Lateral-auth: lookup is parent-scoped. list_for_parent filters
+    # by parent_id, so a foreign device_id simply isn't in the
+    # returned list and we map both "missing" + "not yours" to 404.
+    device_repo = get_push_device_repository()
+    rows = await device_repo.list_for_parent(parent.id)
+    device = next(
+        (r for r in rows if r.get("device_id") == device_id),
+        None,
+    )
+    if device is None:
+        raise _push_device_not_found(request)
+
+    title = str(payload.get("title") or "测试推送")
+    body = str(payload.get("body") or "这是一条测试推送")
+    severity = str(payload.get("severity") or "info")
+    dedupe_key = payload.get("dedupe_key")
+    data = payload.get("data") or {}
+
+    push_payload = PushPayload(
+        title=title,
+        body=body,
+        severity=severity,
+        dedupe_key=dedupe_key if isinstance(dedupe_key, str) else None,
+        data=data if isinstance(data, dict) else {},
+    )
+
+    delivery_svc = get_push_delivery_service()
+    # dry_run=True is hard-coded — BE-PUSH-002 will introduce a
+    # flag once the real vendor SDKs are wired in. Until then
+    # /push/test is *always* a probe, never a real ring.
+    result = await delivery_svc.deliver(
+        device,
+        push_payload,
+        dry_run=True,
+    )
+
+    # Audit row. Goes through the unified `audit_logs` table
+    # (BE-COMP-004) so support tooling can correlate a parent's
+    # "I got pinged at 10:42" complaint with our test-fire record.
+    audit_svc = get_audit_log_service()
+    client_ip = (
+        request.client.host if request.client else None
+    )
+    # We deliberately do NOT include `title` / `body` in metadata:
+    # they're user-controlled text and AuditLogService scrubs
+    # PII-shaped keys anyway, but skipping them keeps the audit
+    # row narrow.
+    await audit_svc.log_event(
+        event_type=_EVENT_PUSH_TEST_SENT,
+        severity=SEVERITY_INFO,
+        actor_parent_id=parent.id,
+        target_parent_id=parent.id,
+        endpoint="/api/v1/push/test",
+        method="POST",
+        reason="BE-PUSH-006 test push fired",
+        client_ip=client_ip,
+        metadata={
+            "device_id": device_id,
+            "channel": device.get("channel"),
+            "dry_run": True,
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+        },
+    )
+
+    body_out = {
+        "device_id": device_id,
+        "status": STATUS_DRY_RUN,
+        "channel": device.get("channel"),
+        "latency_ms": result.latency_ms,
+    }
+    response = JSONResponse(
+        status_code=200,
+        content=body_out,
+    )
+    # Observability: explicit header so callers can grep logs and
+    # ops dashboards can pattern-match a "this was a probe" line
+    # without parsing the JSON body.
+    response.headers["X-Push-Test-Mode"] = "dry-run"
+    return response
+
+
+@router.get(
+    "/test/history",
+    summary="Recent test-push deliveries (in-memory ring buffer)",
+    response_model=_PushTestHistory,
+    description="""
+            Recent test-push deliveries, newest-first.
+
+            Backed by a process-local ring buffer (last 100
+            deliveries, across all parents). The endpoint is
+            meant for support engineers who just fired a test
+            push via `POST /push/test` and want to confirm it
+            reached the delivery seam. For the durable,
+            per-parent audit trail, query the unified
+            `audit_logs` table directly.
+
+            `limit` defaults to 20 and is capped at 100 (the
+            buffer's own capacity). `channel` is an optional
+            exact-match filter.
+            """,
+)
+async def test_push_history(
+    request: Request,
+    limit: int = DEFAULT_HISTORY_LIMIT,
+    channel: str | None = None,
+) -> dict:
+    """Return recent test-push deliveries, newest-first.
+
+    `limit` is clamped to [1, MAX_HISTORY_LIMIT]; the buffer's
+    own capacity is the absolute upper bound so any larger
+    request just returns the whole buffer.
+    """
+    if limit <= 0:
+        limit = DEFAULT_HISTORY_LIMIT
+    if limit > MAX_HISTORY_LIMIT:
+        limit = MAX_HISTORY_LIMIT
+
+    svc = get_push_delivery_service()
+    deliveries = svc.history(limit=limit, channel=channel)
+    return {
+        "deliveries": [d.to_dict() for d in deliveries],
+        "count": len(deliveries),
+    }

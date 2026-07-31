@@ -61,6 +61,10 @@ MESSAGES_ZH: dict[str, str] = {
     "media.invalid_enabled_channels": "enabled_channels 必须是字符串列表",
     "media.invalid_high_risk_only": "high_risk_only 必须为布尔值",
 
+    # ---- push.* (BE-PUSH-006 测试推送端点) ----
+    "push.device_not_found": "未找到该设备，或该设备不属于当前账户",
+    "push.test_rate_limited": "测试推送请求过于频繁，请稍后再试",
+
     # ---- dashboard.* (BE-DASH-001) ----
     "dashboard.invalid_template": "模板名称不合法",
     "dashboard.missing_field": "缺少必填字段",
@@ -118,6 +122,14 @@ MESSAGES_EN: dict[str, str] = {
     "media.invalid_quiet_hour": "Quiet hour must be an integer 0-23",
     "media.invalid_enabled_channels": "enabled_channels must be a list of strings",
     "media.invalid_high_risk_only": "high_risk_only must be a boolean",
+
+    # ---- push.* (BE-PUSH-006 test push endpoint) ----
+    "push.device_not_found": (
+        "Device not found or not owned by this account"
+    ),
+    "push.test_rate_limited": (
+        "Too many test push requests, please retry later"
+    ),
 
     # ---- dashboard.* ----
     "dashboard.invalid_template": "Invalid template name",
