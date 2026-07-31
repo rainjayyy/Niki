@@ -50,7 +50,15 @@ from niki.db.models.treehole_aggregation import (
     WINDOW_KIND_WEEKLY,
 )
 from niki.db.models.treehole_summary import TreeholeSummary
+from niki.db.models.two_factor import TwoFactorConfig
 from niki.db.models.weekly_report import WeeklyReport
+from niki.db.models.webhook import (
+    MAX_CONSECUTIVE_FAILURES,
+    MAX_EVENT_TYPES_PER_SUBSCRIPTION,
+    VALID_EVENT_TYPES,
+    WebhookDelivery,
+    WebhookSubscription,
+)
 
 __all__ = [
     "Parent",
@@ -67,6 +75,7 @@ __all__ = [
     "WINDOW_KIND_DAILY",
     "WINDOW_KIND_WEEKLY",
     "VALID_WINDOW_KINDS",
+    "TwoFactorConfig",  # BE-AUTH-007
     "DashboardAlert",
     "TutoringEvent",
     "KnowledgeQuery",
@@ -85,4 +94,10 @@ __all__ = [
     "EVENT_LATERAL_AUTH_VIOLATION",
     "EVENT_SMS_SENT",
     "EVENT_LOGIN_SUCCESS",
+    # BE-API-008: webhook subscriptions + per-event delivery log
+    "WebhookSubscription",
+    "WebhookDelivery",
+    "VALID_EVENT_TYPES",
+    "MAX_EVENT_TYPES_PER_SUBSCRIPTION",
+    "MAX_CONSECUTIVE_FAILURES",
 ]

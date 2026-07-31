@@ -43,6 +43,23 @@ class TokenType(StrEnum):
     REFRESH = "refresh"
 
 
+# BE-AUTH-007: token capability scopes. `full` is the default —
+# backwards-compatible with every existing access token (claims
+# with no `scope` field treat it as `full`). `2fa_pending` is a
+# short-lived partial token issued by `POST /auth/sms/login` when
+# 2FA is enabled; it carries the parent's identity but cannot
+# satisfy `require_2fa_for_sensitive_ops`. `full_reauth` is a
+# short-lived full-scope token issued by `POST /auth/2fa/verify`
+# AFTER a successful TOTP/backup-code check — it is what the
+# sensitive-op gate trusts as fresh 2FA evidence.
+SCOPE_FULL: str = "full"
+SCOPE_2FA_PENDING: str = "2fa_pending"
+SCOPE_FULL_REAUTH: str = "full_reauth"
+VALID_SCOPES: frozenset[str] = frozenset(
+    {SCOPE_FULL, SCOPE_2FA_PENDING, SCOPE_FULL_REAUTH}
+)
+
+
 class JWTError(Exception):
     """Base class for JWT signing/verification failures."""
 
@@ -104,17 +121,21 @@ def issue_access_token(
     parent_id: str,
     *,
     ttl_seconds: int | None = None,
+    scope: str = SCOPE_FULL,
 ) -> str:
     """Sign a short-lived access token.
 
     Args:
         parent_id: The subject (`sub`) - parent account id.
         ttl_seconds: Override the default 1-hour TTL (tests only).
+        scope: Token capability scope. Default `SCOPE_FULL`; pass
+            `SCOPE_2FA_PENDING` for a partial token that cannot be
+            used against sensitive endpoints (BE-AUTH-007).
 
     Returns:
         Encoded JWT string of the form `header.payload.signature`.
     """
-    return _issue(parent_id, TokenType.ACCESS, ttl_seconds)
+    return _issue(parent_id, TokenType.ACCESS, ttl_seconds, scope)
 
 
 def issue_refresh_token(
@@ -212,6 +233,7 @@ def _issue(
     parent_id: str,
     typ: TokenType,
     ttl_seconds: int | None,
+    scope: str = SCOPE_FULL,
 ) -> str:
     settings = get_settings()
     if typ == TokenType.ACCESS:
@@ -221,12 +243,16 @@ def _issue(
 
     now = int(time.time())
     header = {"alg": "HS256", "typ": "JWT"}
-    payload = {
+    payload: dict[str, Any] = {
         "sub": parent_id,
         "typ": typ.value,
         "iat": now,
         "exp": now + ttl,
         "jti": str(uuid.uuid4()),
+        # BE-AUTH-007: always stamp the scope claim so readers
+        # can branch on it without having to treat absence as
+        # `full` (which made the original implementation fragile).
+        "scope": scope,
     }
     header_b64 = _b64_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
     payload_b64 = _b64_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))

@@ -29,6 +29,9 @@ EXPECTED_TABLES = {
     "audit_logs",        # BE-COMP-004 (unified cross-domain trail)
     "push_devices",      # BE-PUSH-001
     "push_prefs",        # BE-PUSH-001
+    "two_factor_configs",  # BE-AUTH-007 (parent 2FA / TOTP)
+    "webhook_subscriptions",  # BE-API-008
+    "webhook_deliveries",     # BE-API-008
 }
 
 

@@ -46,6 +46,16 @@ MESSAGES_ZH: dict[str, str] = {
     "auth.parent_child_mismatch": "当前账户不能访问该孩子的数据",
     "auth.child_not_found": "未找到该孩子的注册信息",
 
+    # ---- auth.2fa.* (BE-AUTH-007 家长端 2FA / TOTP) ----
+    "auth.2fa_required": "此账户已开启两步验证，请提供两步验证码",
+    "auth.2fa_invalid_code": "两步验证码不正确",
+    "auth.2fa_backup_code_invalid": "备份码无效或已使用",
+    "auth.2fa_not_enrolled": "此账户尚未开启两步验证",
+    "auth.2fa_already_enrolled": "两步验证已开启，请先关闭再重新启用",
+    "auth.2fa_password_required": "此操作需要重新验证密码",
+    "auth.2fa_password_invalid": "密码不正确",
+    "auth.2fa_rate_limited": "两步验证尝试过于频繁，请稍后再试",
+
     # ---- media.* (BE-MEDIA-001 / BE-MEDIA-001-rollout) ----
     "media.empty_file": "上传的文件为空",
     "media.file_not_found": "文件不存在或已过期",
@@ -83,6 +93,14 @@ MESSAGES_ZH: dict[str, str] = {
     "notifications.not_found": "通知不存在或已被删除",
     "notifications.invalid_cursor": "分页游标无效或已过期",
     "notifications.invalid_severity": "severity 取值不在支持的范围内",
+
+    # ---- webhook.* (BE-API-008 回调订阅) ----
+    "webhook.invalid_url": "URL 格式不正确",
+    "webhook.invalid_event_type": "事件类型不在支持范围内",
+    "webhook.not_found": "订阅不存在或不属于当前账户",
+    "webhook.too_many_event_types": "事件类型超过 10 个上限",
+    "webhook.url_not_https": "生产环境必须使用 HTTPS",
+    "webhook.rate_limited": "创建订阅请求过于频繁，请稍后再试",
 }
 
 
@@ -114,6 +132,28 @@ MESSAGES_EN: dict[str, str] = {
     "auth.consent_required": "Please sign the consent document first",
     "auth.parent_child_mismatch": "Token does not own this child_id",
     "auth.child_not_found": "No child registered with the given id",
+
+    # ---- auth.2fa.* (BE-AUTH-007 parent 2FA / TOTP) ----
+    "auth.2fa_required": (
+        "Two-factor authentication is required for this account"
+    ),
+    "auth.2fa_invalid_code": "Invalid two-factor code",
+    "auth.2fa_backup_code_invalid": (
+        "Backup code is invalid or has already been used"
+    ),
+    "auth.2fa_not_enrolled": (
+        "Two-factor authentication is not set up on this account"
+    ),
+    "auth.2fa_already_enrolled": (
+        "Two-factor authentication is already enabled"
+    ),
+    "auth.2fa_password_required": (
+        "Password re-authentication is required for this action"
+    ),
+    "auth.2fa_password_invalid": "Password is incorrect",
+    "auth.2fa_rate_limited": (
+        "Too many 2FA attempts, please try again later"
+    ),
 
     # ---- media.* ----
     "media.empty_file": "Uploaded file is empty",
@@ -163,6 +203,18 @@ MESSAGES_EN: dict[str, str] = {
     ),
     "notifications.invalid_severity": (
         "severity value is not in the supported set"
+    ),
+
+    # ---- webhook.* (BE-API-008 callback subscriptions) ----
+    "webhook.invalid_url": "Invalid webhook URL",
+    "webhook.invalid_event_type": "Event type is not supported",
+    "webhook.not_found": (
+        "Subscription not found or not owned by this account"
+    ),
+    "webhook.too_many_event_types": "Too many event types (max 10)",
+    "webhook.url_not_https": "HTTPS is required in production",
+    "webhook.rate_limited": (
+        "Too many subscription attempts, please retry later"
     ),
 }
 

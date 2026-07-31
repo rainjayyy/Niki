@@ -25,6 +25,17 @@ COMMON_TEST_CHILDREN = {
     "parent-B": ["child-B1"],
 }
 
+
+async def _instant_sleep(_seconds: float) -> None:
+    """No-op `asyncio.sleep` substitute for the webhook dispatcher.
+
+    The production dispatcher sleeps 1s/4s/16s between retries.
+    Tests that don't care about the wall-clock duration want
+    the dispatcher to proceed immediately; tests that *do*
+    care inject their own captor.
+    """
+    return None
+
 @pytest.fixture(autouse=True)
 def _reset_session_store():
     """BE-SESSION-redis: reset the session store singleton
@@ -64,6 +75,14 @@ def _register_common_test_children():
         set_treehole_repository,
     )
     from niki.db.repositories import InMemoryTreeholeRepository
+    from niki.db.repositories import (
+        InMemoryWebhookRepository,
+        set_webhook_repository,
+    )
+    from niki.services.webhook import (
+        WebhookDispatcherService,
+        set_webhook_dispatcher,
+    )
     set_treehole_repository(InMemoryTreeholeRepository())
     set_treehole_aggregation_repository(
         InMemoryTreeholeAggregationRepository()
@@ -71,6 +90,20 @@ def _register_common_test_children():
     # BE-PUSH-001: reset push device + prefs repos too
     set_push_device_repository(InMemoryPushDeviceRepository())
     set_push_prefs_repository(InMemoryPushPrefsRepository())
+    # BE-API-008: reset webhook repo + dispatcher. We pass the
+    # SAME repo instance to the dispatcher that we set as the
+    # singleton, so writes through either the API or the
+    # dispatcher hit the same backing store (otherwise a
+    # delivery created via the dispatcher is invisible to a
+    # direct repo.list_* call, and vice versa).
+    _webhook_repo = InMemoryWebhookRepository()
+    set_webhook_repository(_webhook_repo)
+    set_webhook_dispatcher(
+        WebhookDispatcherService(
+            repo=_webhook_repo,
+            sleep=_instant_sleep,
+        )
+    )
 
 
 @pytest.fixture(autouse=True)
