@@ -46,7 +46,6 @@ from niki.i18n.translator import get_translator
 from niki.middleware.rate_limit import get_limiter
 from niki.services.audit_log import (
     SEVERITY_INFO,
-    AuditLogService,
     get_audit_log_service,
 )
 from niki.services.push_delivery import (
@@ -883,10 +882,10 @@ class _PushTestHistory(BaseModel):
     )
     count: int = Field(..., description="Number of deliveries returned.")
 
+
 # Module-local handle for the slowapi limiter so the @limiter.limit
-# decorator can resolve the singleton. We grab it lazily in the
-# request handlers themselves to avoid surprising import-time
-# side-effects — `get_limiter()` is idempotent and cheap.
+# decorator can resolve the singleton. `get_limiter()` is idempotent
+# and cheap.
 _limiter = get_limiter()
 
 
