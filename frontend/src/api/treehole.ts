@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `treehole` (7 operation(s)).
- * Generated: 2026-07-31T06:59:07Z
+ * Generated: 2026-07-31T08:34:20Z
  */
 
 import { request } from "./client";

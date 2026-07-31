@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 
 from niki.auth import (
     AccountLifecycle,
@@ -1094,6 +1094,7 @@ async def phone_change_cancel(
     request: Request,
     request_id: str,
     parent: Annotated[ParentAccount, Depends(get_current_parent)],
+    _body: dict | None = Body(default=None),
 ) -> dict:
     """Cancel a phone-change request (lateral-auth enforced)."""
     try:

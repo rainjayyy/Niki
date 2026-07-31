@@ -5,7 +5,7 @@
  * Types derived from the OpenAPI `components.schemas` block.
  * `Body_*` interfaces describe multipart form bodies; the SDK does not
  * generate multipart call signatures yet (BE-API-008).
- * Generated: 2026-07-31T06:59:07Z
+ * Generated: 2026-07-31T08:34:20Z
  */
 
 export interface Body_ocr_api_v1_media_ocr_post {
