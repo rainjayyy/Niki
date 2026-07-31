@@ -63,6 +63,10 @@ MESSAGES_ZH: dict[str, str] = {
     "media.invalid_severity": "severities 必须是 {info, warning, critical} 的子集",
     "media.invalid_event_type": "muted_event_types 必须是非空字符串列表",
 
+    # ---- push.* (BE-PUSH-006 测试推送端点) ----
+    "push.device_not_found": "未找到该设备，或该设备不属于当前账户",
+    "push.test_rate_limited": "测试推送请求过于频繁，请稍后再试",
+
     # ---- dashboard.* (BE-DASH-001) ----
     "dashboard.invalid_template": "模板名称不合法",
     "dashboard.missing_field": "缺少必填字段",
@@ -74,6 +78,11 @@ MESSAGES_ZH: dict[str, str] = {
 
     # ---- audit.* (BE-COMP-004 统一审计日志) ----
     "audit.cross_parent_forbidden": "只能查询自己的审计记录",
+
+    # ---- notifications.* (BE-PUSH-005 通知中心) ----
+    "notifications.not_found": "通知不存在或已被删除",
+    "notifications.invalid_cursor": "分页游标无效或已过期",
+    "notifications.invalid_severity": "severity 取值不在支持的范围内",
 }
 
 
@@ -123,6 +132,14 @@ MESSAGES_EN: dict[str, str] = {
     "media.invalid_severity": "severities must be a subset of {info, warning, critical}",
     "media.invalid_event_type": "muted_event_types must be a list of non-empty strings",
 
+    # ---- push.* (BE-PUSH-006 test push endpoint) ----
+    "push.device_not_found": (
+        "Device not found or not owned by this account"
+    ),
+    "push.test_rate_limited": (
+        "Too many test push requests, please retry later"
+    ),
+
     # ---- dashboard.* ----
     "dashboard.invalid_template": "Invalid template name",
     "dashboard.missing_field": "Missing required field",
@@ -135,6 +152,17 @@ MESSAGES_EN: dict[str, str] = {
     # ---- audit.* (BE-COMP-004 unified audit log) ----
     "audit.cross_parent_forbidden": (
         "You may only query your own audit history"
+    ),
+
+    # ---- notifications.* (BE-PUSH-005 notification center) ----
+    "notifications.not_found": (
+        "Notification does not exist or has been deleted"
+    ),
+    "notifications.invalid_cursor": (
+        "Pagination cursor is invalid or expired"
+    ),
+    "notifications.invalid_severity": (
+        "severity value is not in the supported set"
     ),
 }
 
