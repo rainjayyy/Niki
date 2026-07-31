@@ -12,7 +12,7 @@ import enum
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, Enum, Index, String
+from sqlalchemy import Boolean, DateTime, Enum, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
@@ -49,6 +49,15 @@ class Parent(Base):
     id_number_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     phone_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     email: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # BE-AUTH-006: email stored as hash for dedup without PII (mirrors
+    # phone_hash). `email` stays raw for display; `email_verified`
+    # gates whether recovery emails may be sent to it.
+    email_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     # Lifecycle state
     status: Mapped[ParentStatus] = mapped_column(
@@ -105,6 +114,9 @@ class Parent(Base):
         Index("ix_parents_id_number_hash", "id_number_hash", unique=True),
         Index("ix_parents_phone_hash", "phone_hash", unique=True),
         Index("ix_parents_status_created", "status", "created_at"),
+        # BE-AUTH-006: per-email dedup; partial-style index because the
+        # column is nullable.
+        Index("ix_parents_email_hash", "email_hash"),
     )
 
     def __repr__(self) -> str:
@@ -118,6 +130,7 @@ class Parent(Base):
             "id_number_masked": f"{self.id_number_hash[:6]}****",
             "phone_masked": f"{self.phone_hash[:3]}****",
             "email": self.email,
+            "email_verified": bool(self.email_verified),
             "status": self.status.value,
             "is_verified": self.status == ParentStatus.VERIFIED,
             "created_at": self.created_at.isoformat() if self.created_at else None,

@@ -41,6 +41,11 @@ from niki.db.models.deletion_request import DeletionRequest
 from niki.db.models.emotion_baseline_record import EmotionBaselineRecord
 from niki.db.models.memory_chunk import MemoryChunk
 from niki.db.models.parent import Parent, ParentStatus
+from niki.db.models.phone_change import (
+    PhoneChangeRequest,
+    PhoneChangeStatus,
+    VALID_PHONE_CHANGE_STATUSES,
+)
 from niki.db.models.push_device import PushDevice, PushPrefs, VALID_CHANNELS, VALID_PLATFORMS
 from niki.db.models.treehole_engagement import TreeholeEngagement
 from niki.db.models.treehole_aggregation import (
@@ -100,4 +105,8 @@ __all__ = [
     "VALID_EVENT_TYPES",
     "MAX_EVENT_TYPES_PER_SUBSCRIPTION",
     "MAX_CONSECUTIVE_FAILURES",
+    # BE-AUTH-006: parent phone change requests
+    "PhoneChangeRequest",
+    "PhoneChangeStatus",
+    "VALID_PHONE_CHANGE_STATUSES",
 ]

@@ -81,6 +81,7 @@ class ParentAccount:
     id_number_masked: str          # For storage; raw never persisted
     phone_masked: str
     email: str | None = None
+    email_verified: bool = False     # BE-AUTH-006
     status: AccountStatus = AccountStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     verified_at: datetime | None = None
@@ -125,6 +126,7 @@ class ParentAccount:
             "id_number_masked": self.id_number_masked,
             "phone_masked": self.phone_masked,
             "email": self.email,
+            "email_verified": bool(self.email_verified),
             "status": self.status.value,
             "is_verified": self.is_verified,
             "created_at": self.created_at.isoformat(),

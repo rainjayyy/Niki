@@ -200,3 +200,30 @@ async def cleanup_expired_pairing_codes() -> dict[str, Any]:
         "latency_ms": latency_ms,
         "removed": removed,
     }
+
+
+async def cleanup_completed_phone_changes() -> dict[str, Any]:
+    """BE-AUTH-006: sweep phone-change requests whose cooling period
+    has elapsed and complete them.
+
+    Registered with `HeartbeatService` from `niki.main.lifespan`. The
+    interval matches the cooling window's smallest meaningful
+    granularity: 1 hour is more than enough for a 7-day window.
+    """
+    from niki.services.phone_change import get_phone_change_service
+
+    started = time.monotonic()
+    try:
+        completed = await get_phone_change_service().sweep_expired()
+    except Exception as exc:
+        return {
+            "status": "unhealthy",
+            "latency_ms": None,
+            "error": f"phone_change sweep raised: {exc}",
+        }
+    latency_ms = (time.monotonic() - started) * 1000.0
+    return {
+        "status": "healthy",
+        "latency_ms": latency_ms,
+        "detail": {"completed": completed},
+    }

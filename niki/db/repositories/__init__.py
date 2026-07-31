@@ -148,10 +148,25 @@ __all__ = [
     "TwoFactorConfigData",
     "get_two_factor_repository",
     "set_two_factor_repository",
+    # BE-AUTH-006: phone-change requests
+    "PhoneChangeRepository",
+    "PhoneChangeRequestData",
+    "InMemoryPhoneChangeRepository",
+    "PostgresPhoneChangeRepository",
+    "get_phone_change_repository",
+    "set_phone_change_repository",
 ]
 
 from niki.db.repositories.child_repo import (
     ChildRepository,
     InMemoryChildRepository,
     PostgresChildRepository,
+)
+from niki.db.repositories.phone_change_repo import (
+    InMemoryPhoneChangeRepository,
+    PhoneChangeRepository,
+    PhoneChangeRequestData,
+    PostgresPhoneChangeRepository,
+    get_phone_change_repository,
+    set_phone_change_repository,
 )
