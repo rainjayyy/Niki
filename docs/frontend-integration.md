@@ -712,7 +712,7 @@ X-Device-Id: <UUID>
 | 完成 | ID | 缺口 | 当前状态 | 前端影响 | 替代方案 | 建议实现 | 工作量 |
 |:-:|---|---|---|---|---|---|---|
 | ✅ | **BE-AUTH-005** | **短信验证码（`POST /auth/sms/send` + `POST /auth/sms/verify`）** | ✅ 已完成：in-memory SMSCodeService + 5 分钟 TTL + 60s 节流；阿里云 SMS 后续替换 | 登录流程跑得通 | — | — | 1.5 天 |
-| ❌ | **BE-AUTH-006** | **换绑手机 / 换绑邮箱流程** | 缺失 | 已登录家长需要换号时无路径 | 走 customer service | `POST /auth/phone/change` 短信二次验证 + 7 天冷静期 | 1 天 |
+| ✅ | **BE-AUTH-006** | **换绑手机 / 换绑邮箱流程** | ✅ 已完成：`POST /auth/phone/change/request` + `/verify` + `/{id}/cancel` + `/confirm-now`（跳过冷静期）+ `POST /auth/email/change/request` + `/verify`；7 天冷静期 + cron sweep；lateral-auth 跨家长 404；每次状态迁移写 `audit_logs` | 家长端可换号 / 换邮箱；冷静期防误操作 | — | 1 天 |
 
 #### 7.2.2 Device（1 项）
 
@@ -771,7 +771,7 @@ X-Device-Id: <UUID>
 
 | 完成 | ID | 缺口 | 当前状态 | 前端影响 | 替代方案 | 建议实现 | 工作量 |
 |:-:|---|---|---|---|---|---|---|
-| ❌ | **BE-AUTH-007** | **家长端 2FA** | 仅短信登录，无 2FA | 设备丢 + 短信验证码被劫持 = 失陷 | 不做（PoC 阶段） | TOTP（Google Authenticator）；敏感操作（deletion request）前必过 | 2 天 |
+| ✅ | **BE-AUTH-007** | **家长端 2FA** | ✅ 已完成：7 个端点（enroll / enroll/verify / verify / delete / backup-codes / status / login）+ TOTP via `pyotp`（30s 步长 + ±1 tolerance + 防重放）+ 10 个备份码（一次性）+ Fernet 加密 secret 落盘 + 登录流返回 `partial_token`（scope=`2fa_pending`）+ `require_2fa_for_sensitive_ops` 守卫 `/auth/deletion/request`（X-2FA-Code / X-2FA-Backup-Code） | 设备丢失仍受保护；删除等敏感操作强制 2FA | — | 2 天 |
 
 #### 7.3.2 Push（4 项）
 
@@ -798,7 +798,7 @@ X-Device-Id: <UUID>
 
 | 完成 | ID | 缺口 | 当前状态 | 建议实现 | 工作量 |
 |:-:|---|---|---|---|---|
-| ❌ | **BE-API-008** | **Webhook 回调（异步任务）** | 30 天删除走 cron，但用户拿不到进度 | `POST /webhooks/register`；事件类型 `account.deleted`, `deletion.completed`；签名校验 | 2 天 |
+| ✅ | **BE-API-008** | **Webhook 回调（异步任务）** | ✅ 已完成：6 端点（POST /webhooks / GET list / GET {id} / PATCH {id} / DELETE {id} / GET {id}/deliveries）+ HMAC-SHA256 签名（`X-Niki-Signature: sha256=<hex>`）+ 4 次重试（1s/4s/16s 退避）+ 5 次连续失败自动禁用 + 幂等 `event_id` + 跨 owner 404（防 id-oracle）+ 每次状态变更写 `audit_logs` + HTTPS-only（dev 模式可放行 http） | 集成方可订阅删除 / 安全 / 审计事件；签名校验防伪造 | — | 2 天 |
 | ✅ | **BE-API-009** | **Prometheus 指标** | ✅ 已完成：`GET /metrics` Prometheus 文本格式 + 12 自定义 Counter / Histogram / Gauge（chat / safety / auth / push / ocr / webhook / rate_limited / http_duration）+ 5 条 hot path 埋点 + `MetricsMiddleware` | 运维可拉 QPS / p99 / 安全拦截率；熔断阈值可设 | — | 0.5 天 |
 
 #### 7.3.6 Compliance（2 项）
@@ -1125,6 +1125,7 @@ Label 建议：
 | v1.2 | 2026-07-24 | §7 缺口清单大改版：从 8+7+5=20 项扩到 46 项（P0×16 / P1×17 / P2×13），按域分组共 10 个；每条工单含 ID、当前状态、前端影响、替代方案、建议实现、工作量；新增 §7.4 关键路径图 / §7.5 文档内 ⚠️ 联动表 / §7.6 4×7 周排期 / §7.7 兜底方案 / §7.8 GitHub Issues 追踪建议 | Claude |
 | **v1.4** | **2026-07-30** | **§7 P1 加速清盘**：8 个 P1 工单落地（session-redis / auth-alerts-rollout / dash-rollout / treehole-agg-rollout / media-rollout / rt-002 / dev-002 / comp-005）；矩阵更新：P1 由 1/17 → 8/17；总完成 17/46 → 24/46 | Claude |
 | **v1.5** | **2026-07-31** | **§7 P1/P2 第二轮清盘**：4 个 P1 工单落地（push-004 静默时段 / push-005 通知中心 / push-006 测试端点 / api-009 Prometheus）；TS SDK 自动重生（`scripts/gen_ts_sdk.py`）覆盖 32 个 endpoint；测试 1676 → **1775 passed**，4 skipped；通知中心用 HMAC 签名 cursor 防 ID 枚举；Prometheus 暴露 12 个自定义指标（chat / safety / auth / push / ocr / webhook / rate_limited / http_duration / active_parents） | Claude |
+| **v1.6** | **2026-07-31** | **§7 P2 第三轮清盘**：4 个工单落地（api-008 Webhook 回调 / auth-007 家长端 2FA TOTP / push-003 Web Push VAPID / auth-006 换绑手机邮箱 7 天冷静期）；测试 1775 → **1902 passed**，4 skipped；BE-AUTH-006 修复合并后 4 处 bug（audit hook 异步 + new_phone_raw stash + email_hash→email 字段 + 测试 fixture）；TS SDK 重生覆盖 34 endpoint；通知中心 / 2FA / Webhook 都用 HMAC 签名或 scope-claim JWT；2FA 在 `/auth/deletion/request` 处强制 | Claude |
 | **v1.3** | **2026-07-29** | **§7 缺口清单状态盘点**：每张工单表加「完成」列（图例：✅ 已完成 / ⚠️ 部分完成 / 🟡 进行中 / ❌ 未开始）；§7.0 汇总矩阵更新：P0 已完成 **16/16**（全部清零），P1 **1/17**，P2 **0/13**；§7.6 排期补"实际状态"列；列出已完成工单清单（AUTH/DEV/PUSH/MEDIA/RT/STOR/API/COMP 各域） | Claude |
 
 ---
