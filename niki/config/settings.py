@@ -147,6 +147,28 @@ class Settings(BaseSettings):
     # (see BE-MISC-002 followups).
     feature_flags_default: str = "{}"
 
+    # --- BE-AUTH-007: 2FA / TOTP ---
+    # Fernet key used to encrypt TOTP secrets at rest. Generated at
+    # startup if None; production should set NIKI_TOTP_ENCRYPTION_KEY
+    # to a stable urlsafe-base64-32-bytes value so reboots don't
+    # invalidate existing rows. When None and no env override is set,
+    # TwoFactorService.generate_key() mints one in-process.
+    totp_encryption_key: str | None = None
+    totp_issuer: str = "Niki"
+    # How long a partial_token (2fa_pending scope) stays valid.
+    totp_partial_ttl_seconds: int = 5 * 60
+    # How long a successful /2fa/verify upgrade-token (full scope)
+    # stays valid — used by require_2fa_for_sensitive_ops to decide
+    # whether the caller still has a recent re-auth.
+    totp_reauth_window_seconds: int = 5 * 60
+
+    # --- BE-API-008: webhook callbacks ---
+    # When False (default), POST /webhooks rejects http://
+    # targets — only https:// is allowed in production. Set to
+    # True for local development against an ngrok / localhost
+    # listener via NIKI_ALLOW_INSECURE_WEBHOOK_TARGETS=true.
+    allow_insecure_webhook_targets: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -72,6 +72,21 @@ from niki.db.repositories.treehole_aggregation_repo import (
     get_treehole_aggregation_repository,
     set_treehole_aggregation_repository,
 )
+from niki.db.repositories.two_factor_repo import (
+    InMemoryTwoFactorRepository,
+    PostgresTwoFactorRepository,
+    TwoFactorConfigData,
+    TwoFactorRepository,
+    get_two_factor_repository,
+    set_two_factor_repository,
+)
+from niki.db.repositories.webhook_repo import (
+    InMemoryWebhookRepository,
+    PostgresWebhookRepository,
+    WebhookRepository,
+    get_webhook_repository,
+    set_webhook_repository,
+)
 
 __all__ = [
     "AccountRepository",
@@ -120,6 +135,19 @@ __all__ = [
     "PostgresAuditLogRepository",
     "get_audit_log_repository",
     "set_audit_log_repository",
+    # BE-API-008: webhook subscriptions + deliveries
+    "WebhookRepository",
+    "InMemoryWebhookRepository",
+    "PostgresWebhookRepository",
+    "get_webhook_repository",
+    "set_webhook_repository",
+    # BE-AUTH-007: parent 2FA / TOTP
+    "TwoFactorRepository",
+    "InMemoryTwoFactorRepository",
+    "PostgresTwoFactorRepository",
+    "TwoFactorConfigData",
+    "get_two_factor_repository",
+    "set_two_factor_repository",
 ]
 
 from niki.db.repositories.child_repo import (

@@ -29,10 +29,12 @@ from niki.api.resilience import router as resilience_router
 from niki.api.routing import router as routing_router
 from niki.api.safety import chat_router as safety_chat_router
 from niki.api.safety import router as safety_router
+from niki.api.two_factor import router as two_factor_router
 from niki.api.session import router as session_router
 from niki.api.tools import router as tools_router
 from niki.api.treehole import router as treehole_router
 from niki.api.tutoring import router as tutoring_router
+from niki.api.webhooks import router as webhooks_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -100,6 +102,8 @@ OPENAPI_TAGS: list[dict] = _collect_tag_metadata(
     status_router,
     push_router,
     notifications_router,
+    webhooks_router,
+    two_factor_router,
 )
 
 # Health & monitoring
@@ -191,5 +195,12 @@ api_router.include_router(notifications_router)
 
 # BE-API-009: Prometheus exposition endpoint (/metrics)
 api_router.include_router(metrics_router)
+
+# BE-API-008: webhook subscriptions + deliveries
+api_router.include_router(webhooks_router)
+
+# BE-AUTH-007: parent 2FA / TOTP endpoints (mount under /auth so
+# the full path is /api/v1/auth/2fa/*).
+api_router.include_router(two_factor_router)
 
 
