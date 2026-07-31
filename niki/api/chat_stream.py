@@ -22,6 +22,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from niki.infrastructure.llm.streaming import get_streaming_provider
+from niki.metrics import get_registry
 from niki.middleware.rate_limit import limiter
 from typing import Annotated
 from niki.auth.account import ParentAccount
@@ -129,6 +130,19 @@ async def chat_stream(
     session_id = body.get("session_id")
     child_age = body.get("child_age")
     persona = body.get("persona")
+
+    # BE-API-009: count every chat-stream request.
+    try:
+        provider_name = type(
+            get_streaming_provider()
+        ).__name__.lower().replace("streamingprovider", "") or "mock"
+    except Exception:  # pragma: no cover
+        provider_name = "mock"
+    get_registry().CHAT_TOTAL.labels(
+        route="chat_stream",
+        provider=provider_name,
+        mode="stream",
+    ).inc()
 
     gen = _sse_generator(
         text,

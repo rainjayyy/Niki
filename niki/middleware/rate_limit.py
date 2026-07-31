@@ -48,6 +48,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from niki.config.settings import get_settings
+from niki.metrics import get_registry
 from niki.schemas.common import APIResponse
 
 logger = structlog.get_logger(__name__)
@@ -133,6 +134,13 @@ def setup_rate_limit(app: FastAPI) -> None:
             path=request.url.path,
             limit=limit_str,
         )
+        # BE-API-009: count 429s by endpoint.
+        try:
+            get_registry().RATE_LIMITED_TOTAL.labels(
+                endpoint=request.url.path,
+            ).inc()
+        except Exception:  # pragma: no cover
+            pass
         body = APIResponse.from_error(
             code="RATE_LIMIT_EXCEEDED",
             message=f"Too many requests (limit: {limit_str})",

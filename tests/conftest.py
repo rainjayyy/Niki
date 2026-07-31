@@ -156,6 +156,17 @@ def _reset_rate_limit() -> None:
     reset_for_tests()
 
 
+@pytest.fixture(autouse=True)
+def _reset_metrics_registry() -> None:
+    """BE-API-009: drop the Prometheus registry between tests so
+    counter values can't leak across tests."""
+    from niki.metrics import reset_for_tests as reset_metrics
+
+    reset_metrics()
+    yield
+    reset_metrics()
+
+
 # Endpoints that import `get_current_parent` and bind it locally.
 # To globally override the dependency without rewriting each test to
 # mint a JWT, we patch the function on every module that imported it

@@ -172,6 +172,9 @@ class TestResponseSchemas:
             ("get", "/api/v1/deletion/{request_id}/receipt"),
             ("get", "/api/v1/alerts/stream/{child_id}"),
             ("post", "/api/v1/chat/stream"),
+            # BE-API-009: Prometheus exposition endpoint returns
+            # text/plain; not application/json.
+            ("get", "/api/v1/metrics"),
         }
         missing: list[str] = []
         for m, p, info in api_paths:

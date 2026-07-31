@@ -31,6 +31,7 @@ from niki.db.repositories.auth_audit_repo import (
     get_auth_audit_log_repository,
 )
 from niki.feature_flags import get_feature_flag_service
+from niki.metrics import get_registry
 from niki.security.alerts import (
     AlertDispatcher,
     SecurityAlert,
@@ -177,6 +178,20 @@ class AuthAuditLogger:
         # for the alerting path below — it is a single-table index
         # scan and must not pay for the wider table.
         await self._mirror_to_unified_audit(event)
+
+        # 2c. BE-API-009: count every audit event into the
+        # `niki_auth_audit_total{event_type, severity}` counter.
+        try:
+            get_registry().AUTH_AUDIT_TOTAL.labels(
+                event_type=event.event_type,
+                severity=event.severity,
+            ).inc()
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "auth.audit.metrics_increment_failed",
+                error=str(exc),
+                event_type=event.event_type,
+            )
 
         # 3. NEW (BE-AUTH-001-rollout-alerts): feed the rate tracker
         # for warning-severity events and dispatch an alert when
