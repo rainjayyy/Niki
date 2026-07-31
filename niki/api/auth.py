@@ -67,6 +67,24 @@ from niki.services.two_factor import get_two_factor_service
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
+from niki.services.phone_change import (
+    EmailChangeAlreadyUsed,
+    EmailChangeCodeInvalid,
+    EmailChangeError,
+    EmailChangeInvalidFormat,
+    EmailChangeRequestNotFound,
+    PhoneChangeAlreadyPending,
+    PhoneChangeAlreadyVerified,
+    PhoneChangeCannotCancel,
+    PhoneChangeCodeExpired,
+    PhoneChangeCodeInvalid,
+    PhoneChangeError,
+    PhoneChangeInvalidPassword,
+    PhoneChangeRequestNotFound,
+    PhoneChangeSameNumber,
+    get_email_change_service,
+    get_phone_change_service,
+)
 
 router = APIRouter(
     prefix="/auth",
@@ -83,6 +101,54 @@ router = APIRouter(
 
 # Module-level singleton
 _lifecycle = AccountLifecycle()
+
+
+# ---------------------------------------------------------------------------
+# BE-AUTH-006: wire the phone/email change services to the unified
+# `audit_logs` table (BE-COMP-004). The hook is set lazily so tests
+# that override the audit service are picked up.
+# ---------------------------------------------------------------------------
+
+
+def _audit_hook_factory():
+    """Build an async hook that defers to the global AuditLogService."""
+    from niki.services.audit_log import get_audit_log_service
+
+    async def _hook(
+        event_type: str,
+        *,
+        severity: str = "info",
+        actor_parent_id: str | None = None,
+        target_parent_id: str | None = None,
+        endpoint: str = "",
+        method: str = "",
+        reason: str = "",
+        client_ip: str | None = None,
+        metadata: dict | None = None,
+    ) -> None:
+        try:
+            await get_audit_log_service().log_event(
+                event_type,
+                severity=severity,
+                actor_parent_id=actor_parent_id,
+                target_parent_id=target_parent_id,
+                endpoint=endpoint or None,
+                method=method or None,
+                reason=reason,
+                client_ip=client_ip,
+                metadata=metadata or {},
+            )
+        except Exception:  # pragma: no cover — defence in depth
+            pass
+
+    return _hook
+
+
+# Install the hook on the default singletons so endpoint handlers
+# don't have to re-wire it. Tests that inject their own services
+# can attach a custom hook via `set_phone_change_service(...)`.
+get_phone_change_service()._audit_hook = _audit_hook_factory()  # type: ignore[attr-defined]
+get_email_change_service()._audit_hook = _audit_hook_factory()  # type: ignore[attr-defined]
 
 # Translation-key map for the structured AuthError codes. The
 # `code` is what the frontend branches on (and what we test
@@ -101,6 +167,21 @@ _AUTH_KEY_BY_CODE: dict[str, str] = {
     "SMS_CODE_EXPIRED": "auth.sms_code_expired",
     "SMS_TOO_MANY_ATTEMPTS": "auth.sms_too_many_attempts",
     "NOT_FOUND": "auth.not_found",
+    # BE-AUTH-006
+    "PHONE_CHANGE_INVALID_PASSWORD": "auth.phone_change_invalid_password",
+    "PHONE_CHANGE_CODE_INVALID": "auth.phone_change_code_invalid",
+    "PHONE_CHANGE_CODE_EXPIRED": "auth.phone_change_code_expired",
+    "PHONE_CHANGE_NOT_FOUND": "auth.phone_change_not_found",
+    "PHONE_CHANGE_ALREADY_PENDING": "auth.phone_change_already_pending",
+    "PHONE_CHANGE_IN_COOLING_PERIOD": (
+        "auth.phone_change_in_cooling_period"
+    ),
+    "PHONE_CHANGE_SAME_NUMBER": "auth.phone_change_same_number",
+    "PHONE_CHANGE_CANNOT_CANCEL": "auth.phone_change_cannot_cancel",
+    "EMAIL_CHANGE_INVALID_FORMAT": "auth.email_change_invalid_format",
+    "EMAIL_CHANGE_CODE_INVALID": "auth.email_change_code_invalid",
+    "EMAIL_CHANGE_NOT_FOUND": "auth.email_change_not_found",
+    "EMAIL_ALREADY_IN_USE": "auth.email_already_in_use",
 }
 
 
@@ -124,6 +205,49 @@ def _error_response(request: Request, exc: AuthError) -> dict:
     # Unknown code → keep the exception's literal message so we
     # never regress existing error text.
     return {"error": exc.code, "message": exc.message}
+
+
+# ---------------------------------------------------------------------------
+# BE-AUTH-006: phone/email change error → HTTP status mapping
+# ---------------------------------------------------------------------------
+
+
+# Each entry: error code → (HTTP status, i18n key, fallback message).
+# The HTTP status matches the §6.3 contract — 409 for "conflict
+# with current state", 422 for "input format error", etc.
+_PHONE_CHANGE_STATUS: dict[str, int] = {
+    "PHONE_CHANGE_INVALID_PASSWORD": 401,
+    "PHONE_CHANGE_NOT_FOUND": 404,
+    "PHONE_CHANGE_SAME_NUMBER": 409,
+    "PHONE_CHANGE_ALREADY_PENDING": 409,
+    "PHONE_CHANGE_CODE_INVALID": 400,
+    "PHONE_CHANGE_CODE_EXPIRED": 400,
+    "PHONE_CHANGE_CANNOT_CANCEL": 409,
+    "PHONE_CHANGE_IN_COOLING_PERIOD": 409,
+}
+_EMAIL_CHANGE_STATUS: dict[str, int] = {
+    "EMAIL_CHANGE_INVALID_FORMAT": 422,
+    "EMAIL_CHANGE_CODE_INVALID": 400,
+    "EMAIL_CHANGE_NOT_FOUND": 404,
+    "EMAIL_ALREADY_IN_USE": 409,
+}
+
+
+def _raise_change_error(
+    request: Request, exc: PhoneChangeError | EmailChangeError
+) -> None:
+    """Map a phone/email change service exception to an HTTPException.
+
+    Centralised so endpoints don't repeat the same boilerplate.
+    """
+    if isinstance(exc, EmailChangeError):
+        status = _EMAIL_CHANGE_STATUS.get(exc.code, 400)
+    else:
+        status = _PHONE_CHANGE_STATUS.get(exc.code, 400)
+    raise HTTPException(
+        status_code=status,
+        detail=_error_response(request, exc),
+    ) from exc
 
 
 def _client_ip(request: Request) -> str | None:
@@ -875,3 +999,229 @@ async def logout(
     if jti:
         await get_blacklist().revoke(jti)
     return {"status": "logged_out", "parent_id": parent.id, "revoked_jti": jti}
+
+
+# ---------------------------------------------------------------------------
+# BE-AUTH-006: phone/email change endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/phone/change/request",
+    summary="Request phone change (step 1)",
+    description=(
+        "BE-AUTH-006: begin a phone-change flow. The parent must "
+        "supply their current `password` (re-auth) and the `new_phone` "
+        "to bind. The backend dispatches a 6-digit SMS code to "
+        "`new_phone` and persists a `pending_verification` row with a "
+        "10-minute expiry. Rate-limited to 3 requests per minute per IP."
+    ),
+)
+@limiter.limit("3/minute")
+async def phone_change_request(
+    request: Request,
+    payload: dict,
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+) -> dict:
+    """Step 1: send SMS code to the new phone."""
+    new_phone = payload.get("new_phone", "")
+    password = payload.get("password", "")
+    try:
+        view = await get_phone_change_service().request(
+            parent_id=parent.id,
+            new_phone=new_phone,
+            password=password,
+        )
+    except PhoneChangeError as exc:
+        _raise_change_error(request, exc)
+    except AuthError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
+    return view_to_dict(view, "phone")
+
+
+@router.post(
+    "/phone/change/verify",
+    summary="Verify phone-change SMS code (step 2)",
+    description=(
+        "BE-AUTH-006: verify the 6-digit SMS code that was sent to the "
+        "new phone. On success, the request transitions to "
+        "`pending_cooling` and `effective_at` is set 7 days into the "
+        "future. After `effective_at` a cron sweep completes the swap."
+    ),
+)
+async def phone_change_verify(
+    request: Request,
+    payload: dict,
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+) -> dict:
+    """Step 2: verify the SMS code and enter the 7-day cooling period."""
+    request_id = payload.get("request_id", "")
+    code = payload.get("sms_code", "")
+    try:
+        view = await get_phone_change_service().verify(
+            request_id=request_id,
+            sms_code=code,
+        )
+    except PhoneChangeError as exc:
+        _raise_change_error(request, exc)
+    if view.parent_id != parent.id:
+        # Lateral-auth: never reveal the row exists if it doesn't
+        # belong to the caller.
+        raise HTTPException(
+            status_code=404,
+            detail=localized_error_response(
+                request,
+                code="PHONE_CHANGE_NOT_FOUND",
+                key="auth.phone_change_not_found",
+            ),
+        )
+    return view_to_dict(view, "phone")
+
+
+@router.post(
+    "/phone/change/{request_id}/cancel",
+    summary="Cancel a phone-change request",
+    description=(
+        "BE-AUTH-006: cancel a phone-change request that is still in "
+        "`pending_verification` or `pending_cooling`. The call is "
+        "rejected (404) if the request belongs to a different parent."
+    ),
+)
+async def phone_change_cancel(
+    request: Request,
+    request_id: str,
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+) -> dict:
+    """Cancel a phone-change request (lateral-auth enforced)."""
+    try:
+        view = await get_phone_change_service().cancel(
+            request_id=request_id,
+            parent_id=parent.id,
+        )
+    except PhoneChangeError as exc:
+        _raise_change_error(request, exc)
+    return view_to_dict(view, "phone")
+
+
+@router.post(
+    "/phone/change/confirm-now",
+    summary="Skip the 7-day cooling period",
+    description=(
+        "BE-AUTH-006: bypass the cooling period and complete the "
+        "phone swap immediately. A `warning`-severity audit event is "
+        "written to record the user actively waived the 7-day window."
+    ),
+)
+async def phone_change_confirm_now(
+    request: Request,
+    payload: dict,
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+) -> dict:
+    """Bypass the 7-day cooling period (warning-audited)."""
+    request_id = payload.get("request_id", "")
+    try:
+        view = await get_phone_change_service().confirm_now(
+            request_id=request_id,
+            parent_id=parent.id,
+        )
+    except PhoneChangeError as exc:
+        _raise_change_error(request, exc)
+    return view_to_dict(view, "phone")
+
+
+@router.post(
+    "/email/change/request",
+    summary="Request email change (step 1)",
+    description=(
+        "BE-AUTH-006: begin an email-change flow. The backend dispatches "
+        "a 6-digit code to `new_email` (mock — logs the code in dev). "
+        "Rate-limited to 3 requests per minute per IP."
+    ),
+)
+@limiter.limit("3/minute")
+async def email_change_request(
+    request: Request,
+    payload: dict,
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+) -> dict:
+    """Step 1: send verification email to the new address."""
+    new_email = payload.get("new_email", "")
+    try:
+        result = await get_email_change_service().request(
+            parent_id=parent.id,
+            new_email=new_email,
+        )
+    except EmailChangeError as exc:
+        _raise_change_error(request, exc)
+    except AuthError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=_error_response(request, exc),
+        ) from exc
+    return result
+
+
+@router.post(
+    "/email/change/verify",
+    summary="Verify email-change code and complete (step 2)",
+    description=(
+        "BE-AUTH-006: verify the 6-digit email code. The new email is "
+        "swapped into the account immediately; no cooling period."
+    ),
+)
+async def email_change_verify(
+    request: Request,
+    payload: dict,
+    parent: Annotated[ParentAccount, Depends(get_current_parent)],
+) -> dict:
+    """Step 2: verify the email code and apply the swap immediately."""
+    code = payload.get("code", "")
+    new_email = payload.get("new_email", "")
+    try:
+        account = await get_email_change_service().verify(
+            parent_id=parent.id,
+            code=code,
+            new_email=new_email,
+        )
+    except EmailChangeError as exc:
+        _raise_change_error(request, exc)
+    return {"account": account.to_dict()}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def view_to_dict(view, kind: str) -> dict:
+    """Serialise a PhoneChangeRequestView for API responses.
+
+    `kind` is "phone" today; reserved so future change services can
+    share the same JSON-shaping helper.
+    """
+    return {
+        "request_id": view.request_id,
+        "parent_id": view.parent_id,
+        "status": view.status,
+        "requested_at": view.requested_at.isoformat()
+        if view.requested_at
+        else None,
+        "expires_at": view.expires_at.isoformat()
+        if view.expires_at
+        else None,
+        "effective_at": view.effective_at.isoformat()
+        if view.effective_at
+        else None,
+        "confirmed_at": view.confirmed_at.isoformat()
+        if view.confirmed_at
+        else None,
+        "completed_at": view.completed_at.isoformat()
+        if view.completed_at
+        else None,
+        "cancelled_at": view.cancelled_at.isoformat()
+        if view.cancelled_at
+        else None,
+    }

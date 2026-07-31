@@ -87,6 +87,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         cleanup_expired_pairing_codes,
         interval_seconds=60,
     )
+    # BE-AUTH-006: periodic sweep of phone-change requests whose
+    # 7-day cooling period has elapsed. 1 hour is plenty of
+    # granularity; the row's `effective_at` is the source of truth.
+    from niki.infrastructure.heartbeat import (
+        cleanup_completed_phone_changes,
+    )
+    heartbeat.register(
+        "phone_change_sweep",
+        cleanup_completed_phone_changes,
+        interval_seconds=3600,
+    )
     await heartbeat.start()
     app.state.heartbeat = heartbeat
 

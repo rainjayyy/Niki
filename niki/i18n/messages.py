@@ -46,6 +46,24 @@ MESSAGES_ZH: dict[str, str] = {
     "auth.parent_child_mismatch": "当前账户不能访问该孩子的数据",
     "auth.child_not_found": "未找到该孩子的注册信息",
 
+    # ---- auth.phone_change.* (BE-AUTH-006 换绑手机) ----
+    "auth.phone_change_invalid_password": "请先验证当前账户密码",
+    "auth.phone_change_code_invalid": "短信验证码不正确",
+    "auth.phone_change_code_expired": "短信验证码已过期，请重新获取",
+    "auth.phone_change_not_found": "换绑请求不存在或不属于当前账户",
+    "auth.phone_change_already_pending": "已存在进行中的换绑请求，请先取消",
+    "auth.phone_change_in_cooling_period": (
+        "换绑手机已进入 7 天冷静期，暂无法立即生效"
+    ),
+    "auth.phone_change_same_number": "新手机号不能与当前手机号相同",
+    "auth.phone_change_cannot_cancel": "该换绑请求已处于终态，无法取消",
+
+    # ---- auth.email_change.* (BE-AUTH-006 换绑邮箱) ----
+    "auth.email_change_invalid_format": "邮箱地址格式不正确",
+    "auth.email_change_code_invalid": "邮箱验证码不正确",
+    "auth.email_change_not_found": "换绑请求不存在或不属于当前账户",
+    "auth.email_already_in_use": "该邮箱已被另一账户使用",
+
     # ---- auth.2fa.* (BE-AUTH-007 家长端 2FA / TOTP) ----
     "auth.2fa_required": "此账户已开启两步验证，请提供两步验证码",
     "auth.2fa_invalid_code": "两步验证码不正确",
@@ -138,6 +156,38 @@ MESSAGES_EN: dict[str, str] = {
     "auth.consent_required": "Please sign the consent document first",
     "auth.parent_child_mismatch": "Token does not own this child_id",
     "auth.child_not_found": "No child registered with the given id",
+
+    # ---- auth.phone_change.* (BE-AUTH-006) ----
+    "auth.phone_change_invalid_password": (
+        "Please re-authenticate with your account password"
+    ),
+    "auth.phone_change_code_invalid": "SMS verification code is incorrect",
+    "auth.phone_change_code_expired": (
+        "SMS verification code has expired; please request a new one"
+    ),
+    "auth.phone_change_not_found": (
+        "Phone-change request not found or not owned by this account"
+    ),
+    "auth.phone_change_already_pending": (
+        "A phone-change request is already in flight; please cancel it first"
+    ),
+    "auth.phone_change_in_cooling_period": (
+        "Phone change is in the 7-day cooling period and cannot take effect yet"
+    ),
+    "auth.phone_change_same_number": (
+        "New phone number must differ from the current one"
+    ),
+    "auth.phone_change_cannot_cancel": (
+        "This phone-change request is in a final state and cannot be cancelled"
+    ),
+
+    # ---- auth.email_change.* (BE-AUTH-006) ----
+    "auth.email_change_invalid_format": "Invalid email address format",
+    "auth.email_change_code_invalid": "Email verification code is incorrect",
+    "auth.email_change_not_found": (
+        "Email-change request not found or not owned by this account"
+    ),
+    "auth.email_already_in_use": "This email is already in use by another account",
 
     # ---- auth.2fa.* (BE-AUTH-007 parent 2FA / TOTP) ----
     "auth.2fa_required": (

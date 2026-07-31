@@ -107,6 +107,27 @@ class AccountRepository(ABC):
     async def list_all(self) -> list[ParentAccount]:
         """All accounts (admin / debug only)."""
 
+    # ---- BE-AUTH-006 phone / email change plumbing ----
+
+    @abstractmethod
+    async def update_phone_hash(
+        self, parent_id: str, new_phone: str
+    ) -> ParentAccount | None:
+        """Swap the account's phone hash (called by PhoneChangeService
+        once the cooling period elapses or after `confirm-now`)."""
+
+    @abstractmethod
+    async def update_email(
+        self, parent_id: str, new_email: str
+    ) -> ParentAccount | None:
+        """Swap the account's email + email_hash + flip verified=True."""
+
+    @abstractmethod
+    async def find_by_email_hash(
+        self, email_hash: str
+    ) -> ParentAccount | None:
+        """Look up an account by email hash (email uniqueness check)."""
+
     # ---- helpers ----
 
     @staticmethod
@@ -165,6 +186,45 @@ class PostgresAccountRepository(AccountRepository):
         rows = result.scalars().all()
         return [self._to_business(r) for r in rows]
 
+    async def find_by_email_hash(
+        self, email_hash: str
+    ) -> ParentAccount | None:
+        """BE-AUTH-006: lookup by email hash (uniqueness check)."""
+        result = await self._session.execute(
+            select(Parent).where(Parent.email_hash == email_hash)
+        )
+        row = result.scalar_one_or_none()
+        return self._to_business(row) if row else None
+
+    async def update_phone_hash(
+        self, parent_id: str, new_phone: str
+    ) -> ParentAccount | None:
+        """Swap the account's phone hash + masked view in place."""
+        result = await self._session.execute(
+            select(Parent).where(Parent.id == parent_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        row.phone_hash = self.hash_field(new_phone)
+        await self._session.flush()
+        return self._to_business(row)
+
+    async def update_email(
+        self, parent_id: str, new_email: str
+    ) -> ParentAccount | None:
+        result = await self._session.execute(
+            select(Parent).where(Parent.id == parent_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        row.email = new_email
+        row.email_hash = self.hash_field(new_email)
+        row.email_verified = True
+        await self._session.flush()
+        return self._to_business(row)
+
     # ---- writes ----
 
     async def create(
@@ -184,6 +244,10 @@ class PostgresAccountRepository(AccountRepository):
             id_number_hash=self.hash_field(id_number),
             phone_hash=self.hash_field(phone),
             email=email,
+            email_hash=(
+                self.hash_field(email) if email else None
+            ),
+            email_verified=False,
             status=ParentStatus.PENDING,
         )
         self._session.add(parent)
@@ -323,6 +387,7 @@ class PostgresAccountRepository(AccountRepository):
             id_number_masked=f"{row.id_number_hash[:6]}****",
             phone_masked=f"{row.phone_hash[:3]}****",
             email=row.email,
+            email_verified=bool(row.email_verified),
             status=AccountStatus(row.status.value),
             created_at=row.created_at.replace(tzinfo=timezone.utc)
             if row.created_at and row.created_at.tzinfo is None
@@ -360,6 +425,13 @@ class InMemoryAccountRepository(AccountRepository):
     def __init__(self) -> None:
         self._parents: dict[str, ParentAccount] = {}
         self._phone_to_id: dict[str, str] = {}  # phone_hash -> parent_id (BE-AUTH-002)
+        self._email_to_id: dict[str, str] = {}  # BE-AUTH-006
+        # BE-AUTH-006: stash the raw phone alongside the masked view so
+        # the phone-change service can do the "same number" check.
+        # Production (Postgres) can't do this; the helper is a no-op
+        # there and the check still passes because both sides go
+        # through the same hash pipeline.
+        self._raw_phones: dict[str, str] = {}
         self._progress: dict[str, "SignupProgress"] = {}
 
     async def get(self, parent_id: str) -> ParentAccount | None:
@@ -371,6 +443,53 @@ class InMemoryAccountRepository(AccountRepository):
         if parent_id is None:
             return None
         return self._parents.get(parent_id)
+
+    async def find_by_email_hash(
+        self, email_hash: str
+    ) -> ParentAccount | None:
+        parent_id = self._email_to_id.get(email_hash)
+        if parent_id is None:
+            return None
+        return self._parents.get(parent_id)
+
+    async def update_phone_hash(
+        self, parent_id: str, new_phone: str
+    ) -> ParentAccount | None:
+        account = self._parents.get(parent_id)
+        if account is None:
+            return None
+        # Drop the OLD phone_hash index entry.
+        old_hash = None
+        for ph, pid in list(self._phone_to_id.items()):
+            if pid == parent_id:
+                old_hash = ph
+                self._phone_to_id.pop(ph, None)
+        new_hash = self.hash_field(new_phone)
+        self._phone_to_id[new_hash] = parent_id
+        # BE-AUTH-006: keep the in-memory raw phone in sync.
+        self._raw_phones[parent_id] = new_phone
+        account.phone_masked = mask_phone(new_phone)
+        return account
+
+    def get_raw_phone(self, parent_id: str) -> str | None:
+        """BE-AUTH-006: test/dev helper to fetch the raw phone."""
+        return self._raw_phones.get(parent_id)
+
+    async def update_email(
+        self, parent_id: str, new_email: str
+    ) -> ParentAccount | None:
+        account = self._parents.get(parent_id)
+        if account is None:
+            return None
+        # Drop the OLD email_hash index entry.
+        for eh, pid in list(self._email_to_id.items()):
+            if pid == parent_id:
+                self._email_to_id.pop(eh, None)
+        new_hash = self.hash_field(new_email)
+        self._email_to_id[new_hash] = parent_id
+        account.email = new_email
+        account.email_verified = True
+        return account
 
     async def create(
         self,
@@ -389,11 +508,18 @@ class InMemoryAccountRepository(AccountRepository):
             id_number_masked=mask_id_number(id_number),
             phone_masked=mask_phone(phone),
             email=email,
+            email_verified=False,
             status=AccountStatus.PENDING,
         )
         self._parents[parent_id] = account
         # BE-AUTH-002: secondary index by phone hash for SMS-login lookup.
         self._phone_to_id[self.hash_field(phone)] = parent_id
+        # BE-AUTH-006: stash the raw phone for same-number detection
+        # (only meaningful in the in-memory backend).
+        self._raw_phones[parent_id] = phone
+        # BE-AUTH-006: secondary index by email hash for uniqueness check.
+        if email is not None and email.strip():
+            self._email_to_id[self.hash_field(email)] = parent_id
         self._progress[parent_id] = SignupProgress(
             parent_id=parent_id,
             steps=[
@@ -448,6 +574,10 @@ class InMemoryAccountRepository(AccountRepository):
             for ph, pid in list(self._phone_to_id.items()):
                 if pid == parent_id:
                     self._phone_to_id.pop(ph, None)
+            # BE-AUTH-006: also drop the email hash index entry.
+            for eh, pid in list(self._email_to_id.items()):
+                if pid == parent_id:
+                    self._email_to_id.pop(eh, None)
         self._progress.pop(parent_id, None)
 
     async def list_all(self) -> list[ParentAccount]:
