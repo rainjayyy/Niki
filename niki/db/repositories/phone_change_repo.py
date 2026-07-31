@@ -62,6 +62,12 @@ class PhoneChangeRequestData:
     confirmed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
+    # In-memory backend only: stash the raw new phone so the flip
+    # in `_complete()` can hand it to `account_repo.update_phone_hash`.
+    # Production Postgres cannot recover a phone from its hash, so
+    # this stays None there and `update_phone_hash` is a no-op
+    # outside the dev / test flow.
+    new_phone_raw: Optional[str] = None
 
     def is_pending(self) -> bool:
         return self.status in (
@@ -118,8 +124,15 @@ class PhoneChangeRepository(ABC):
         new_phone_hash: str,
         verification_code: str,
         expires_at: datetime,
+        new_phone_raw: Optional[str] = None,
     ) -> PhoneChangeRequestData:
-        """Insert a new PENDING_VERIFICATION row, return persisted."""
+        """Insert a new PENDING_VERIFICATION row, return persisted.
+
+        `new_phone_raw` is only populated by the in-memory backend —
+        production cannot recover a phone from its hash, so the
+        Postgres impl persists the column as NULL and the
+        completion path is a no-op there (cooling sweep ends in a
+        status flip without the hash swap)."""
 
     @abstractmethod
     async def get(self, request_id: str) -> PhoneChangeRequestData | None:
@@ -174,6 +187,7 @@ class InMemoryPhoneChangeRepository(PhoneChangeRepository):
         new_phone_hash: str,
         verification_code: str,
         expires_at: datetime,
+        new_phone_raw: Optional[str] = None,
     ) -> PhoneChangeRequestData:
         import uuid as _uuid
 
@@ -188,6 +202,7 @@ class InMemoryPhoneChangeRepository(PhoneChangeRepository):
             requested_at=now,
             expires_at=_aware(expires_at),
             status=PhoneChangeStatus.PENDING_VERIFICATION.value,
+            new_phone_raw=new_phone_raw,
         )
         self._rows[rid] = row
         return copy.deepcopy(row)
@@ -271,6 +286,7 @@ class PostgresPhoneChangeRepository(PhoneChangeRepository):
         new_phone_hash: str,
         verification_code: str,
         expires_at: datetime,
+        new_phone_raw: Optional[str] = None,
     ) -> PhoneChangeRequestData:
         row = PhoneChangeRequest(
             parent_id=parent_id,

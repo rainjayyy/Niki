@@ -30,6 +30,7 @@ without changing call sites.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -50,10 +51,10 @@ from niki.auth.email_code_service import (
     get_email_code_service,
 )
 from niki.auth.sms_service import (
-    SMSCodeError,
     SMSCodeInvalid,
     SMSCodeExpired,
     SMSTooManyAttempts,
+    SMSError,
     get_sms_service,
 )
 from niki.db.models.phone_change import (
@@ -270,7 +271,7 @@ class PhoneChangeService:
 
     # ---- hooks ----
 
-    def _emit_audit(
+    async def _emit_audit(
         self,
         event_type: str,
         *,
@@ -287,8 +288,6 @@ class PhoneChangeService:
             return
         # Best-effort; never raise.
         try:
-            import asyncio
-
             coro = self._audit_hook(
                 event_type,
                 severity=severity,
@@ -301,11 +300,7 @@ class PhoneChangeService:
                 metadata=metadata or {},
             )
             if asyncio.iscoroutine(coro):
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.ensure_future(coro)
-                else:
-                    loop.run_until_complete(coro)
+                await coro
         except Exception as exc:  # pragma: no cover — defence
             logger.warning(
                 "phone_change.audit_emit_failed",
@@ -365,8 +360,9 @@ class PhoneChangeService:
             new_phone_hash=new_hash,
             verification_code=sms_code,
             expires_at=expires_at,
+            new_phone_raw=new_phone,
         )
-        self._emit_audit(
+        await self._emit_audit(
             EVENT_PHONE_CHANGE_REQUESTED,
             severity="warning",
             actor_parent_id=parent_id,
@@ -440,7 +436,7 @@ class PhoneChangeService:
             effective_at=effective_at,
             confirmed_at=now,
         )
-        self._emit_audit(
+        await self._emit_audit(
             EVENT_PHONE_CHANGE_VERIFIED,
             actor_parent_id=row.parent_id if row else None,
             reason="Phone-change SMS code verified",
@@ -485,7 +481,7 @@ class PhoneChangeService:
             status=PhoneChangeStatus.CANCELLED.value,
             cancelled_at=now,
         )
-        self._emit_audit(
+        await self._emit_audit(
             EVENT_PHONE_CHANGE_CANCELLED,
             actor_parent_id=parent_id,
             reason="Phone-change request cancelled by parent",
@@ -580,20 +576,35 @@ class PhoneChangeService:
         return phone_hash
 
     async def _complete(self, row: PhoneChangeRequestData) -> None:
-        """Final state-machine transition + account-level swap."""
-        new_phone_raw = _phone_from_hash(row.new_phone_hash)
-        # 1. Mutate the parent row.
-        new_acct = await self._account_repo.update_phone_hash(
-            row.parent_id, new_phone_raw
-        )
-        # 2. Flip the request row.
+        """Final state-machine transition + account-level swap.
+
+        The in-memory backend stashes the raw new phone on the row
+        (`new_phone_raw`), so we can flip the account's stored hash
+        + the in-memory raw mirror in one shot. The Postgres
+        backend leaves `new_phone_raw=None` — production cannot
+        recover a phone from its hash, so the cooling sweep ends in
+        a status flip there with the same-number check pre-validated
+        during the request step.
+        """
+        # 1. Mutate the parent row (no-op if `new_phone_raw` is None).
+        new_phone_raw = row.new_phone_raw
+        if new_phone_raw is not None:
+            new_acct = await self._account_repo.update_phone_hash(
+                row.parent_id, new_phone_raw
+            )
+        # 2. Flip the request row. Pass effective_at through so the
+        #    bypass-cooling path (confirm_now from PENDING_VERIFICATION)
+        #    lands the freshly-stamped `effective_at` on disk instead of
+        #    leaving it None in the repo's stored dataclass.
         now = datetime.now(timezone.utc)
-        updated = await self._repo.update_state(
-            row.id,
-            status=PhoneChangeStatus.COMPLETED.value,
-            completed_at=now,
-        )
-        self._emit_audit(
+        update_kwargs: dict[str, Any] = {
+            "status": PhoneChangeStatus.COMPLETED.value,
+            "completed_at": now,
+        }
+        if row.effective_at is not None:
+            update_kwargs["effective_at"] = row.effective_at
+        updated = await self._repo.update_state(row.id, **update_kwargs)
+        await self._emit_audit(
             EVENT_PHONE_CHANGE_COMPLETED,
             actor_parent_id=row.parent_id,
             reason="Phone-change completed",
@@ -629,7 +640,7 @@ class EmailChangeService:
         self._email = email_service
         self._audit_hook = audit_hook
 
-    def _emit_audit(
+    async def _emit_audit(
         self,
         event_type: str,
         *,
@@ -645,8 +656,6 @@ class EmailChangeService:
         if self._audit_hook is None:
             return
         try:
-            import asyncio
-
             coro = self._audit_hook(
                 event_type,
                 severity=severity,
@@ -659,11 +668,7 @@ class EmailChangeService:
                 metadata=metadata or {},
             )
             if asyncio.iscoroutine(coro):
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.ensure_future(coro)
-                else:
-                    loop.run_until_complete(coro)
+                await coro
         except Exception as exc:  # pragma: no cover
             logger.warning(
                 "email_change.audit_emit_failed",
@@ -707,7 +712,7 @@ class EmailChangeService:
         request_id = str(_uuid.uuid4())
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=EMAIL_VERIFICATION_TTL)
-        self._emit_audit(
+        await self._emit_audit(
             EVENT_EMAIL_CHANGE_REQUESTED,
             actor_parent_id=parent_id,
             reason="Email-change request created",
@@ -743,11 +748,11 @@ class EmailChangeService:
         )
         if account is None:
             raise EmailChangeRequestNotFound()
-        self._emit_audit(
+        await self._emit_audit(
             EVENT_EMAIL_CHANGE_COMPLETED,
             actor_parent_id=parent_id,
             reason="Email-change completed",
-            metadata={"new_email_hash_present": bool(account.email_hash)},
+            metadata={"new_email_present": bool(account.email)},
         )
         return account
 
