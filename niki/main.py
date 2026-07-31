@@ -22,6 +22,7 @@ from niki.infrastructure.redis import RedisClient
 from niki.i18n.middleware import LanguageMiddleware
 from niki.middleware.cors import setup_cors
 from niki.middleware.error_handler import setup_error_handlers
+from niki.middleware.metrics import MetricsMiddleware
 from niki.middleware.min_client_version import (
     MinClientVersionMiddleware,
 )
@@ -153,6 +154,12 @@ def create_app() -> FastAPI:
     # `Translator`. Runs after CORS so the response `Vary` header is
     # added to CORS-decorated responses too.
     app.add_middleware(LanguageMiddleware)
+
+    # BE-API-009: observe HTTP request latency into
+    # `niki_http_request_duration_seconds{method, endpoint}` for every
+    # routed request. Added last so it sits on the outermost shell —
+    # that way it captures the full middleware stack latency.
+    app.add_middleware(MetricsMiddleware)
 
     # BE-COMP-003: reject clients older than the minimum
     # supported version. Reads `X-Client-Version`.

@@ -24,6 +24,7 @@ from enum import StrEnum
 
 import structlog
 
+from niki.metrics import get_registry
 from niki.safety.dictionaries import SENSITIVE_WORDS
 from niki.safety.topic_blacklist import TopicBlacklist, TopicMatch
 
@@ -108,6 +109,11 @@ class InputSafetyGateway:
                 "input_safety.self_harm_detected",
                 words=self_harm_matches,
             )
+            # BE-API-009: count escalations separately from blocks.
+            get_registry().SAFETY_BLOCK_TOTAL.labels(
+                reason="self_harm",
+                severity="escalate",
+            ).inc()
             return InputVerdict(
                 action=InputAction.ESCALATE,
                 matched_category="self_harm",
@@ -126,6 +132,12 @@ class InputSafetyGateway:
                     category=category,
                     words=matches,
                 )
+                # BE-API-009: emit a block counter with the matched
+                # category as `reason`.
+                get_registry().SAFETY_BLOCK_TOTAL.labels(
+                    reason=category,
+                    severity="block",
+                ).inc()
                 return InputVerdict(
                     action=InputAction.BLOCK,
                     matched_category=category,

@@ -20,6 +20,7 @@ from niki.api.encyclopedia import router as encyclopedia_router
 from niki.api.health import router as health_router
 from niki.api.media import router as media_router
 from niki.api.memory import router as memory_router
+from niki.api.metrics import router as metrics_router
 from niki.api.orchestrator import router as chat_router
 from niki.api.pairing import router as pairing_router
 from niki.api.push import router as push_router
@@ -182,5 +183,8 @@ api_router.include_router(status_router)
 
 # BE-PUSH-001: push channel registration + preferences
 api_router.include_router(push_router)
+
+# BE-API-009: Prometheus exposition endpoint (/metrics)
+api_router.include_router(metrics_router)
 
 

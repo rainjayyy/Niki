@@ -57,6 +57,7 @@ from niki.db.models.audit_log import (
     EVENT_SMS_SENT,
 )
 from niki.middleware.rate_limit import limiter
+from niki.metrics import get_registry
 from niki.services.audit_log import get_audit_log_service
 
 from niki.api._i18n import localized_error_response, resolve_lang
@@ -624,6 +625,12 @@ async def sms_login(request: Request, payload: dict) -> dict:
     try:
         await get_sms_service().verify(phone, code)
     except (SMSCodeInvalid, SMSCodeExpired, SMSTooManyAttempts) as exc:
+        # BE-API-009: count the failure before raising.
+        reason = getattr(exc, "code", None) or type(exc).__name__.lower()
+        get_registry().LOGIN_FAILURE_TOTAL.labels(
+            method="sms",
+            reason=reason,
+        ).inc()
         raise HTTPException(
             status_code=401,
             detail=_error_response(request, exc),
@@ -652,6 +659,9 @@ async def sms_login(request: Request, payload: dict) -> dict:
     settings = get_settings()
     access = issue_access_token(account.id)
     refresh = issue_refresh_token(account.id)
+
+    # BE-API-009: count successful SMS logins.
+    get_registry().LOGIN_SUCCESS_TOTAL.labels(method="sms").inc()
 
     # BE-COMP-004: a successful login is the anchor event for every
     # "was this me?" support conversation. `auto_created` tells the
