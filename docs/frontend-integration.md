@@ -778,9 +778,9 @@ X-Device-Id: <UUID>
 | 完成 | ID | 缺口 | 当前状态 | 前端影响 | 建议实现 | 工作量 |
 |:-:|---|---|---|---|---|---|
 | ❌ | **BE-PUSH-003** | **Web Push（VAPID）** | 缺失 | 家长端关闭浏览器后收不到告警 | `py_vapid` + service worker 注册；VAPID 公私钥存 settings | 1 天 |
-| ❌ | **BE-PUSH-004** | **通知偏好设置（静默时段、勿扰）** | 缺失 | 21:00-07:00 推送扰民被投诉 | `PATCH /push/prefs {quiet_start, quiet_end, channels[]}` | 1 天 |
-| ❌ | **BE-PUSH-005** | **通知中心（`GET /notifications?cursor=`）** | 缺失 | 家长错过推送无追溯路径 | 分页 list；点开 mark read；Redis 存 90 天 | 1.5 天 |
-| ❌ | **BE-PUSH-006** | **推送测试端点（`POST /push/test`）** | 缺失 | 家长端出问题排查困难 | 发测试消息到指定 device | 0.5 天 |
+| ✅ | **BE-PUSH-004** | **通知偏好设置（静默时段、勿扰）** | ✅ 已完成：`PushPrefs` 扩到 8 字段（`dnd_enabled` / `dnd_until` / `severities` / `muted_event_types`）+ `is_quiet_now` / `should_deliver` helpers + PATCH 端点扩展 + alembic 可逆 migration | 家长端可配勿扰时段、按严重度过滤、按事件静音 | — | 1 天 |
+| ✅ | **BE-PUSH-005** | **通知中心（`GET /notifications?cursor=`）** | ✅ 已完成：`GET /notifications`（HMAC 签名 cursor + severity/unread 过滤）+ `POST /{id}/read`（横向越权 404）+ `POST /read-all`（幂等） | 家长端可拉历史告警 | — | 1.5 天 |
+| ✅ | **BE-PUSH-006** | **推送测试端点（`POST /push/test`）** | ✅ 已完成：`POST /push/test`（5/min 限流 + dry-run + 写 `audit_logs`）+ `GET /push/test/history`（最近 100 条 ring buffer） | 客服可发测试推送、家长可自检 | — | 0.5 天 |
 
 #### 7.3.3 Media（1 项）
 
@@ -799,7 +799,7 @@ X-Device-Id: <UUID>
 | 完成 | ID | 缺口 | 当前状态 | 建议实现 | 工作量 |
 |:-:|---|---|---|---|---|
 | ❌ | **BE-API-008** | **Webhook 回调（异步任务）** | 30 天删除走 cron，但用户拿不到进度 | `POST /webhooks/register`；事件类型 `account.deleted`, `deletion.completed`；签名校验 | 2 天 |
-| ❌ | **BE-API-009** | **Prometheus 指标** | 缺失，`/metrics` 不存在 | `prometheus-fastapi-instrumentator`；自定义 Counter：`chat_total`, `safety_block_total` | 0.5 天 |
+| ✅ | **BE-API-009** | **Prometheus 指标** | ✅ 已完成：`GET /metrics` Prometheus 文本格式 + 12 自定义 Counter / Histogram / Gauge（chat / safety / auth / push / ocr / webhook / rate_limited / http_duration）+ 5 条 hot path 埋点 + `MetricsMiddleware` | 运维可拉 QPS / p99 / 安全拦截率；熔断阈值可设 | — | 0.5 天 |
 
 #### 7.3.6 Compliance（2 项）
 
@@ -1124,6 +1124,7 @@ Label 建议：
 | v1.1 | 2026-07-24 | 修正错误码为真实后端值 / 标识 5 种返回模式 / 接入 OpenAPI 自动生成清单 / 推送策略矩阵 / 短信验证码流程 / 后端 ASR 替代浏览器 Web Speech / 厂商推送通道 / TOC + 错误码命名规范 | Claude |
 | v1.2 | 2026-07-24 | §7 缺口清单大改版：从 8+7+5=20 项扩到 46 项（P0×16 / P1×17 / P2×13），按域分组共 10 个；每条工单含 ID、当前状态、前端影响、替代方案、建议实现、工作量；新增 §7.4 关键路径图 / §7.5 文档内 ⚠️ 联动表 / §7.6 4×7 周排期 / §7.7 兜底方案 / §7.8 GitHub Issues 追踪建议 | Claude |
 | **v1.4** | **2026-07-30** | **§7 P1 加速清盘**：8 个 P1 工单落地（session-redis / auth-alerts-rollout / dash-rollout / treehole-agg-rollout / media-rollout / rt-002 / dev-002 / comp-005）；矩阵更新：P1 由 1/17 → 8/17；总完成 17/46 → 24/46 | Claude |
+| **v1.5** | **2026-07-31** | **§7 P1/P2 第二轮清盘**：4 个 P1 工单落地（push-004 静默时段 / push-005 通知中心 / push-006 测试端点 / api-009 Prometheus）；TS SDK 自动重生（`scripts/gen_ts_sdk.py`）覆盖 32 个 endpoint；测试 1676 → **1775 passed**，4 skipped；通知中心用 HMAC 签名 cursor 防 ID 枚举；Prometheus 暴露 12 个自定义指标（chat / safety / auth / push / ocr / webhook / rate_limited / http_duration / active_parents） | Claude |
 | **v1.3** | **2026-07-29** | **§7 缺口清单状态盘点**：每张工单表加「完成」列（图例：✅ 已完成 / ⚠️ 部分完成 / 🟡 进行中 / ❌ 未开始）；§7.0 汇总矩阵更新：P0 已完成 **16/16**（全部清零），P1 **1/17**，P2 **0/13**；§7.6 排期补"实际状态"列；列出已完成工单清单（AUTH/DEV/PUSH/MEDIA/RT/STOR/API/COMP 各域） | Claude |
 
 ---
