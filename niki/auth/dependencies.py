@@ -6,6 +6,11 @@ Provides `get_current_parent` — a Depends() that:
   3. Checks the blacklist via `token_blacklist.is_revoked_sync(jti)`.
   4. Looks up the matching `ParentAccount` and injects it.
 
+BE-AUTH-007: also stamps `request.state.jwt_scope` and
+`request.state.jwt_iat` so downstream deps
+(`require_2fa_for_sensitive_ops`) can tell whether the current
+token has a `full` scope or only `2fa_pending`.
+
 Errors are converted to HTTP 401 with a structured body matching the
 Niki §6.3 style:
     {"error": "MISSING_TOKEN", "message": "..."}
@@ -21,6 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from niki.auth.account import ParentAccount
 from niki.auth.jwt_service import (
     JWTError,
+    SCOPE_FULL,
     TokenType,
     verify_token,
 )
@@ -41,6 +47,7 @@ def _unauthorized(code: str, message: str) -> HTTPException:
 
 
 async def get_current_parent(
+    request: Request,
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
     ],
@@ -48,6 +55,13 @@ async def get_current_parent(
     """Authenticate the caller via a Bearer JWT and return the account.
 
     On failure raises HTTP 401 with a structured error body.
+
+    Side effects:
+      * Sets `request.state.jwt_scope` (default `"full"` for
+        tokens without an explicit scope claim).
+      * Sets `request.state.jwt_iat` to the token's iat timestamp
+        so `require_2fa_for_sensitive_ops` can decide whether the
+        token is fresh enough (BE-AUTH-007).
     """
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise _unauthorized("MISSING_TOKEN", "Bearer token required")
@@ -64,6 +78,11 @@ async def get_current_parent(
         raise _unauthorized(exc.code, exc.message) from exc
 
     parent_id = claims["sub"]
+    # BE-AUTH-007: stash scope + iat on request.state for downstream
+    # gates. Default to `full` for backwards compatibility — older
+    # tokens issued before this claim was introduced have no scope.
+    request.state.jwt_scope = claims.get("scope", SCOPE_FULL)
+    request.state.jwt_iat = claims.get("iat")
     # Return a thin ParentAccount built from the token's claims so the
     # the dep works without an injected lifecycle. Production wiring
     # should override this dep with one that does `lifecycle.get_account`.

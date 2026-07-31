@@ -32,8 +32,12 @@ from niki.auth.account import (
     validate_phone,
 )
 from niki.auth.dependencies import get_current_parent
+from niki.auth.two_factor_gate import (
+    require_2fa_for_sensitive_ops,
+)
 from niki.auth.jwt_service import (
     JWTError,
+    SCOPE_2FA_PENDING,
     TokenType,
     issue_access_token,
     issue_refresh_token,
@@ -59,6 +63,7 @@ from niki.db.models.audit_log import (
 from niki.middleware.rate_limit import limiter
 from niki.metrics import get_registry
 from niki.services.audit_log import get_audit_log_service
+from niki.services.two_factor import get_two_factor_service
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
@@ -342,11 +347,24 @@ async def get_account(request: Request, parent_id: str) -> dict:
     description=(
         "Begin the 30-day deletion window. The account is immediately "
         "flipped to DELETION_PENDING; calling /deletion/complete after "
-        "the grace period performs the irreversible purge."
+        "the grace period performs the irreversible purge. "
+        "BE-AUTH-007: when the caller's 2FA is enabled, this endpoint "
+        "requires either an `X-2FA-Code` or `X-2FA-Backup-Code` "
+        "header, or a fresh full-scope JWT issued via "
+        "`POST /auth/2fa/verify`."
     ),
 )
-async def deletion_request(request: Request, payload: dict) -> dict:
-    """Request account deletion (starts 30-day window)."""
+async def deletion_request(
+    request: Request,
+    payload: dict,
+    _gate_ok: Annotated[  # noqa: ARG001
+        bool, Depends(require_2fa_for_sensitive_ops)
+    ],
+) -> dict:
+    """Request account deletion (starts 30-day window).
+
+    BE-AUTH-007: gated by `require_2fa_for_sensitive_ops`.
+    """
     parent_id = payload["parent_id"]
     try:
         account = await _lifecycle.request_deletion(parent_id)
@@ -657,6 +675,44 @@ async def sms_login(request: Request, payload: dict) -> dict:
             ) from exc
 
     settings = get_settings()
+
+    # BE-AUTH-007: when the account has 2FA enabled, the SMS
+    # login must NOT issue full tokens. Instead we issue a
+    # short-lived `2fa_pending` partial token that the client
+    # exchanges at `POST /auth/2fa/login` for the full pair.
+    twofa_enabled = await get_two_factor_service().is_enabled(
+        account.id
+    )
+    if twofa_enabled:
+        partial = issue_access_token(
+            account.id,
+            ttl_seconds=settings.totp_partial_ttl_seconds,
+            scope=SCOPE_2FA_PENDING,
+        )
+        get_registry().LOGIN_SUCCESS_TOTAL.labels(method="sms").inc()
+        await get_audit_log_service().log_event(
+            EVENT_LOGIN_SUCCESS,
+            actor_parent_id=account.id,
+            target_parent_id=account.id,
+            endpoint="/api/v1/auth/sms/login",
+            method="POST",
+            reason="SMS-code login succeeded (2fa pending)",
+            metadata={
+                "auto_created_account": auto_created,
+                "account_status": account.status.value,
+                "twofa_required": True,
+            },
+            client_ip=_client_ip(request),
+        )
+        return {
+            "status": "2fa_required",
+            "partial_token": partial,
+            "token_type": "Bearer",
+            "expires_in": settings.totp_partial_ttl_seconds,
+            "parent_id": account.id,
+            "account_status": account.status.value,
+        }
+
     access = issue_access_token(account.id)
     refresh = issue_refresh_token(account.id)
 

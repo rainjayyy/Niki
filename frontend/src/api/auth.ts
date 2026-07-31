@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `auth` (15 operation(s)).
- * Generated: 2026-07-31T02:39:17Z
+ * Generated: 2026-07-31T04:51:35Z
  */
 
 import { request } from "./client";
@@ -83,9 +83,10 @@ export async function postAuthDeletionComplete(
 /**
  * Request account deletion
  *
- * Begin the 30-day deletion window. The account is immediately flipped to DELETION_PENDING; calling /deletion/complete after the grace period performs the irreversible purge.
+ * Begin the 30-day deletion window. The account is immediately flipped to DELETION_PENDING; calling /deletion/complete after the grace period performs the irreversible purge. BE-AUTH-007: when the caller's 2FA is enabled, this endpoint requires either an `X-2FA-Code` or `X-2FA-Backup-Code` header, or a fresh full-scope JWT issued via `POST /auth/2fa/verify`.
  *
  * @remarks `POST /api/v1/auth/deletion/request`
+ * @remarks header parameter(s) `X-2FA-Backup-Code`, `X-2FA-Code` — pass via `options.headers`.
  */
 export async function postAuthDeletionRequest(
   body: Record<string, unknown>,

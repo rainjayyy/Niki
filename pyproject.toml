@@ -50,6 +50,7 @@ dependencies = [
 
     # Security
     "cryptography>=43.0.0",
+    "pyotp>=2.9.0",            # BE-AUTH-007 TOTP (RFC 6238) 2FA
     "python-jose[cryptography]>=3.3.0",
 
     # Utilities

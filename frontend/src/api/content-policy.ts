@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `content-policy` (8 operation(s)).
- * Generated: 2026-07-31T02:39:17Z
+ * Generated: 2026-07-31T04:51:35Z
  */
 
 import { request } from "./client";
