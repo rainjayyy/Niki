@@ -5,7 +5,7 @@
  * Types derived from the OpenAPI `components.schemas` block.
  * `Body_*` interfaces describe multipart form bodies; the SDK does not
  * generate multipart call signatures yet (BE-API-008).
- * Generated: 2026-07-30T10:53:23Z
+ * Generated: 2026-07-31T02:39:17Z
  */
 
 export interface Body_ocr_api_v1_media_ocr_post {
@@ -69,4 +69,55 @@ export interface ValidationError {
   type: string;
   input?: unknown;
   ctx?: Record<string, unknown>;
+}
+
+/**
+ * Sentinel body for endpoints that accept no payload. FastAPI / OpenAPI require POST/PUT/PATCH endpoints to declare a `requestBody` schema, otherwise the auto-generated spec omits it and consumers (TS SDK generator, OpenAPI docs test) flag it as missing. Wrapping in an empty model keeps the surface honest without forcing callers to send `{}`.
+ */
+export interface _EmptyBody {
+  [key: string]: unknown;
+}
+
+/**
+ * `GET /push/test/history` response body.
+ */
+export interface _PushTestHistory {
+  /** Recent deliveries, newest-first. */
+  deliveries?: Array<_PushTestResultItem>;
+  /** Number of deliveries returned. */
+  count: number;
+}
+
+/**
+ * `POST /push/test` response body.
+ */
+export interface _PushTestResult {
+  /** Device the test was fired at. */
+  device_id: string;
+  /** Always `dry_run` until BE-PUSH-002 lands a real SDK. */
+  status?: string;
+  /** Push channel the device is on (apns/fcm/web/...). */
+  channel?: string | null;
+  /** Synthetic 5-50ms latency for dry-run deliveries. */
+  latency_ms?: number | null;
+}
+
+/**
+ * One entry in the `GET /push/test/history` response.
+ */
+export interface _PushTestResultItem {
+  /** Target device id. */
+  device_id: string;
+  /** Push channel the device is on. */
+  channel: string;
+  /** One of delivered | dry_run | failed | skipped_no_token. */
+  status: string;
+  /** Failure reason when status != delivered/dry_run. */
+  error?: string | null;
+  /** Wall-clock delivery latency (synthetic 5-50ms for dry_run). */
+  latency_ms?: number | null;
+  /** Echoes the dry_run argument the caller passed. */
+  dry_run?: boolean;
+  /** ISO-8601 timestamp the delivery was recorded. */
+  created_at: string;
 }

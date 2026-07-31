@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `encyclopedia` (3 operation(s)).
- * Generated: 2026-07-30T10:53:23Z
+ * Generated: 2026-07-31T02:39:17Z
  */
 
 import { request } from "./client";
