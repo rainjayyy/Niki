@@ -57,12 +57,29 @@ class DashboardAlert(Base):
     delivered_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # BE-PUSH-005: parent-facing "read" timestamp for the
+    # notification center. Distinct from `delivered_at` (which
+    # tracks vendor-side push delivery) — this is when the
+    # parent actually opened/acked the notification in the UI.
+    # Nullable so existing rows and existing readers (BE-RT-002
+    # dashboard view) stay unaffected.
+    read_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     __table_args__ = (
         Index(
             "ix_dashboard_alerts_child_type",
             "child_id",
             "alert_type",
+        ),
+        # BE-PUSH-005: covers the notification-center's hot path
+        # (`parent_id = ? AND read_at IS NULL ORDER BY created_at DESC`).
+        Index(
+            "ix_dashboard_alerts_parent_read_created",
+            "parent_id",
+            "read_at",
+            "created_at",
         ),
     )
 
