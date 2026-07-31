@@ -71,6 +71,27 @@ _PII_METADATA_KEYS = frozenset({
 
 _REDACTED = "[redacted]"
 
+# Field names the structlog line already occupies. A metadata key that
+# collides with one of them would make `log_fn(**metadata)` raise
+# TypeError ("got multiple values for keyword argument") — which, since
+# the log line is emitted *before* the DB write, would lose the audit
+# row entirely. So colliding keys are prefixed for the log line only;
+# the persisted metadata keeps the caller's spelling.
+_RESERVED_LOG_FIELDS = frozenset({
+    "severity",
+    "actor_parent_id",
+    "target_parent_id",
+    "target_child_id",
+    "endpoint",
+    "method",
+    "reason",
+    "client_ip",
+    "event",
+    "level",
+    "timestamp",
+    "logger",
+})
+
 # Metadata values longer than this are truncated — a long string is
 # almost always free text that slipped past the key check.
 _MAX_METADATA_STR = 200
@@ -152,7 +173,7 @@ class AuditLogService:
             method=event.method,
             reason=event.reason,
             client_ip=event.client_ip,
-            **event.metadata,
+            **_rename_reserved(event.metadata),
         )
 
         # 2. Persist — swallow failures.
@@ -207,6 +228,19 @@ def _scrub_metadata(
             continue
         out[key] = value
     return out
+
+
+def _rename_reserved(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Prefix metadata keys that would clash with the log line's own.
+
+    `meta_endpoint=fcm.googleapis.com` next to `endpoint=/api/v1/...`
+    reads fine in a log viewer, and — unlike the TypeError this
+    avoids — it doesn't cost us the audit row.
+    """
+    return {
+        (f"meta_{key}" if key in _RESERVED_LOG_FIELDS else key): value
+        for key, value in metadata.items()
+    }
 
 
 # ---------------------------------------------------------------------------

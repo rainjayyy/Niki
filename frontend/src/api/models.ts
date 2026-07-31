@@ -5,7 +5,7 @@
  * Types derived from the OpenAPI `components.schemas` block.
  * `Body_*` interfaces describe multipart form bodies; the SDK does not
  * generate multipart call signatures yet (BE-API-008).
- * Generated: 2026-07-31T04:51:35Z
+ * Generated: 2026-07-31T06:59:07Z
  */
 
 export interface Body_ocr_api_v1_media_ocr_post {
@@ -120,4 +120,14 @@ export interface _PushTestResultItem {
   dry_run?: boolean;
   /** ISO-8601 timestamp the delivery was recorded. */
   created_at: string;
+}
+
+/**
+ * `GET /push/vapid-public-key` response body.
+ */
+export interface _VapidPublicKey {
+  /** base64url-encoded uncompressed P-256 point (65 bytes, 0x04-prefixed). Feed it to `applicationServerKey` after `urlB64ToUint8Array()`. */
+  public_key: string;
+  /** VAPID `sub` claim — the contact a push service uses to reach us. Informational for the frontend. */
+  subject: string;
 }

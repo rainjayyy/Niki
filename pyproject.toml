@@ -59,6 +59,7 @@ dependencies = [
     "reportlab>=5.0.0",          # BE-DASH-001 PDF weekly report
     "boto3>=1.34.0",             # BE-MEDIA-001-real S3-compatible storage
     "prometheus-client>=0.20.0", # BE-API-009 Prometheus /metrics endpoint
+    "pywebpush>=2.0.0",          # BE-PUSH-003 Web Push (VAPID / RFC 8292)
 ]
 
 [project.optional-dependencies]

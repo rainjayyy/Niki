@@ -1,18 +1,21 @@
-"""Push delivery abstraction (BE-PUSH-006).
+"""Push delivery abstraction (BE-PUSH-006 + BE-PUSH-003).
 
 Single seam between Niki and any push-vendor SDK (HMS / MiPush /
-OPPO / Vivo / Flyme / APNs / FCM / Web Push). BE-PUSH-002 / 003
-will provide real implementations behind this interface; until
-then `InMemoryPushDeliveryService` is the default and produces
-dry-run results that flow through the audit log + history
-endpoint so support engineers can already verify end-to-end
-that "send a test push" reaches the delivery seam.
+OPPO / Vivo / Flyme / APNs / FCM / Web Push). BE-PUSH-003 filled
+in the Web Push half (`WebPushDeliveryBackend`, real deliveries via
+VAPID); BE-PUSH-002 will do the same for the mobile vendors. Until
+then every non-web platform still lands on
+`InMemoryPushDeliveryService`'s dry-run result, which flows through
+the audit log + history endpoint so support engineers can already
+verify end-to-end that "send a test push" reaches the delivery seam.
 
-Three types:
+Five types:
 
-    PushPayload            — what to send
-    PushDeliveryResult     — what happened
-    PushDeliveryService    — ABC; one method `deliver(...)`
+    PushPayload                   — what to send
+    PushDeliveryResult            — what happened
+    PushDeliveryService           — ABC; one method `deliver(...)`
+    WebPushDeliveryBackend        — real Web Push (RFC 8030 + VAPID)
+    CompositePushDeliveryService  — per-platform dispatch + history
 
 Why a dry-run mode at all
 -------------------------
@@ -42,12 +45,17 @@ durable trail — different audience, different latency target.
 
 from __future__ import annotations
 
+import asyncio
+import functools
+import json
 import random
 import threading
+import time
 from abc import ABC, abstractmethod
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
+from urllib.parse import urlparse
 
 import structlog
 
@@ -56,6 +64,8 @@ logger = structlog.get_logger(__name__)
 __all__ = [
     "PushDeliveryService",
     "InMemoryPushDeliveryService",
+    "WebPushDeliveryBackend",
+    "CompositePushDeliveryService",
     "PushPayload",
     "PushDeliveryResult",
     "STATUS_DELIVERED",
@@ -66,6 +76,9 @@ __all__ = [
     "DEFAULT_HISTORY_LIMIT",
     "MAX_HISTORY_LIMIT",
     "RING_BUFFER_CAPACITY",
+    "EVENT_WEB_PUSH_DELIVERED",
+    "EVENT_WEB_PUSH_DRY_RUN",
+    "EVENT_WEB_PUSH_FAILED",
     "get_push_delivery_service",
     "set_push_delivery_service",
     "reset_push_delivery_service_for_tests",
@@ -398,6 +411,459 @@ class InMemoryPushDeliveryService(PushDeliveryService):
 
 
 # ---------------------------------------------------------------------------
+# BE-PUSH-003 — real Web Push (RFC 8030) delivery behind the same seam
+# ---------------------------------------------------------------------------
+
+# Audit event types. Free-form strings by design (see
+# `niki.db.models.audit_log`), kept here so the backend and its tests
+# can't spell them differently.
+EVENT_WEB_PUSH_DELIVERED: str = "web_push_delivered"
+EVENT_WEB_PUSH_FAILED: str = "web_push_failed"
+EVENT_WEB_PUSH_DRY_RUN: str = "web_push_dry_run"
+
+# Dry-run latency for the *web* backend. Slightly higher floor than
+# the in-memory stub's 5ms: a real Web Push round-trip to FCM/Mozilla
+# is never faster than ~10ms, and a plausible number keeps ops
+# dashboards from learning a fantasy baseline.
+_WEB_DRY_RUN_LATENCY_MIN_MS: int = 10
+_WEB_DRY_RUN_LATENCY_MAX_MS: int = 50
+
+
+def _default_webpush_send(**kwargs: Any) -> Any:
+    """Call `pywebpush.webpush(**kwargs)`, importing it lazily.
+
+    Lazy because `pywebpush` is an optional runtime dependency: the
+    module must import (and every non-web code path must work) on a
+    box where it isn't installed. Tests monkeypatch this function or
+    inject `WebPushDeliveryBackend(webpush_fn=...)`.
+    """
+    from pywebpush import webpush  # noqa: PLC0415 — deliberate lazy import
+
+    return webpush(**kwargs)
+
+
+def _webpush_exception_type() -> type[BaseException]:
+    """Return `pywebpush.WebPushException`, or a never-raised stand-in.
+
+    Lets `except _webpush_exception_type()` stay valid when the
+    library is absent — we then fall through to the generic
+    `Exception` handler, which produces the same `failed` result.
+    """
+    try:
+        from pywebpush import WebPushException  # noqa: PLC0415
+    except Exception:  # pragma: no cover — import-error path
+
+        class _NeverRaised(Exception):
+            pass
+
+        return _NeverRaised
+    return WebPushException
+
+
+def _response_status(obj: Any) -> Optional[int]:
+    """Pull an HTTP status code off a response *or* an exception."""
+    code = getattr(obj, "status_code", None)
+    if isinstance(code, int):
+        return code
+    response = getattr(obj, "response", None)
+    code = getattr(response, "status_code", None)
+    return code if isinstance(code, int) else None
+
+
+def _endpoint_host(endpoint: str) -> Optional[str]:
+    """Host of a push endpoint — never the path.
+
+    The path segment of a Web Push endpoint *is* the subscription
+    credential: anyone holding it can push to that browser. It must
+    never reach the audit table, which support engineers (and, via
+    /admin/audit, parents) can read. The host alone still answers the
+    only operational question we ask of it — "which push service is
+    flaking?".
+    """
+    try:
+        return urlparse(endpoint).netloc or None
+    except ValueError:  # pragma: no cover — urlparse is very forgiving
+        return None
+
+
+class WebPushDeliveryBackend(PushDeliveryService):
+    """Deliver a payload to a browser via Web Push + VAPID.
+
+    Handles only `platform == "web"` devices; anything else comes
+    back `skipped_no_token` so a caller that hands us the wrong
+    device gets a *result*, not an exception (delivery is a
+    best-effort side channel — it must never 500 the request that
+    triggered it).
+
+    The `push_token` column carries the subscription in one of two
+    shapes, both accepted:
+
+      - a bare endpoint URL, with `p256dh` / `auth` read off the
+        device row if present;
+      - the full `PushSubscription.toJSON()` string, which is what
+        the browser hands the frontend verbatim.
+
+    `pywebpush` is synchronous (it uses `requests`), so the actual
+    send runs in a worker thread — otherwise one slow push service
+    would stall the whole event loop.
+    """
+
+    def __init__(
+        self,
+        *,
+        webpush_fn: Optional[Callable[..., Any]] = None,
+        settings: Any = None,
+        audit_service: Any = None,
+    ) -> None:
+        self._webpush_fn = webpush_fn
+        self._settings = settings
+        self._audit_service = audit_service
+
+    # -- collaborators (resolved late so tests can swap singletons) ------
+
+    def _get_settings(self) -> Any:
+        if self._settings is not None:
+            return self._settings
+        from niki.config.settings import get_settings
+
+        return get_settings()
+
+    def _get_audit_service(self) -> Any:
+        if self._audit_service is not None:
+            return self._audit_service
+        from niki.services.audit_log import get_audit_log_service
+
+        return get_audit_log_service()
+
+    # -- main entry point ------------------------------------------------
+
+    async def deliver(
+        self,
+        device: Any,
+        payload: PushPayload,
+        *,
+        dry_run: bool = False,
+    ) -> PushDeliveryResult:
+        device_id = _device_attr(device, "device_id") or "unknown"
+        channel = _device_attr(device, "channel") or "web"
+        platform = _device_attr(device, "platform")
+        push_token = _device_attr(device, "push_token") or ""
+        parent_id = _device_attr(device, "parent_id")
+
+        # 1. Not our platform. Cheapest check first.
+        if platform != "web":
+            return await self._finish(
+                device_id=device_id,
+                channel=channel,
+                parent_id=parent_id,
+                status=STATUS_SKIPPED_NO_TOKEN,
+                error=f"platform {platform!r} is not web",
+                dry_run=dry_run,
+                endpoint=None,
+                status_code=None,
+                latency_ms=None,
+            )
+
+        # 2. Token must parse into a subscription with an https endpoint.
+        subscription = _parse_subscription(push_token)
+        if subscription is None:
+            return await self._finish(
+                device_id=device_id,
+                channel=channel,
+                parent_id=parent_id,
+                status=STATUS_SKIPPED_NO_TOKEN,
+                error="device has no usable web push subscription",
+                dry_run=dry_run,
+                endpoint=None,
+                status_code=None,
+                latency_ms=None,
+            )
+        _attach_device_keys(subscription, device)
+        endpoint = subscription["endpoint"]
+
+        # 3. Probe mode — walk everything except the network call.
+        if dry_run:
+            return await self._finish(
+                device_id=device_id,
+                channel=channel,
+                parent_id=parent_id,
+                status=STATUS_DRY_RUN,
+                error=None,
+                dry_run=True,
+                endpoint=endpoint,
+                status_code=None,
+                latency_ms=random.randint(
+                    _WEB_DRY_RUN_LATENCY_MIN_MS,
+                    _WEB_DRY_RUN_LATENCY_MAX_MS,
+                ),
+            )
+
+        settings = self._get_settings()
+        try:
+            from niki.config.settings import get_or_generate_vapid_keys
+
+            private_key, _public_key = get_or_generate_vapid_keys(settings)
+        except Exception as exc:  # key material unavailable
+            return await self._finish(
+                device_id=device_id,
+                channel=channel,
+                parent_id=parent_id,
+                status=STATUS_FAILED,
+                error=f"VAPID_KEY_UNAVAILABLE: {exc}",
+                dry_run=False,
+                endpoint=endpoint,
+                status_code=None,
+                latency_ms=None,
+            )
+
+        ttl = int(getattr(settings, "web_push_ttl_seconds", 86400) or 86400)
+        urgency = str(getattr(settings, "web_push_urgency", "normal") or "normal")
+        headers: dict[str, str] = {"TTL": str(ttl), "Urgency": urgency}
+        if payload.dedupe_key:
+            # RFC 8030 §5.4: a push service collapses undelivered
+            # messages that share a Topic — exactly our dedupe
+            # semantics, for free, on the push service's side.
+            headers["Topic"] = payload.dedupe_key[:32]
+
+        send_kwargs: dict[str, Any] = {
+            "subscription_info": subscription,
+            "data": json.dumps(payload.to_dict(), ensure_ascii=False),
+            "vapid_private_key": private_key,
+            "vapid_claims": {"sub": settings.vapid_subject},
+            "ttl": ttl,
+            "headers": headers,
+        }
+
+        started = time.monotonic()
+        status_code: Optional[int] = None
+        error: Optional[str] = None
+        try:
+            response = await self._send(send_kwargs)
+            status_code = _response_status(response)
+        except _webpush_exception_type() as exc:
+            status_code = _response_status(exc)
+            error = f"WEB_PUSH_ERROR: {exc}"
+        except ImportError as exc:
+            status_code = None
+            error = f"PYWEBPUSH_UNAVAILABLE: {exc}"
+        except Exception as exc:  # network / TLS / DNS
+            status_code = None
+            error = f"NETWORK_ERROR: {exc}"
+        latency_ms = int((time.monotonic() - started) * 1000)
+
+        # A push service answers 201 Created on success; 200/202 are
+        # accepted by some implementations, so treat any 2xx as sent.
+        delivered = error is None and (
+            status_code is None or 200 <= status_code < 300
+        )
+        if not delivered and error is None:
+            error = f"HTTP_{status_code}"
+
+        return await self._finish(
+            device_id=device_id,
+            channel=channel,
+            parent_id=parent_id,
+            status=STATUS_DELIVERED if delivered else STATUS_FAILED,
+            error=error,
+            dry_run=False,
+            endpoint=endpoint,
+            status_code=status_code,
+            latency_ms=latency_ms,
+        )
+
+    # -- internals -------------------------------------------------------
+
+    async def _send(self, send_kwargs: dict[str, Any]) -> Any:
+        """Run the (synchronous) pywebpush call off the event loop."""
+        fn = self._webpush_fn or _default_webpush_send
+        return await asyncio.to_thread(functools.partial(fn, **send_kwargs))
+
+    async def _finish(
+        self,
+        *,
+        device_id: str,
+        channel: str,
+        parent_id: Optional[str],
+        status: str,
+        error: Optional[str],
+        dry_run: bool,
+        endpoint: Optional[str],
+        status_code: Optional[int],
+        latency_ms: Optional[int],
+    ) -> PushDeliveryResult:
+        """Build the result, write the audit row, emit the log line.
+
+        Every exit path from `deliver()` goes through here, which is
+        what makes AC-6 ("audit log on *every* delivery attempt")
+        true by construction rather than by discipline.
+        """
+        result = PushDeliveryResult(
+            device_id=device_id,
+            channel=channel,
+            status=status,
+            error=error,
+            latency_ms=latency_ms,
+            dry_run=dry_run,
+        )
+        await self._audit(
+            result,
+            parent_id=parent_id,
+            endpoint=endpoint,
+            status_code=status_code,
+        )
+        logger.info(
+            "push.web_delivery",
+            device_id=device_id,
+            channel=channel,
+            status=status,
+            dry_run=dry_run,
+            latency_ms=latency_ms,
+            status_code=status_code,
+            endpoint_host=_endpoint_host(endpoint) if endpoint else None,
+            error=error,
+        )
+        return result
+
+    async def _audit(
+        self,
+        result: PushDeliveryResult,
+        *,
+        parent_id: Optional[str],
+        endpoint: Optional[str],
+        status_code: Optional[int],
+    ) -> None:
+        if result.status == STATUS_DELIVERED:
+            event_type, severity = EVENT_WEB_PUSH_DELIVERED, "info"
+        elif result.status == STATUS_DRY_RUN:
+            event_type, severity = EVENT_WEB_PUSH_DRY_RUN, "info"
+        else:
+            # `skipped_no_token` is a misconfiguration, not a crisis,
+            # but it still deserves the warning ladder: a parent who
+            # never gets alerts wants it visible somewhere.
+            event_type, severity = EVENT_WEB_PUSH_FAILED, "warning"
+
+        try:
+            await self._get_audit_service().log_event(
+                event_type=event_type,
+                severity=severity,
+                actor_parent_id=parent_id,
+                target_parent_id=parent_id,
+                endpoint="/api/v1/push/web",
+                method="POST",
+                reason="BE-PUSH-003 web push delivery attempt",
+                metadata={
+                    "subscription_id": result.device_id,
+                    # Host only — see `_endpoint_host`.
+                    "endpoint": _endpoint_host(endpoint) if endpoint else None,
+                    "status_code": status_code,
+                    "latency_ms": result.latency_ms,
+                    "delivery_status": result.status,
+                },
+            )
+        except Exception as exc:  # pragma: no cover — audit must not raise
+            logger.warning("push.web_audit_failed", error=str(exc))
+
+
+def _parse_subscription(push_token: str) -> Optional[dict[str, Any]]:
+    """Coerce a stored `push_token` into a pywebpush subscription dict.
+
+    Returns None when the token can't possibly be a Web Push
+    subscription — an empty string, a vendor token from another
+    platform, or an http:// endpoint (push services are https-only,
+    and accepting http would mean shipping the payload in clear).
+    """
+    token = (push_token or "").strip()
+    if not token:
+        return None
+
+    if token.startswith("{"):
+        try:
+            parsed = json.loads(token)
+        except (ValueError, TypeError):
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        endpoint = parsed.get("endpoint")
+        if not isinstance(endpoint, str) or not endpoint.startswith("https://"):
+            return None
+        keys = parsed.get("keys")
+        subscription: dict[str, Any] = {"endpoint": endpoint}
+        if isinstance(keys, dict):
+            subscription["keys"] = dict(keys)
+        return subscription
+
+    if not token.startswith("https://"):
+        return None
+    return {"endpoint": token}
+
+
+def _attach_device_keys(subscription: dict[str, Any], device: Any) -> None:
+    """Fill `keys` from the device row when the token was endpoint-only.
+
+    Both `p256dh` and `auth` are required for payload encryption; a
+    half-filled pair is worse than none (pywebpush would raise), so
+    we only attach when both are present.
+    """
+    if subscription.get("keys"):
+        return
+    p256dh = _device_attr(device, "p256dh") or _device_attr(device, "push_p256dh")
+    auth = _device_attr(device, "auth") or _device_attr(device, "push_auth")
+    if p256dh and auth:
+        subscription["keys"] = {"p256dh": p256dh, "auth": auth}
+
+
+class CompositePushDeliveryService(InMemoryPushDeliveryService):
+    """Route each device to the backend that can actually reach it.
+
+    Today that's a two-way split:
+
+        platform == "web"  → `WebPushDeliveryBackend` (real delivery)
+        everything else    → the inherited dry-run stub
+
+    It *inherits* from `InMemoryPushDeliveryService` rather than
+    wrapping it so both branches land in the same ring buffer —
+    `GET /push/test/history` is the support engineer's single pane of
+    glass and would be half-blind otherwise.
+
+    BE-PUSH-002 adds APNs / FCM / HMS branches here; the dispatch
+    table is the only thing that changes.
+    """
+
+    def __init__(
+        self,
+        *,
+        capacity: int = RING_BUFFER_CAPACITY,
+        web_backend: Optional[PushDeliveryService] = None,
+    ) -> None:
+        super().__init__(capacity=capacity)
+        self._web_backend: PushDeliveryService = (
+            web_backend or WebPushDeliveryBackend()
+        )
+
+    @property
+    def web_backend(self) -> PushDeliveryService:
+        return self._web_backend
+
+    async def deliver(
+        self,
+        device: Any,
+        payload: PushPayload,
+        *,
+        dry_run: bool = False,
+    ) -> PushDeliveryResult:
+        if _device_attr(device, "platform") != "web":
+            return await super().deliver(device, payload, dry_run=dry_run)
+
+        result = await self._web_backend.deliver(
+            device, payload, dry_run=dry_run
+        )
+        # The web backend does its own audit + logging; the ring
+        # buffer is this class's job.
+        self._record(result, payload=payload)
+        return result
+
+
+# ---------------------------------------------------------------------------
 # Process-wide singleton
 # ---------------------------------------------------------------------------
 
@@ -409,15 +875,17 @@ _service_lock = threading.Lock()
 def get_push_delivery_service() -> PushDeliveryService:
     """Return the process-wide `PushDeliveryService`.
 
-    Lazy-builds an `InMemoryPushDeliveryService` on first access.
-    Safe under concurrent first-access (uses a real lock so two
-    racing callers can't end up with two instances).
+    Lazy-builds a `CompositePushDeliveryService` on first access
+    (BE-PUSH-003: real Web Push for browsers, dry-run stub for
+    every other platform). Safe under concurrent first-access
+    (uses a real lock so two racing callers can't end up with two
+    instances).
     """
     global _service
     if _service is None:
         with _service_lock:
             if _service is None:
-                _service = InMemoryPushDeliveryService()
+                _service = CompositePushDeliveryService()
     return _service
 
 
@@ -425,8 +893,9 @@ def set_push_delivery_service(service: PushDeliveryService) -> None:
     """Override the process-wide service (tests + ops tools).
 
     Pass `None` to clear the cache so the next `get_*` rebuilds
-    a fresh default — useful for tests that want to start from
-    a clean ring buffer without re-instantiating explicitly.
+    the default (`CompositePushDeliveryService`) — useful for tests
+    that want to start from a clean ring buffer without
+    re-instantiating explicitly.
     """
     global _service
     _service = service

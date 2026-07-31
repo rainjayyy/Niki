@@ -65,3 +65,7 @@ docker/.env
 # Alembic
 alembic/versions/*.pyc
 .claude/
+
+# BE-PUSH-003: auto-generated VAPID key cache (never commit signing material)
+.vapid_private.pem
+.vapid_public.b64
