@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `alerts` (1 operation(s)).
- * Generated: 2026-07-31T04:51:35Z
+ * Generated: 2026-07-31T06:59:07Z
  */
 
 import { request } from "./client";

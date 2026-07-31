@@ -6,11 +6,12 @@ Endpoints:
     GET  /api/v1/push/devices         — list the caller's registered devices
     GET  /api/v1/push/prefs           — read notification preferences
     PATCH /api/v1/push/prefs          — update notification preferences
+    GET  /api/v1/push/vapid-public-key — VAPID public key (BE-PUSH-003)
 
-The actual delivery to vendor servers (HMS / MiPush / OPPO /
-Vivo / Flyme / APNs / FCM / Web Push) is wired in BE-PUSH-002 /
-BE-PUSH-003 (P1+). This ticket only handles the registration
-and preferences surface so the frontend can start sending tokens.
+Delivery to browsers is live as of BE-PUSH-003 (Web Push / VAPID,
+see `niki/services/push_delivery.py::WebPushDeliveryBackend`).
+Delivery to mobile vendor servers (HMS / MiPush / OPPO / Vivo /
+Flyme / APNs / FCM) is still wired in BE-PUSH-002 (P1+).
 
 BE-PUSH-004 adds quiet-hours semantics (wrap-around), a DND
 toggle with optional expiry, a per-severity whitelist and a
@@ -32,6 +33,10 @@ from pydantic import BaseModel, Field
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
+from niki.config.settings import (
+    get_or_generate_vapid_keys,
+    get_settings,
+)
 from niki.db.models import (
     VALID_CHANNELS,
     VALID_PLATFORMS,
@@ -1107,4 +1112,77 @@ async def test_push_history(
     return {
         "deliveries": [d.to_dict() for d in deliveries],
         "count": len(deliveries),
+    }
+
+
+# ---------------------------------------------------------------------------
+# BE-PUSH-003: VAPID public key for browser subscription
+# ---------------------------------------------------------------------------
+
+
+class _VapidPublicKey(BaseModel):
+    """`GET /push/vapid-public-key` response body."""
+
+    public_key: str = Field(
+        ...,
+        description=(
+            "base64url-encoded uncompressed P-256 point (65 bytes, "
+            "0x04-prefixed). Feed it to `applicationServerKey` after "
+            "`urlB64ToUint8Array()`."
+        ),
+    )
+    subject: str = Field(
+        ...,
+        description=(
+            "VAPID `sub` claim — the contact a push service uses to "
+            "reach us. Informational for the frontend."
+        ),
+    )
+
+
+@router.get(
+    "/vapid-public-key",
+    summary="VAPID application-server public key for Web Push subscription",
+    response_model=_VapidPublicKey,
+    responses={
+        200: {"description": "The server's VAPID public key."},
+        503: {"description": "Server has no VAPID key material and could not mint one."},
+    },
+    description="""
+            Return the server's VAPID application-server public key.
+
+            The browser needs this *before* it can call
+            `pushManager.subscribe({applicationServerKey})`, so the
+            endpoint is deliberately **unauthenticated** — the key is
+            public by construction (it's shipped to every browser that
+            subscribes) and requiring a JWT would only add a 401
+            round-trip to the service-worker registration flow.
+
+            The key is stable: it's read from settings, else from the
+            on-disk cache, else minted once and cached. It must not
+            change between deploys — every existing browser
+            subscription is bound to it.
+
+            See `niki/static/push-helper.js` for the matching
+            client-side subscription helper.
+            """,
+)
+async def vapid_public_key(request: Request) -> dict:
+    """Return the VAPID public key the frontend subscribes with."""
+    try:
+        _private_key, public_key = get_or_generate_vapid_keys()
+    except Exception:  # pragma: no cover — key generation is pure CPU
+        public_key = ""
+    if not public_key:
+        raise HTTPException(
+            status_code=503,
+            detail=localized_error_response(
+                request,
+                code="VAPID_KEY_UNAVAILABLE",
+                key="push.web_vapid_key_unavailable",
+            ),
+        )
+    return {
+        "public_key": public_key,
+        "subject": get_settings().vapid_subject,
     }

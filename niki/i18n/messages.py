@@ -77,6 +77,12 @@ MESSAGES_ZH: dict[str, str] = {
     "push.device_not_found": "未找到该设备，或该设备不属于当前账户",
     "push.test_rate_limited": "测试推送请求过于频繁，请稍后再试",
 
+    # ---- push.web_* (BE-PUSH-003 Web Push / VAPID) ----
+    "push.web_unsupported_browser": "当前浏览器不支持网页推送，请更换浏览器或使用手机端接收告警",
+    "push.web_subscription_failed": "网页推送订阅失败，请检查通知权限后重试",
+    "push.web_vapid_key_unavailable": "服务器推送密钥尚未就绪，请稍后重试",
+    "push.web_unsubscribe_failed": "取消网页推送订阅失败，请重试",
+
     # ---- dashboard.* (BE-DASH-001) ----
     "dashboard.invalid_template": "模板名称不合法",
     "dashboard.missing_field": "缺少必填字段",
@@ -178,6 +184,22 @@ MESSAGES_EN: dict[str, str] = {
     ),
     "push.test_rate_limited": (
         "Too many test push requests, please retry later"
+    ),
+
+    # ---- push.web_* (BE-PUSH-003 Web Push / VAPID) ----
+    "push.web_unsupported_browser": (
+        "This browser does not support web push; use another browser "
+        "or receive alerts on your phone"
+    ),
+    "push.web_subscription_failed": (
+        "Web push subscription failed; check notification permissions "
+        "and try again"
+    ),
+    "push.web_vapid_key_unavailable": (
+        "Push keys are not ready on the server, please retry shortly"
+    ),
+    "push.web_unsubscribe_failed": (
+        "Failed to cancel the web push subscription, please retry"
     ),
 
     # ---- dashboard.* ----

@@ -777,7 +777,7 @@ X-Device-Id: <UUID>
 
 | 完成 | ID | 缺口 | 当前状态 | 前端影响 | 建议实现 | 工作量 |
 |:-:|---|---|---|---|---|---|
-| ❌ | **BE-PUSH-003** | **Web Push（VAPID）** | 缺失 | 家长端关闭浏览器后收不到告警 | `py_vapid` + service worker 注册；VAPID 公私钥存 settings | 1 天 |
+| ✅ | **BE-PUSH-003** | **Web Push（VAPID）** | ✅ 已完成：`WebPushDeliveryBackend`（`pywebpush` + VAPID，201→delivered / 4xx·5xx→failed / dry-run 探针）+ `CompositePushDeliveryService` 按 `platform` 分发 + `GET /push/vapid-public-key`（免鉴权）+ `/static/service-worker.js`（`push` / `notificationclick` / `pushsubscriptionchange`）+ `/static/push-helper.js` + VAPID 密钥自动生成落盘 + 每次投递写 `audit_logs` | 家长端关闭浏览器后也能收到告警 | — | 1 天 |
 | ✅ | **BE-PUSH-004** | **通知偏好设置（静默时段、勿扰）** | ✅ 已完成：`PushPrefs` 扩到 8 字段（`dnd_enabled` / `dnd_until` / `severities` / `muted_event_types`）+ `is_quiet_now` / `should_deliver` helpers + PATCH 端点扩展 + alembic 可逆 migration | 家长端可配勿扰时段、按严重度过滤、按事件静音 | — | 1 天 |
 | ✅ | **BE-PUSH-005** | **通知中心（`GET /notifications?cursor=`）** | ✅ 已完成：`GET /notifications`（HMAC 签名 cursor + severity/unread 过滤）+ `POST /{id}/read`（横向越权 404）+ `POST /read-all`（幂等） | 家长端可拉历史告警 | — | 1.5 天 |
 | ✅ | **BE-PUSH-006** | **推送测试端点（`POST /push/test`）** | ✅ 已完成：`POST /push/test`（5/min 限流 + dry-run + 写 `audit_logs`）+ `GET /push/test/history`（最近 100 条 ring buffer） | 客服可发测试推送、家长可自检 | — | 0.5 天 |

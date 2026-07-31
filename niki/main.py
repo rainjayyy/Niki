@@ -4,22 +4,26 @@ Start the application:
     uvicorn niki.main:app --reload
 """
 
+import mimetypes
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from niki.api.router import OPENAPI_TAGS, api_router
 from niki.config.logging_config import configure_logging
 from niki.config.settings import get_settings
+from niki.i18n.middleware import LanguageMiddleware
 from niki.infrastructure.chroma import ChromaClient
 from niki.infrastructure.heartbeat import HeartbeatService
 from niki.infrastructure.neo4j import Neo4jClient
 from niki.infrastructure.postgres import PostgresClient
 from niki.infrastructure.redis import RedisClient
-from niki.i18n.middleware import LanguageMiddleware
 from niki.middleware.cors import setup_cors
 from niki.middleware.error_handler import setup_error_handlers
 from niki.middleware.metrics import MetricsMiddleware
@@ -131,8 +135,8 @@ def create_app() -> FastAPI:
     # need to mint real JWTs. Set NIKI_TEST_FAKE_AUTH=1 in conftest.
     # Production should NEVER set this.
     if os.environ.get("NIKI_TEST_FAKE_AUTH") == "1":
-        from niki.auth.dependencies import get_current_parent
         from niki.auth.account import ParentAccount
+        from niki.auth.dependencies import get_current_parent
 
         async def _fake_parent() -> ParentAccount:
             return ParentAccount(
@@ -171,7 +175,53 @@ def create_app() -> FastAPI:
     # Routes
     app.include_router(api_router)
 
+    # BE-PUSH-003: static assets (Web Push service worker + the
+    # subscription helper the parent-facing app imports). Served from
+    # the package directory so it works the same whether the app is
+    # started from the repo root or from an installed wheel.
+    _mount_static(app)
+
     return app
+
+
+# Windows maps `.js` to `text/plain` in some registry configurations,
+# and a browser refuses to execute a service worker that isn't served
+# with a JavaScript MIME type. Pin it at import time.
+mimetypes.add_type("application/javascript", ".js")
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+class _StaticFilesWithSWScope(StaticFiles):
+    """StaticFiles that lets the service worker claim the root scope.
+
+    A worker served from `/static/` may only control `/static/` unless
+    the response carries `Service-Worker-Allowed: /`. Without this
+    header, `register(url, {scope: '/'})` throws and the parent never
+    receives a push for any page outside `/static/`.
+    """
+
+    async def get_response(self, path: str, scope: Any) -> Any:
+        response = await super().get_response(path, scope)
+        if path.endswith("service-worker.js"):
+            response.headers["Service-Worker-Allowed"] = "/"
+        return response
+
+
+def _mount_static(app: FastAPI) -> None:
+    """Mount `niki/static/` at `/static`.
+
+    Missing directory is not fatal: a deployment that strips static
+    assets should still serve the API. We log and move on.
+    """
+    if not STATIC_DIR.is_dir():  # pragma: no cover — packaging accident
+        logger.warning("app.static_dir_missing", path=str(STATIC_DIR))
+        return
+    app.mount(
+        "/static",
+        _StaticFilesWithSWScope(directory=str(STATIC_DIR)),
+        name="static",
+    )
 
 
 # Application instance
