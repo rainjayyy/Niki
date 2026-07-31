@@ -1,10 +1,16 @@
-"""PushDevice + PushPrefs ORM models (BE-PUSH-001).
+"""PushDevice + PushPrefs ORM models (BE-PUSH-001 + BE-PUSH-004).
 
 A parent account may bind multiple push-capable devices (iOS,
 Android, Web, mini-program). Each device registers a vendor
 push token. The actual delivery to vendor servers is wired in
 BE-PUSH-002 (P1) — this ticket only handles the registration
 and preferences surface.
+
+BE-PUSH-004 extends `PushPrefs` with quiet-hours behaviour
+(`dnd_enabled`, `dnd_until`), per-severity whitelist
+(`severities`) and per-event-type mute (`muted_event_types`).
+The semantics are implemented in `niki/api/push.py::is_quiet_now`
+and `should_deliver`; this module is intentionally schema-only.
 """
 
 from __future__ import annotations
@@ -38,6 +44,18 @@ VALID_CHANNELS: frozenset[str] = frozenset(
 VALID_PLATFORMS: frozenset[str] = frozenset(
     {"ios", "android", "web", "weapp", "flutter"}
 )
+
+# BE-PUSH-004: severity whitelist used by `PushPrefs.severities`.
+# `info` events are normally muted by default — only escalate to
+# the parent when severity ≥ `warning`.
+VALID_SEVERITIES: frozenset[str] = frozenset(
+    {"info", "warning", "critical"}
+)
+
+# Default severities a fresh parent gets on first GET /push/prefs
+# — `info` is intentionally excluded so a new parent doesn't get
+# spammed. They can opt in via PATCH /push/prefs.
+DEFAULT_SEVERITIES: list[str] = ["warning", "critical"]
 
 
 def _uuid_str() -> str:
@@ -122,7 +140,21 @@ class PushDevice(Base):
 
 
 class PushPrefs(Base):
-    """Per-parent notification preferences (PRD silent hours, PRD #29 high-risk gate)."""
+    """Per-parent notification preferences (PRD silent hours, PRD #29 high-risk gate).
+
+    BE-PUSH-004 added:
+      - `dnd_enabled`  — toggle for "do not disturb" (overrides quiet hours).
+      - `dnd_until`    — optional expiry timestamp; if set and in the future,
+                         DND is active only until that point. If `dnd_enabled`
+                         is True and `dnd_until` is NULL, DND persists.
+      - `severities`   — whitelist of severities to deliver. Default
+                         `["warning", "critical"]` so `info` events are muted.
+      - `muted_event_types` — explicit per-event-type mute list. Default `[]`.
+
+    Quiet-hours semantics (wrap-around) live in
+    `niki/api/push.py::is_quiet_now` / `should_deliver`; this module
+    is intentionally schema-only.
+    """
 
     __tablename__ = "push_prefs"
 
@@ -146,6 +178,25 @@ class PushPrefs(Base):
     high_risk_only: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    # --- BE-PUSH-004 additions ---
+    dnd_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    dnd_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    severities: Mapped[list[str]] = mapped_column(
+        "severities",
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=False,
+        default=lambda: list(DEFAULT_SEVERITIES),
+    )
+    muted_event_types: Mapped[list[str]] = mapped_column(
+        "muted_event_types",
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=False,
+        default=list,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -159,6 +210,13 @@ class PushPrefs(Base):
             "quiet_end": self.quiet_end,
             "enabled_channels": list(self.enabled_channels or []),
             "high_risk_only": self.high_risk_only,
+            "dnd_enabled": self.dnd_enabled,
+            "dnd_until": (
+                self.dnd_until.isoformat()
+                if self.dnd_until else None
+            ),
+            "severities": list(self.severities or []),
+            "muted_event_types": list(self.muted_event_types or []),
             "updated_at": (
                 self.updated_at.isoformat()
                 if self.updated_at else None

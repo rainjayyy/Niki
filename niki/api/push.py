@@ -1,4 +1,4 @@
-"""Push notification registration endpoints (BE-PUSH-001).
+"""Push notification registration endpoints (BE-PUSH-001 + BE-PUSH-004).
 
 Endpoints:
     POST /api/v1/push/register        — register a device's push token
@@ -11,14 +11,23 @@ The actual delivery to vendor servers (HMS / MiPush / OPPO /
 Vivo / Flyme / APNs / FCM / Web Push) is wired in BE-PUSH-002 /
 BE-PUSH-003 (P1+). This ticket only handles the registration
 and preferences surface so the frontend can start sending tokens.
+
+BE-PUSH-004 adds quiet-hours semantics (wrap-around), a DND
+toggle with optional expiry, a per-severity whitelist and a
+per-event-type mute. The behaviour lives in the helpers
+`is_quiet_now` and `should_deliver` so BE-PUSH-002/003/005 can
+call them at delivery time without re-implementing the policy.
 """
 
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.auth.account import ParentAccount
@@ -26,12 +35,27 @@ from niki.auth.dependencies import get_current_parent
 from niki.db.models import (
     VALID_CHANNELS,
     VALID_PLATFORMS,
+    VALID_SEVERITIES,
 )
 from niki.db.repositories import (
+    get_audit_log_repository,
     get_push_device_repository,
     get_push_prefs_repository,
 )
 from niki.i18n.translator import get_translator
+from niki.middleware.rate_limit import get_limiter
+from niki.services.audit_log import (
+    SEVERITY_INFO,
+    AuditLogService,
+    get_audit_log_service,
+)
+from niki.services.push_delivery import (
+    DEFAULT_HISTORY_LIMIT,
+    MAX_HISTORY_LIMIT,
+    PushPayload,
+    STATUS_DRY_RUN,
+    get_push_delivery_service,
+)
 
 
 router = APIRouter(prefix="/push", tags=[
@@ -56,6 +80,8 @@ _PUSH_KEY_BY_CODE: dict[str, str] = {
     "INVALID_QUIET_HOUR": "media.invalid_quiet_hour",
     "INVALID_ENABLED_CHANNELS": "media.invalid_enabled_channels",
     "INVALID_HIGH_RISK_ONLY": "media.invalid_high_risk_only",
+    "INVALID_SEVERITY": "media.invalid_severity",
+    "INVALID_EVENT_TYPE": "media.invalid_event_type",
     "BAD_REQUEST": "auth.signup_missing_field",
 }
 
@@ -275,6 +301,235 @@ def _validate_channels(request: Request, value: Any) -> list[str]:
     return list(value)
 
 
+# ---------------------------------------------------------------------------
+# BE-PUSH-004 validators + helpers
+# ---------------------------------------------------------------------------
+
+
+def _validate_severities(request: Request, value: Any) -> list[str]:
+    """Validate the per-severity whitelist.
+
+    Each entry must be a string from {info, warning, critical}.
+    An empty list is accepted (means "nothing should ever notify");
+    callers who want the default should PATCH the full list.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(
+        isinstance(s, str) for s in value
+    ):
+        raise _bad_request(
+            request,
+            "INVALID_SEVERITY",
+            "severities must be a list of strings",
+        )
+    unknown = [s for s in value if s not in VALID_SEVERITIES]
+    if unknown:
+        raise _bad_request(
+            request,
+            "INVALID_SEVERITY",
+            f"unknown severities: {unknown}",
+        )
+    # Preserve caller order but de-dupe (so a duplicated value
+    # doesn't double-count in should_deliver()'s `in` check).
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for s in value:
+        if s not in seen:
+            seen.add(s)
+            deduped.append(s)
+    return deduped
+
+
+def _validate_event_types(request: Request, value: Any) -> list[str]:
+    """Validate the per-event-type mute list.
+
+    Each entry must be a non-empty string. We don't enforce a
+    closed set of event types here (the producer side adds new
+    ones over time); we only sanity-check the shape so a junk
+    payload can't sneak into the JSON column.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(
+        isinstance(e, str) for e in value
+    ):
+        raise _bad_request(
+            request,
+            "INVALID_EVENT_TYPE",
+            "muted_event_types must be a list of strings",
+        )
+    if any(not e.strip() for e in value):
+        raise _bad_request(
+            request,
+            "INVALID_EVENT_TYPE",
+            "muted_event_types entries must be non-empty strings",
+        )
+    # Preserve order, dedupe.
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for e in value:
+        if e not in seen:
+            seen.add(e)
+            deduped.append(e)
+    return deduped
+
+
+def _validate_dnd_until(request: Request, value: Any) -> datetime | None:
+    """Coerce a PATCH payload value into a tz-aware datetime.
+
+    Accepts ISO8601 strings (the JSON wire format) or `None` to
+    clear the field. Anything else → INVALID_QUIET_HOUR (reusing
+    the existing code since the conceptual error is the same:
+    "this field's value isn't shaped right").
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        try:
+            # `fromisoformat` handles "...+00:00" / "Z" in 3.11+;
+            # on 3.9 it handles "+00:00" but not bare "Z". Replace
+            # a trailing "Z" defensively.
+            iso = value.replace("Z", "+00:00") if value.endswith("Z") else value
+            dt = datetime.fromisoformat(iso)
+        except ValueError as exc:
+            raise _bad_request(
+                request,
+                "INVALID_QUIET_HOUR",
+                f"dnd_until must be ISO8601 ({exc})",
+            ) from exc
+    else:
+        raise _bad_request(
+            request,
+            "INVALID_QUIET_HOUR",
+            "dnd_until must be an ISO8601 string or null",
+        )
+    if dt.tzinfo is None:
+        # Naive datetimes are ambiguous (server local? UTC?). The
+        # DB column is tz-aware; refuse rather than guess.
+        raise _bad_request(
+            request,
+            "INVALID_QUIET_HOUR",
+            "dnd_until must include a timezone offset",
+        )
+    return dt
+
+
+def is_quiet_now(
+    prefs: dict[str, Any],
+    now: datetime | None = None,
+) -> bool:
+    """True iff `now` falls in the parent's quiet window OR DND is active.
+
+    DND wins over quiet hours: if `dnd_enabled=True`, the parent
+    gets silence regardless of the time-of-day window. When
+    `dnd_until` is set, DND is only active until that timestamp;
+    once expired, DND silently deactivates without needing an
+    explicit PATCH.
+
+    Quiet-hours windows support wrap-around: `quiet_start=22,
+    quiet_end=7` means "22:00 today through 07:00 tomorrow". When
+    `quiet_start == quiet_end` (or either is None), the window is
+    treated as disabled — clients that want to fully silence the
+    parent should use DND.
+
+    Args:
+        prefs: A prefs dict as returned by `PushPrefs.to_dict()`
+            or `PushPrefsRepository.get()`.
+        now: Optional clock for the check. Defaults to
+            `datetime.now(timezone.utc)`. Tests pass an explicit
+            value to avoid flakiness.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    # 1) DND overrides everything.
+    if prefs.get("dnd_enabled"):
+        dnd_until = prefs.get("dnd_until")
+        if dnd_until is None:
+            # Persistent DND — silence forever (until parent toggles off).
+            return True
+        # `dnd_until` may be a datetime or an ISO string (the API
+        # serialises datetime as ISO). Coerce both shapes.
+        if isinstance(dnd_until, str):
+            iso = dnd_until.replace("Z", "+00:00") if dnd_until.endswith("Z") else dnd_until
+            try:
+                dnd_until = datetime.fromisoformat(iso)
+            except ValueError:
+                # Garbled value — be conservative and let the
+                # notification through. The next PATCH will
+                # overwrite the row with a clean value.
+                dnd_until = None
+        if isinstance(dnd_until, datetime) and dnd_until.tzinfo is None:
+            dnd_until = dnd_until.replace(tzinfo=timezone.utc)
+        if isinstance(dnd_until, datetime) and dnd_until > now:
+            return True
+        # Otherwise DND has expired → fall through to quiet hours.
+
+    # 2) Quiet-hours window with wrap-around.
+    qs = prefs.get("quiet_start")
+    qe = prefs.get("quiet_end")
+    if qs is None or qe is None:
+        return False
+    if not isinstance(qs, int) or not isinstance(qe, int):
+        return False
+    if qs == qe:
+        # Equal hours = empty window (semantically "no quiet hours").
+        return False
+    h = now.hour
+    if qs < qe:
+        # Same-day window, e.g. 13 → 14 = just 13:00-14:00.
+        return qs <= h < qe
+    # Wrap-around window, e.g. 22 → 7 = 22:00-23:59 + 00:00-07:00.
+    return h >= qs or h < qe
+
+
+def should_deliver(
+    prefs: dict[str, Any],
+    severity: str,
+    event_type: str,
+    now: datetime | None = None,
+) -> bool:
+    """Decide whether a push *should* go out, given prefs + payload.
+
+    Combines three independent gates — any one returning False
+    suppresses the notification:
+
+      1. Quiet hours / DND (`is_quiet_now`).
+      2. Severity whitelist (`prefs["severities"]`). An empty
+         whitelist means "nothing should ever notify" (explicit
+         opt-out); a missing key defaults to delivery.
+      3. Event-type mute (`prefs["muted_event_types"]`).
+
+    Args:
+        prefs: Prefs dict (see `is_quiet_now`).
+        severity: One of "info" / "warning" / "critical".
+        event_type: Domain event type, e.g. "safety_block",
+            "session_pause". Matched by exact string.
+        now: Optional clock for the quiet-hours check.
+
+    Returns:
+        True iff the push should be delivered.
+    """
+    if is_quiet_now(prefs, now):
+        return False
+    allowed = prefs.get("severities")
+    # An explicit empty list is "mute everything" (opt-out).
+    # `None` / missing key falls through and lets the event through
+    # so callers can call us before populating prefs.
+    if isinstance(allowed, list):
+        if not allowed:
+            return False
+        if severity not in allowed:
+            return False
+    muted = prefs.get("muted_event_types")
+    if isinstance(muted, list) and event_type in muted:
+        return False
+    return True
+
+
 @router.get(
     "/prefs",
     summary="Return notification preferences (defaults if unset)",
@@ -309,7 +564,9 @@ async def update_prefs(
     """Partial update of notification preferences.
 
     Only the fields present in the body are touched; the rest
-    keep their previous values.
+    keep their previous values. BE-PUSH-004 added `dnd_enabled`,
+    `dnd_until`, `severities`, `muted_event_types`. The full
+    validation surface lives in `_validate_*` helpers above.
     """
     if not isinstance(payload, dict):
         raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
@@ -319,6 +576,19 @@ async def update_prefs(
     quiet_end = _validate_quiet_hour(
         request, payload.get("quiet_end"), "quiet_end"
     )
+    # BE-PUSH-004: refuse equal quiet hours when both are set
+    # (an empty window would otherwise silently disable quiet
+    # hours without the caller noticing).
+    if (
+        quiet_start is not None
+        and quiet_end is not None
+        and quiet_start == quiet_end
+    ):
+        raise _bad_request(
+            request,
+            "INVALID_QUIET_HOUR",
+            "quiet_start and quiet_end must differ",
+        )
     if (
         "enabled_channels" in payload
         and payload["enabled_channels"] is not None
@@ -336,6 +606,32 @@ async def update_prefs(
             "high_risk_only must be a boolean",
         )
 
+    # --- BE-PUSH-004 new fields ---
+    dnd_enabled = payload.get("dnd_enabled")
+    if dnd_enabled is not None and not isinstance(dnd_enabled, bool):
+        raise _bad_request(
+            request,
+            "INVALID_HIGH_RISK_ONLY",  # reuse: same shape (bool) error
+            "dnd_enabled must be a boolean",
+        )
+    if "dnd_until" in payload:
+        dnd_until = _validate_dnd_until(request, payload["dnd_until"])
+    else:
+        dnd_until = None
+    if "severities" in payload and payload["severities"] is not None:
+        severities = _validate_severities(request, payload["severities"])
+    else:
+        severities = None
+    if (
+        "muted_event_types" in payload
+        and payload["muted_event_types"] is not None
+    ):
+        muted_event_types = _validate_event_types(
+            request, payload["muted_event_types"]
+        )
+    else:
+        muted_event_types = None
+
     repo = get_push_prefs_repository()
     row = await repo.update(
         parent.id,
@@ -343,6 +639,10 @@ async def update_prefs(
         quiet_end=quiet_end,
         enabled_channels=enabled_channels,
         high_risk_only=high_risk_only,
+        dnd_enabled=dnd_enabled,
+        dnd_until=dnd_until,
+        severities=severities,
+        muted_event_types=muted_event_types,
     )
     row.pop("parent_id", None)
     return row
@@ -500,3 +800,312 @@ async def re_enable_device(
     repo = get_push_device_repository()
     updated = await repo.set_enabled(parent.id, device_id, True)
     return {"enabled": updated}
+
+
+# ---------------------------------------------------------------------------
+# BE-PUSH-006: test push endpoint + history
+# ---------------------------------------------------------------------------
+
+# Rate-limit cap on POST /push/test. Per-IP because a runaway
+# retry loop == DoS against the parent's phone (real vendor
+# SDKs ring on each delivery). 5/minute is enough for a
+# support engineer to debug, tight enough that a broken script
+# can't fill a parent's notification shade.
+_PUSH_TEST_RATE: str = "5/minute"
+
+# Synthetic audit event type for /push/test firings. Picked a
+# short snake_case like the other constants in
+# `niki.db.models.audit_log` so a query like
+# `event_type='push_test_sent'` is greppable end-to-end.
+_EVENT_PUSH_TEST_SENT: str = "push_test_sent"
+
+
+# ---------------------------------------------------------------------------
+# BE-PUSH-006 response models — used to declare the OpenAPI schema for the
+# `/push/test` endpoints. We don't use a Pydantic body model because the
+# handler accepts a free-form `dict` (matching the convention of the rest
+# of the push router), but a response model is the cheapest way to make
+# `tests/api/test_openapi_docs.py` happy without re-architecting.
+# ---------------------------------------------------------------------------
+
+
+class _PushTestResultItem(BaseModel):
+    """One entry in the `GET /push/test/history` response."""
+
+    device_id: str = Field(..., description="Target device id.")
+    channel: str = Field(..., description="Push channel the device is on.")
+    status: str = Field(
+        ...,
+        description="One of delivered | dry_run | failed | skipped_no_token.",
+    )
+    error: str | None = Field(
+        default=None,
+        description="Failure reason when status != delivered/dry_run.",
+    )
+    latency_ms: int | None = Field(
+        default=None,
+        description="Wall-clock delivery latency (synthetic 5-50ms for dry_run).",
+    )
+    dry_run: bool = Field(
+        default=False,
+        description="Echoes the dry_run argument the caller passed.",
+    )
+    created_at: str = Field(
+        ...,
+        description="ISO-8601 timestamp the delivery was recorded.",
+    )
+
+
+class _PushTestResult(BaseModel):
+    """`POST /push/test` response body."""
+
+    device_id: str = Field(..., description="Device the test was fired at.")
+    status: str = Field(
+        default=STATUS_DRY_RUN,
+        description="Always `dry_run` until BE-PUSH-002 lands a real SDK.",
+    )
+    channel: str | None = Field(
+        default=None,
+        description="Push channel the device is on (apns/fcm/web/...).",
+    )
+    latency_ms: int | None = Field(
+        default=None,
+        description="Synthetic 5-50ms latency for dry-run deliveries.",
+    )
+
+
+class _PushTestHistory(BaseModel):
+    """`GET /push/test/history` response body."""
+
+    deliveries: list[_PushTestResultItem] = Field(
+        default_factory=list,
+        description="Recent deliveries, newest-first.",
+    )
+    count: int = Field(..., description="Number of deliveries returned.")
+
+# Module-local handle for the slowapi limiter so the @limiter.limit
+# decorator can resolve the singleton. We grab it lazily in the
+# request handlers themselves to avoid surprising import-time
+# side-effects — `get_limiter()` is idempotent and cheap.
+_limiter = get_limiter()
+
+
+def _push_device_not_found(request: Request) -> HTTPException:
+    """Return the uniform 404 for `device_id` not owned by caller.
+
+    Used by both POST /push/test (cross-parent 404) and any
+    future read paths. The body is i18n-localized via the
+    `push.device_not_found` key; the *same* message is returned
+    for "doesn't exist" and "exists but not yours" so an attacker
+    can't use the endpoint as a device-id oracle.
+    """
+    return HTTPException(
+        status_code=404,
+        detail=localized_error_response(
+            request,
+            code="DEVICE_NOT_FOUND",
+            key="push.device_not_found",
+        ),
+    )
+
+
+@router.post(
+    "/test",
+    summary="Send a test push to one of the caller's devices",
+    response_model=_PushTestResult,
+    responses={
+        200: {
+            "description": "Dry-run delivery accepted.",
+            "headers": {
+                "X-Push-Test-Mode": {
+                    "description": (
+                        "Always `dry-run` until BE-PUSH-002 wires real"
+                        " vendor SDKs."
+                    ),
+                    "schema": {"type": "string"},
+                },
+            },
+        },
+        404: {"description": "Device not found or not owned by this account."},
+        422: {"description": "Missing `device_id`."},
+        429: {"description": "Rate limit exceeded (5/minute/IP)."},
+    },
+    description="""
+            Send a test push to one of the caller's devices.
+
+            This is the "does my push actually work?" probe — it
+            walks the entire delivery chain (device lookup,
+            payload construction, vendor seam, audit log,
+            history buffer) without ringing a real phone. The
+            response carries `status="dry_run"` and an
+            `X-Push-Test-Mode: dry-run` header so callers can
+            distinguish a real delivery from a probe.
+
+            lateral-auth: `device_id` must belong to the calling
+            parent. Both "doesn't exist" and "exists but not
+            yours" return 404 with the same body to avoid being
+            used as a device-id oracle.
+
+            Rate-limited to 5/minute/IP (slowapi).
+            """,
+)
+@_limiter.limit(_PUSH_TEST_RATE)
+async def send_test_push(
+    request: Request,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> JSONResponse:
+    """Send a test push to one of the caller's devices.
+
+    See BE-PUSH-006.md for the full contract. Returns 200 +
+    `X-Push-Test-Mode: dry-run` on success, 404 on cross-parent
+    device_id, 422 on missing `device_id`, 429 on rate-limit.
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "BAD_REQUEST",
+                "message": "body must be a JSON object",
+            },
+        )
+
+    device_id = payload.get("device_id")
+    if not isinstance(device_id, str) or not device_id:
+        # Pydantic-style 422 — but we use a plain dict because
+        # the body is already a raw `dict` (BE-PUSH-001 endpoints
+        # share this convention; introducing a BaseModel here
+        # would make the rate-limit-decorated endpoint harder
+        # to mirror against the existing /register flow).
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "VALIDATION_ERROR",
+                "message": "device_id is required (string, 1-64 chars)",
+            },
+        )
+
+    # Lateral-auth: lookup is parent-scoped. list_for_parent filters
+    # by parent_id, so a foreign device_id simply isn't in the
+    # returned list and we map both "missing" + "not yours" to 404.
+    device_repo = get_push_device_repository()
+    rows = await device_repo.list_for_parent(parent.id)
+    device = next(
+        (r for r in rows if r.get("device_id") == device_id),
+        None,
+    )
+    if device is None:
+        raise _push_device_not_found(request)
+
+    title = str(payload.get("title") or "测试推送")
+    body = str(payload.get("body") or "这是一条测试推送")
+    severity = str(payload.get("severity") or "info")
+    dedupe_key = payload.get("dedupe_key")
+    data = payload.get("data") or {}
+
+    push_payload = PushPayload(
+        title=title,
+        body=body,
+        severity=severity,
+        dedupe_key=dedupe_key if isinstance(dedupe_key, str) else None,
+        data=data if isinstance(data, dict) else {},
+    )
+
+    delivery_svc = get_push_delivery_service()
+    # dry_run=True is hard-coded — BE-PUSH-002 will introduce a
+    # flag once the real vendor SDKs are wired in. Until then
+    # /push/test is *always* a probe, never a real ring.
+    result = await delivery_svc.deliver(
+        device,
+        push_payload,
+        dry_run=True,
+    )
+
+    # Audit row. Goes through the unified `audit_logs` table
+    # (BE-COMP-004) so support tooling can correlate a parent's
+    # "I got pinged at 10:42" complaint with our test-fire record.
+    audit_svc = get_audit_log_service()
+    client_ip = (
+        request.client.host if request.client else None
+    )
+    # We deliberately do NOT include `title` / `body` in metadata:
+    # they're user-controlled text and AuditLogService scrubs
+    # PII-shaped keys anyway, but skipping them keeps the audit
+    # row narrow.
+    await audit_svc.log_event(
+        event_type=_EVENT_PUSH_TEST_SENT,
+        severity=SEVERITY_INFO,
+        actor_parent_id=parent.id,
+        target_parent_id=parent.id,
+        endpoint="/api/v1/push/test",
+        method="POST",
+        reason="BE-PUSH-006 test push fired",
+        client_ip=client_ip,
+        metadata={
+            "device_id": device_id,
+            "channel": device.get("channel"),
+            "dry_run": True,
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+        },
+    )
+
+    body_out = {
+        "device_id": device_id,
+        "status": STATUS_DRY_RUN,
+        "channel": device.get("channel"),
+        "latency_ms": result.latency_ms,
+    }
+    response = JSONResponse(
+        status_code=200,
+        content=body_out,
+    )
+    # Observability: explicit header so callers can grep logs and
+    # ops dashboards can pattern-match a "this was a probe" line
+    # without parsing the JSON body.
+    response.headers["X-Push-Test-Mode"] = "dry-run"
+    return response
+
+
+@router.get(
+    "/test/history",
+    summary="Recent test-push deliveries (in-memory ring buffer)",
+    response_model=_PushTestHistory,
+    description="""
+            Recent test-push deliveries, newest-first.
+
+            Backed by a process-local ring buffer (last 100
+            deliveries, across all parents). The endpoint is
+            meant for support engineers who just fired a test
+            push via `POST /push/test` and want to confirm it
+            reached the delivery seam. For the durable,
+            per-parent audit trail, query the unified
+            `audit_logs` table directly.
+
+            `limit` defaults to 20 and is capped at 100 (the
+            buffer's own capacity). `channel` is an optional
+            exact-match filter.
+            """,
+)
+async def test_push_history(
+    request: Request,
+    limit: int = DEFAULT_HISTORY_LIMIT,
+    channel: str | None = None,
+) -> dict:
+    """Return recent test-push deliveries, newest-first.
+
+    `limit` is clamped to [1, MAX_HISTORY_LIMIT]; the buffer's
+    own capacity is the absolute upper bound so any larger
+    request just returns the whole buffer.
+    """
+    if limit <= 0:
+        limit = DEFAULT_HISTORY_LIMIT
+    if limit > MAX_HISTORY_LIMIT:
+        limit = MAX_HISTORY_LIMIT
+
+    svc = get_push_delivery_service()
+    deliveries = svc.history(limit=limit, channel=channel)
+    return {
+        "deliveries": [d.to_dict() for d in deliveries],
+        "count": len(deliveries),
+    }

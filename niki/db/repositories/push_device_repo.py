@@ -1,4 +1,4 @@
-"""PushDeviceRepository + PushPrefsRepository (BE-PUSH-001).
+"""PushDeviceRepository + PushPrefsRepository (BE-PUSH-001 + BE-PUSH-004).
 
 PushDevice:
   - Register/unregister/list devices per parent.
@@ -8,6 +8,9 @@ PushDevice:
 PushPrefs:
   - Single-row per parent (one prefs record per parent_id).
   - GET returns defaults for parents who haven't customised.
+  - BE-PUSH-004 extended with: dnd_enabled, dnd_until, severities,
+    muted_event_types. Quiet-hours semantics (wrap-around) live in
+    `niki/api/push.py::is_quiet_now` / `should_deliver`.
 """
 
 from __future__ import annotations
@@ -33,6 +36,14 @@ DEFAULT_ENABLED_CHANNELS: list[str] = [
     "hms", "mipush", "oppo", "vivo", "flyme",
     "apns", "fcm", "web",
 ]
+
+# BE-PUSH-004: defaults for the four new columns. `severities` is
+# deliberately the same constant exposed as `DEFAULT_SEVERITIES`
+# in `niki.db.models.push_device`; we re-declare the literal here
+# to avoid an import cycle (this module is imported by the model
+# layer's lazy-default via SQLAlchemy meta).
+DEFAULT_SEVERITIES_LIST: list[str] = ["warning", "critical"]
+DEFAULT_MUTED_EVENT_TYPES: list[str] = []
 
 
 def _now() -> datetime:
@@ -370,6 +381,10 @@ def default_prefs(parent_id: str) -> dict[str, Any]:
         "quiet_end": None,
         "enabled_channels": list(DEFAULT_ENABLED_CHANNELS),
         "high_risk_only": False,
+        "dnd_enabled": False,
+        "dnd_until": None,
+        "severities": list(DEFAULT_SEVERITIES_LIST),
+        "muted_event_types": list(DEFAULT_MUTED_EVENT_TYPES),
         "updated_at": _now(),
     }
 
@@ -390,6 +405,10 @@ class PushPrefsRepository(ABC):
         quiet_end: int | None = None,
         enabled_channels: list[str] | None = None,
         high_risk_only: bool | None = None,
+        dnd_enabled: bool | None = None,
+        dnd_until: datetime | None = None,
+        severities: list[str] | None = None,
+        muted_event_types: list[str] | None = None,
     ) -> dict[str, Any]:
         """Partial update. None means 'leave unchanged'. Returns
         the merged row (or the freshly-created defaults row)."""
@@ -415,6 +434,10 @@ class InMemoryPushPrefsRepository(PushPrefsRepository):
         quiet_end: int | None = None,
         enabled_channels: list[str] | None = None,
         high_risk_only: bool | None = None,
+        dnd_enabled: bool | None = None,
+        dnd_until: datetime | None = None,
+        severities: list[str] | None = None,
+        muted_event_types: list[str] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             row = self._rows.get(parent_id)
@@ -428,6 +451,14 @@ class InMemoryPushPrefsRepository(PushPrefsRepository):
                 row["enabled_channels"] = list(enabled_channels)
             if high_risk_only is not None:
                 row["high_risk_only"] = high_risk_only
+            if dnd_enabled is not None:
+                row["dnd_enabled"] = dnd_enabled
+            if dnd_until is not None:
+                row["dnd_until"] = dnd_until
+            if severities is not None:
+                row["severities"] = list(severities)
+            if muted_event_types is not None:
+                row["muted_event_types"] = list(muted_event_types)
             row["updated_at"] = _now()
             self._rows[parent_id] = row
             return deepcopy(row)
@@ -452,6 +483,10 @@ class PostgresPushPrefsRepository(PushPrefsRepository):
         quiet_end: int | None = None,
         enabled_channels: list[str] | None = None,
         high_risk_only: bool | None = None,
+        dnd_enabled: bool | None = None,
+        dnd_until: datetime | None = None,
+        severities: list[str] | None = None,
+        muted_event_types: list[str] | None = None,
     ) -> dict[str, Any]:
         now = _now()
         current = await self.get(parent_id)
@@ -473,12 +508,36 @@ class PostgresPushPrefsRepository(PushPrefsRepository):
             if high_risk_only is not None
             else current["high_risk_only"]
         )
+        new_dnd_enabled = (
+            dnd_enabled
+            if dnd_enabled is not None
+            else current["dnd_enabled"]
+        )
+        new_dnd_until = (
+            dnd_until
+            if dnd_until is not None
+            else current["dnd_until"]
+        )
+        new_severities = (
+            list(severities)
+            if severities is not None
+            else current["severities"]
+        )
+        new_muted_event_types = (
+            list(muted_event_types)
+            if muted_event_types is not None
+            else current["muted_event_types"]
+        )
         stmt = pg_insert(PushPrefs).values(
             parent_id=parent_id,
             quiet_start=new_quiet_start,
             quiet_end=new_quiet_end,
             enabled_channels=new_enabled_channels,
             high_risk_only=new_high_risk_only,
+            dnd_enabled=new_dnd_enabled,
+            dnd_until=new_dnd_until,
+            severities=new_severities,
+            muted_event_types=new_muted_event_types,
             updated_at=now,
         ).on_conflict_do_update(
             index_elements=[PushPrefs.parent_id],
@@ -487,6 +546,10 @@ class PostgresPushPrefsRepository(PushPrefsRepository):
                 "quiet_end": new_quiet_end,
                 "enabled_channels": new_enabled_channels,
                 "high_risk_only": new_high_risk_only,
+                "dnd_enabled": new_dnd_enabled,
+                "dnd_until": new_dnd_until,
+                "severities": new_severities,
+                "muted_event_types": new_muted_event_types,
                 "updated_at": now,
             },
         ).returning(PushPrefs)

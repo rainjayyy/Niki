@@ -60,6 +60,8 @@ MESSAGES_ZH: dict[str, str] = {
     "media.invalid_quiet_hour": "静音时段必须为 0-23 的整数",
     "media.invalid_enabled_channels": "enabled_channels 必须是字符串列表",
     "media.invalid_high_risk_only": "high_risk_only 必须为布尔值",
+    "media.invalid_severity": "severities 必须是 {info, warning, critical} 的子集",
+    "media.invalid_event_type": "muted_event_types 必须是非空字符串列表",
 
     # ---- dashboard.* (BE-DASH-001) ----
     "dashboard.invalid_template": "模板名称不合法",
@@ -118,6 +120,8 @@ MESSAGES_EN: dict[str, str] = {
     "media.invalid_quiet_hour": "Quiet hour must be an integer 0-23",
     "media.invalid_enabled_channels": "enabled_channels must be a list of strings",
     "media.invalid_high_risk_only": "high_risk_only must be a boolean",
+    "media.invalid_severity": "severities must be a subset of {info, warning, critical}",
+    "media.invalid_event_type": "muted_event_types must be a list of non-empty strings",
 
     # ---- dashboard.* ----
     "dashboard.invalid_template": "Invalid template name",
