@@ -184,6 +184,16 @@ def get_or_create_llm() -> BaseLLMClient:
     return _singleton
 
 
+def is_stub_mode() -> bool:
+    """True when no real provider is wired — i.e. the factory returned
+    the fallback stub. Endpoint modules use this to decide whether
+    they should layer on a more domain-aware stub (e.g. the
+    encyclopedia-specific KB-echo stub) on top of the generic stub.
+    """
+    client = get_or_create_llm()
+    return getattr(client, "provider_name", "") == "stub"
+
+
 def reset_for_tests() -> None:
     """Drop the cached singleton so the next call rebuilds from settings.
 

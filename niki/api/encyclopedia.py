@@ -46,11 +46,15 @@ _input_gateway = InputSafetyGateway()
 
 # Wire the production LLM via the factory — returns the real
 # MinimaxClient when MINIMAX_API_KEY is set, otherwise the stub.
-# The factory is a process-wide singleton; tests can swap it via
-# `niki.infrastructure.llm.factory.reset_for_tests()`.
-from niki.infrastructure.llm.factory import get_or_create_llm as _get_llm  # noqa: E402
+# In stub mode we layer on the domain-aware encyclopedia stub
+# (echoes the KB hit) so dev + tests can still exercise the full
+# agent pipeline end-to-end without network access.
+from niki.infrastructure.llm.factory import (  # noqa: E402
+    get_or_create_llm as _get_llm,
+    is_stub_mode as _is_stub,
+)
 
-_llm = _get_llm()
+_llm = _EncyclopediaStub() if _is_stub() else _get_llm()
 
 
 _agent = EncyclopediaAgent(

@@ -46,9 +46,14 @@ _dashboard = DashboardService()
 _baseline = EmotionBaseline()
 
 # Wire the production LLM via the factory — see encyclopedia.py
-from niki.infrastructure.llm.factory import get_or_create_llm as _get_llm  # noqa: E402
+from niki.infrastructure.llm.factory import (  # noqa: E402
+    get_or_create_llm as _get_llm,
+    is_stub_mode as _is_stub,
+)
 
-_llm = _get_llm()
+# In stub mode, layer on the generic stub so dev / tests can still
+# exercise the pipeline without network access.
+_llm = _StubLLM() if _is_stub() else _get_llm()
 
 _orchestrator = EmotionAgent(
     llm=_llm,
