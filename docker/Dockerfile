@@ -65,6 +65,11 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY . .
 
+# Install curl for the HEALTHCHECK probe (python:3.12-slim doesn't ship it).
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+USER root
+
 # Set ownership
 RUN chown -R niki:niki /app
 
@@ -72,9 +77,10 @@ USER niki
 
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+# Health check — uses the lightweight liveness probe so we don't hit DB
+# (the readiness probe in /health/ready does that).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health/live || exit 1
 
-# Start with production settings
-CMD ["uvicorn", "niki.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-reload", "--proxy-headers"]
+# Entrypoint waits for Postgres, runs alembic upgrade head, then execs uvicorn.
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
