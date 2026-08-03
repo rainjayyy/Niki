@@ -34,6 +34,10 @@ from niki.db.models.audit_log import (
 from niki.services.audit_log import get_audit_log_service
 
 from niki.api._i18n import localized_error_response
+from niki.schemas.requests import (
+    RecordHighRiskRequest,
+    RecordSafetyValveRequest,
+)
 
 router = APIRouter(prefix="/dashboard", tags=[
     {"name": "dashboard", "description": "Parent dashboard API endpoints — PRD #24-#29."}
@@ -208,14 +212,20 @@ async def get_alerts(
     summary="Record a tutoring safety-valve trigger",
     description="Record a tutoring safety-valve trigger.",
 )
-async def record_safety_valve(payload: dict,
+async def record_safety_valve(payload: RecordSafetyValveRequest,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
-    """Record a tutoring safety-valve trigger."""
+    """Record a tutoring safety-valve trigger.
+
+    `payload` is typed as `RecordSafetyValveRequest` so missing
+    fields surface as 422 REQUEST_VALIDATION_ERROR rather than a
+    500 from `payload["missing_key"]` KeyError (the bug surfaced
+    by frontend testing).
+    """
     row_id = await _dashboard.record_safety_valve(
-        child_id=payload["child_id"],
+        child_id=payload.child_id,
         parent_id=parent.id,
-        problem_summary=payload["problem_summary"],
-        round_reached=int(payload.get("round_reached", 4)),
+        problem_summary=payload.problem_summary,
+        round_reached=payload.round_reached,
     )
     # BE-COMP-004: the safety valve firing is a "Niki stopped
     # tutoring" moment the parent may ask about weeks later.
@@ -226,21 +236,21 @@ async def record_safety_valve(payload: dict,
         severity=SEVERITY_WARNING,
         actor_parent_id=parent.id,
         target_parent_id=parent.id,
-        target_child_id=payload["child_id"],
+        target_child_id=payload.child_id,
         endpoint="/api/v1/dashboard/alerts/record/safety-valve",
         method="POST",
         reason="Tutoring safety valve triggered",
         metadata={
             "alert_id": row_id,
-            "round_reached": int(payload.get("round_reached", 4)),
+            "round_reached": payload.round_reached,
         },
     )
     return {
         "id": row_id,
-        "child_id": payload["child_id"],
+        "child_id": payload.child_id,
         "severity": "info",
-        "problem_summary": payload["problem_summary"],
-        "round_reached": int(payload.get("round_reached", 4)),
+        "problem_summary": payload.problem_summary,
+        "round_reached": payload.round_reached,
     }
 
 
@@ -249,17 +259,23 @@ async def record_safety_valve(payload: dict,
     summary="Record a high-risk signal (self-harm, etc.)",
     description="Record a high-risk signal (self-harm, etc.).",
 )
-async def record_high_risk(payload: dict,
+async def record_high_risk(payload: RecordHighRiskRequest,
     parent: ParentAccount = Depends(get_current_parent),) -> dict:
-    """Record a high-risk signal (self-harm, etc.)."""
-    niki_response_summary = payload.get(
-        "niki_response_summary",
-        "Niki 已用温柔的话语回应孩子",
+    """Record a high-risk signal (self-harm, etc.).
+
+    `payload` is typed as `RecordHighRiskRequest` so missing
+    fields surface as 422 REQUEST_VALIDATION_ERROR rather than a
+    500 from `payload["missing_key"]` KeyError.
+    """
+    niki_response_summary = (
+        payload.niki_response_summary
+        if payload.niki_response_summary is not None
+        else "Niki 已用温柔的话语回应孩子"
     )
     row_id = await _dashboard.record_high_risk(
-        child_id=payload["child_id"],
+        child_id=payload.child_id,
         parent_id=parent.id,
-        original_text=payload["original_text"],
+        original_text=payload.original_text,
         niki_response_summary=niki_response_summary,
     )
     # BE-COMP-004: `critical` severity — this is the event class that
@@ -271,7 +287,7 @@ async def record_high_risk(payload: dict,
         severity=SEVERITY_CRITICAL,
         actor_parent_id=parent.id,
         target_parent_id=parent.id,
-        target_child_id=payload["child_id"],
+        target_child_id=payload.child_id,
         endpoint="/api/v1/dashboard/alerts/record/high-risk",
         method="POST",
         reason="High-risk signal recorded for the child",
@@ -279,9 +295,9 @@ async def record_high_risk(payload: dict,
     )
     return {
         "id": row_id,
-        "child_id": payload["child_id"],
+        "child_id": payload.child_id,
         "severity": "urgent",
-        "original_text": payload["original_text"],
+        "original_text": payload.original_text,
         "niki_response_summary": niki_response_summary,
     }
 

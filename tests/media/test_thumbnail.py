@@ -209,8 +209,8 @@ class TestThumbnailEndpoint:
             "/api/v1/media/f-abc12345/thumb",
             params={"w": 9999, "h": 100},
         )
-        assert r.status_code == 422
-        assert r.json()["detail"]["error"] == "INVALID_THUMB_SIZE"
+        assert r.status_code == 400
+        assert r.json()["error"]["code"] == "INVALID_THUMB_SIZE"
 
     def test_unknown_file_returns_404(
         self, client: TestClient
@@ -220,7 +220,7 @@ class TestThumbnailEndpoint:
             params={"w": 100, "h": 100},
         )
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "FILE_NOT_FOUND"
+        assert r.json()["error"]["code"] == "FILE_NOT_FOUND"
 
     def test_original_endpoint_has_public_cache(
         self, client: TestClient

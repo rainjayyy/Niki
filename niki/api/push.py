@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.auth.account import ParentAccount
+from niki.schemas.requests import PushTestRequest
 from niki.auth.dependencies import get_current_parent
 from niki.config.settings import (
     get_or_generate_vapid_keys,
@@ -956,38 +957,21 @@ def _push_device_not_found(request: Request) -> HTTPException:
 @_limiter.limit(_PUSH_TEST_RATE)
 async def send_test_push(
     request: Request,
-    payload: dict,
+    payload: PushTestRequest,
     parent: ParentAccount = Depends(get_current_parent),
 ) -> JSONResponse:
     """Send a test push to one of the caller's devices.
 
     See BE-PUSH-006.md for the full contract. Returns 200 +
     `X-Push-Test-Mode: dry-run` on success, 404 on cross-parent
-    device_id, 422 on missing `device_id`, 429 on rate-limit.
-    """
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "BAD_REQUEST",
-                "message": "body must be a JSON object",
-            },
-        )
+    device_id, 400 on missing/invalid `device_id` (Pydantic-driven),
+    429 on rate-limit.
 
-    device_id = payload.get("device_id")
-    if not isinstance(device_id, str) or not device_id:
-        # Pydantic-style 422 — but we use a plain dict because
-        # the body is already a raw `dict` (BE-PUSH-001 endpoints
-        # share this convention; introducing a BaseModel here
-        # would make the rate-limit-decorated endpoint harder
-        # to mirror against the existing /register flow).
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "VALIDATION_ERROR",
-                "message": "device_id is required (string, 1-64 chars)",
-            },
-        )
+    The body is typed as `PushTestRequest` so missing `device_id`
+    surfaces as a structured 400 (frontend interceptor) instead of
+    a 500 from `payload["device_id"]` KeyError.
+    """
+    device_id = payload.device_id
 
     # Lateral-auth: lookup is parent-scoped. list_for_parent filters
     # by parent_id, so a foreign device_id simply isn't in the
@@ -1001,11 +985,11 @@ async def send_test_push(
     if device is None:
         raise _push_device_not_found(request)
 
-    title = str(payload.get("title") or "测试推送")
-    body = str(payload.get("body") or "这是一条测试推送")
-    severity = str(payload.get("severity") or "info")
-    dedupe_key = payload.get("dedupe_key")
-    data = payload.get("data") or {}
+    title = payload.title or "测试推送"
+    body = payload.body or "这是一条测试推送"
+    severity = payload.severity or "info"
+    dedupe_key = payload.dedupe_key
+    data = payload.data or {}
 
     push_payload = PushPayload(
         title=title,

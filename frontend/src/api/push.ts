@@ -3,12 +3,13 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `push` (13 operation(s)).
- * Generated: 2026-07-31T08:34:20Z
+ * Generated: 2026-08-03T09:29:32Z
  */
 
 import { request } from "./client";
 import type { RequestOptions } from "./client";
 import type {
+  PushTestRequest,
   _PushTestHistory,
   _PushTestResult,
   _VapidPublicKey,
@@ -180,7 +181,7 @@ export async function postPushRegister(
  * @remarks `POST /api/v1/push/test`
  */
 export async function postPushTest(
-  body: Record<string, unknown>,
+  body: PushTestRequest,
   options?: RequestOptions,
 ): Promise<_PushTestResult> {
   return request<_PushTestResult>(

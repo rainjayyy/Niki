@@ -5,7 +5,7 @@
  * Types derived from the OpenAPI `components.schemas` block.
  * `Body_*` interfaces describe multipart form bodies; the SDK does not
  * generate multipart call signatures yet (BE-API-008).
- * Generated: 2026-07-31T08:34:20Z
+ * Generated: 2026-08-03T09:29:32Z
  */
 
 export interface Body_ocr_api_v1_media_ocr_post {
@@ -61,6 +61,67 @@ export interface HealthStatus {
   latency_ms?: number | null;
   /** Error message if unhealthy */
   error?: string | null;
+}
+
+/**
+ * Body for `POST /api/v1/push/test`. `device_id` is required and validated against the same regex as the device registration endpoint. All other fields are optional and fall back to safe defaults in the handler.
+ */
+export interface PushTestRequest {
+  /** Target device id (1-64 chars [A-Za-z0-9._-]) */
+  device_id: string;
+  /** Notification title (default: '测试推送') */
+  title?: string | null;
+  /** Notification body (default: '这是一条测试推送') */
+  body?: string | null;
+  /** One of info|warning|critical (default: info) */
+  severity?: string | null;
+  /** Dedupe key — same key collapses to one notification */
+  dedupe_key?: string | null;
+  /** Free-form payload attached to the notification */
+  data?: Record<string, unknown> | null;
+}
+
+/**
+ * Body for `POST /api/v1/dashboard/alerts/record/high-risk`. `original_text` is the child's exact words (encrypted at rest in dashboard_alerts; never echoed in the audit log). The endpoint requires this so we can route a parent alert and trigger a safety push notification (BE-RT-002).
+ */
+export interface RecordHighRiskRequest {
+  /** Child whose signal triggered the record */
+  child_id: string;
+  /** Child's exact words */
+  original_text: string;
+  /** Short summary of how Niki responded. Defaults to a safe canned phrase when missing. */
+  niki_response_summary?: string | null;
+}
+
+/**
+ * Body for `POST /api/v1/dashboard/alerts/record/safety-valve`.
+ */
+export interface RecordSafetyValveRequest {
+  child_id: string;
+  problem_summary: string;
+  /** Which tutoring round the valve fired at (1-10) */
+  round_reached?: number;
+}
+
+/**
+ * Body for `POST /api/v1/auth/sms/login`.
+ */
+export interface SMSLoginRequest {
+  phone: string;
+  /** 6-digit SMS verification code */
+  code: string;
+}
+
+/**
+ * Body for `POST /api/v1/auth/sms/send`. `phone` is mandatory. `captcha_id` / `captcha_answer` are optional — BE-COMP-006 toggles captcha gating via `Settings.sms_captcha_required`.
+ */
+export interface SMSSendRequest {
+  /** 11-digit Chinese mobile number */
+  phone: string;
+  /** BE-COMP-006 captcha token id */
+  captcha_id?: string | null;
+  /** BE-COMP-006 captcha answer */
+  captcha_answer?: number | string | null;
 }
 
 export interface ValidationError {

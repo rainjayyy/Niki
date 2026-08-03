@@ -198,13 +198,13 @@ class TestAuthAuditRecentEndpoint:
             "/api/v1/auth/audit/recent", params={"limit": 500}
         )
         # Query(le=200) rejects before our explicit check.
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_limit_one_minimum(self, client: TestClient) -> None:
         r = client.get(
             "/api/v1/auth/audit/recent", params={"limit": 0}
         )
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     async def test_response_serialises_datetime(self, client: TestClient) -> None:
         await _seed_repo([

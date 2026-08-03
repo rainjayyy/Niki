@@ -118,11 +118,11 @@ class TestMemoryGraphEntitiesPagination:
         r = client.get(
             "/api/v1/memory/graph/entities?page_size=500"
         )
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_invalid_page_returns_422(self, client: TestClient) -> None:
         r = client.get("/api/v1/memory/graph/entities?page=0")
-        assert r.status_code == 422
+        assert r.status_code == 400
 
 
 class TestTreeholeSummariesPagination:

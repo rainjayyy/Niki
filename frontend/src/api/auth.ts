@@ -3,11 +3,15 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `auth` (21 operation(s)).
- * Generated: 2026-07-31T08:34:20Z
+ * Generated: 2026-08-03T09:29:32Z
  */
 
 import { request } from "./client";
 import type { RequestOptions } from "./client";
+import type {
+  SMSLoginRequest,
+  SMSSendRequest,
+} from "./models";
 
 /**
  * Mint a captcha challenge
@@ -342,7 +346,7 @@ export async function postAuthSignupStart(
  * @remarks `POST /api/v1/auth/sms/login`
  */
 export async function postAuthSmsLogin(
-  body: Record<string, unknown>,
+  body: SMSLoginRequest,
   options?: RequestOptions,
 ): Promise<Record<string, unknown>> {
   return request<Record<string, unknown>>(
@@ -360,7 +364,7 @@ export async function postAuthSmsLogin(
  * @remarks `POST /api/v1/auth/sms/send`
  */
 export async function postAuthSmsSend(
-  body: Record<string, unknown>,
+  body: SMSSendRequest,
   options?: RequestOptions,
 ): Promise<Record<string, unknown>> {
   return request<Record<string, unknown>>(

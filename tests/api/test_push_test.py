@@ -225,7 +225,7 @@ class TestPostPushTest:
         """Validation: missing device_id is a 422 (not 400)."""
         client, _ = _make_client()
         r = client.post("/api/v1/push/test", json={})
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_empty_body_uses_defaults(
         self,

@@ -1,0 +1,153 @@
+
+=== 真相 ===
+  后端实际端点:        127
+  前端业务调用:        54  (43% of backend)
+  前端调用 → mock 覆盖: 34 / 54  (63%)
+  后端端点未被前端调用: 96  (内部/编排用)
+
+=== 前端 mock 漏掉的端点（20）===
+  /audio/synthesize
+  /auth/consent/document/${type}
+  /auth/deletion/complete
+  /auth/signup/consent
+  /auth/signup/face
+  /auth/signup/real-name
+  /auth/signup/start
+  /children/${childId}/letters
+  /children/letters/${letterId}/read
+  /dashboard/events/tutoring
+  /health/live
+  /health/ready
+  /parents/${
+  /policy/blacklist/${familyId}
+  /policy/downgrade/evaluate
+  /session/is-exhausted/${childId}
+  /session/is-idle/${childId}
+  /session/parent/consume-pause
+  /session/parent/has-pause/${childId}
+  /session/should-warn/${childId}
+
+=== 后端有但前端不需要的端点（96）===
+
+--- alerts (1) ---
+  GET /alerts/stream/{child_id}
+
+--- audio (1) ---
+  POST /audio/transcribe
+
+--- auth (2) ---
+  GET /auth/me/{parent_id}
+  GET /auth/consent/document/{consent_type}
+
+--- auth_audit (1) ---
+  GET /auth/audit/recent
+
+--- chat_stream (1) ---
+  POST /chat/stream
+
+--- children (2) ---
+  POST /children/register/{parent_id}
+  GET /children/list/{parent_id}
+
+--- content_policy (5) ---
+  POST /policy/blacklist/{family_id}/add
+  POST /policy/blacklist/{family_id}/remove
+  GET /policy/blacklist/{family_id}
+  POST /policy/blacklist/{family_id}/evaluate
+  GET /policy/age/{child_id}
+
+--- dashboard (10) ---
+  GET /dashboard/weekly-report/{child_id}
+  GET /dashboard/weekly-report/{child_id}/pdf
+  GET /dashboard/interest/{child_id}
+  GET /dashboard/learning/{child_id}
+  GET /dashboard/alerts/{child_id}
+  ... and 5 more
+
+--- data_export (1) ---
+  GET /parents/{parent_id}/data-export
+
+--- deletion (1) ---
+  GET /deletion/{request_id}/receipt
+
+--- emotion (7) ---
+  POST /emotion/express
+  GET /emotion/baseline
+  POST /emotion/proactive-care
+  GET /emotion/good-night
+  POST /emotion/baseline/add
+  ... and 2 more
+
+--- encyclopedia (3) ---
+  POST /encyclopedia/ask
+  GET /encyclopedia/knowledge
+  POST /encyclopedia/search
+
+--- media (3) ---
+  POST /media/upload
+  GET /media/{file_id:path}/thumb
+  GET /media/{file_id:path}
+
+--- memory (13) ---
+  GET /memory/short-term/{session_id}
+  POST /memory/short-term/{session_id}
+  DELETE /memory/short-term/{session_id}
+  POST /memory/long-term/add
+  POST /memory/long-term/search
+  ... and 8 more
+
+--- push (10) ---
+  POST /push/register
+  POST /push/unregister
+  GET /push/devices
+  GET /push/prefs
+  PATCH /push/prefs
+  ... and 5 more
+
+--- resilience (6) ---
+  POST /resilience/breaker/reset
+  POST /resilience/breaker/force-open
+  POST /resilience/degradation/recover
+  POST /resilience/chat
+  POST /resilience/simulate-outage
+  ... and 1 more
+
+--- routing (4) ---
+  POST /routing/classify
+  POST /routing/route
+  POST /routing/persona/inject
+  POST /routing/fuse
+
+--- safety (3) ---
+  POST /safety/check-input
+  POST /safety/check-output
+  POST /safety/chat
+
+--- session (7) ---
+  GET /session/stats/{child_id}
+  GET /session/should-warn/{child_id}
+  GET /session/is-exhausted/{child_id}
+  GET /session/is-idle/{child_id}
+  GET /session/parent/has-pause/{child_id}
+  ... and 2 more
+
+--- tools (6) ---
+  GET /tools/matrix
+  GET /tools/allowed/{agent}
+  POST /tools/check
+  POST /tools/revoke
+  POST /tools/grant
+  ... and 1 more
+
+--- treehole (6) ---
+  POST /treehole/engage
+  GET /treehole/summaries/{child_id}
+  POST /treehole/aggregate
+  POST /treehole/purge-expired
+  POST /treehole/purge-all
+  ... and 1 more
+
+--- tutoring (3) ---
+  POST /tutoring/ask
+  GET /tutoring/strategies
+  GET /tutoring/difficulty

@@ -152,13 +152,13 @@ class TestListNotifications:
         self, client: TestClient, repo: InMemoryDashboardRepository
     ) -> None:
         r = client.get("/api/v1/notifications?limit=500")
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_limit_below_one_returns_422(
         self, client: TestClient, repo: InMemoryDashboardRepository
     ) -> None:
         r = client.get("/api/v1/notifications?limit=0")
-        assert r.status_code == 422
+        assert r.status_code == 400
 
     def test_other_parents_alerts_excluded(
         self, client: TestClient, repo: InMemoryDashboardRepository

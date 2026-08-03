@@ -30,7 +30,7 @@ import os
 import re
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 
 from niki.auth.account import ParentAccount
@@ -590,8 +590,8 @@ async def upload_avatar(
 async def get_thumbnail(
     request: Request,
     file_id: str,
-    w: int = 200,
-    h: int = 200,
+    w: int = Query(200, ge=1, le=2048, description="Width in [1, 2048]"),
+    h: int = Query(200, ge=1, le=2048, description="Height in [1, 2048]"),
     parent: ParentAccount = Depends(get_current_parent),
 ) -> Response:
     """Return a server-resized thumbnail (BE-MEDIA-001-rollout).
@@ -599,27 +599,16 @@ async def get_thumbnail(
     Bounds: 1 ≤ w,h ≤ 2048. Cached in-process (LRU 100
     entries) keyed by `(file_id, w, h)`. CDN can cache the
     result too (Cache-Control: public, max-age=86400).
+
+    `w` / `h` use Query() with Pydantic range validation so
+    out-of-bounds returns the structured §6.3 shape (400 + code
+    `INVALID_THUMB_SIZE`) instead of a 500 from runtime checks.
     """
     from niki.media.thumbnail import (
         MAX_DIM,
         MIN_DIM,
         build_thumbnail,
     )
-
-    if not (MIN_DIM <= w <= MAX_DIM) or not (
-        MIN_DIM <= h <= MAX_DIM
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail=localized_error_response(
-                request,
-                code="INVALID_THUMB_SIZE",
-                key="media.invalid_thumb_size",
-                fallback_message=(
-                    f"w and h must be in [{MIN_DIM}, {MAX_DIM}]"
-                ),
-            ),
-        )
 
     bare_id = _extract_file_id(file_id)
     if bare_id is None:

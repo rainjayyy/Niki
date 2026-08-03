@@ -180,7 +180,11 @@ class TestUnhandledAndValidation:
             "/validate-body",
             json=["not", "a", "dict"],  # wrong type
         )
-        assert r.status_code == 422
+        # Frontend expects 400 (not 422) for body validation errors so
+        # its interceptor treats them like every other 4xx. The
+        # structured `errors` list is still in the body for callers
+        # that want field-level details.
+        assert r.status_code == 400
         body = r.json()
         _assert_new_shape(body, expected_code="REQUEST_VALIDATION_ERROR")
         # Detail should include the original Pydantic errors.

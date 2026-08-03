@@ -1,0 +1,184 @@
+
+=== 127 个端点 ===
+
+
+--- alerts ---
+  GET     /alerts/stream/{child_id}
+
+--- audio ---
+  POST    /audio/transcribe
+  POST    /audio/synthesize
+
+--- auth ---
+  POST    /auth/signup/start
+  POST    /auth/signup/real-name
+  POST    /auth/signup/face
+  POST    /auth/signup/consent
+  GET     /auth/whoami
+  GET     /auth/me/{parent_id}
+  POST    /auth/deletion/request
+  POST    /auth/deletion/complete
+  GET     /auth/consent/document/{consent_type}
+  POST    /auth/sms/send
+  POST    /auth/sms/login
+  POST    /auth/refresh
+  POST    /auth/logout
+
+--- auth_audit ---
+  GET     /auth/audit/recent
+
+--- chat_stream ---
+  POST    /chat/stream
+
+--- children ---
+  POST    /children/register/{parent_id}
+  GET     /children/list/{parent_id}
+
+--- content_policy ---
+  POST    /policy/blacklist/{family_id}/add
+  POST    /policy/blacklist/{family_id}/remove
+  GET     /policy/blacklist/{family_id}
+  POST    /policy/blacklist/{family_id}/evaluate
+  GET     /policy/age/{child_id}
+  POST    /policy/age/grade
+  POST    /policy/age/grade-text
+  POST    /policy/downgrade/evaluate
+
+--- dashboard ---
+  GET     /dashboard/weekly-report/{child_id}
+  GET     /dashboard/weekly-report/{child_id}/pdf
+  GET     /dashboard/interest/{child_id}
+  GET     /dashboard/learning/{child_id}
+  GET     /dashboard/alerts/{child_id}
+  POST    /dashboard/alerts/record/safety-valve
+  POST    /dashboard/alerts/record/high-risk
+  POST    /dashboard/alerts/{alert_id}/delivered
+  POST    /dashboard/baseline/add
+  POST    /dashboard/events/tutoring
+  POST    /dashboard/events/knowledge
+
+--- data_export ---
+  GET     /parents/{parent_id}/data-export
+
+--- deletion ---
+  GET     /deletion/{request_id}/receipt
+
+--- emotion ---
+  POST    /emotion/express
+  GET     /emotion/baseline
+  POST    /emotion/proactive-care
+  GET     /emotion/good-night
+  POST    /emotion/baseline/add
+  POST    /emotion/events/tutoring
+  POST    /emotion/events/knowledge
+
+--- encyclopedia ---
+  POST    /encyclopedia/ask
+  GET     /encyclopedia/knowledge
+  POST    /encyclopedia/search
+
+--- health ---
+  GET     /health
+  GET     /health/live
+  GET     /health/ready
+
+--- media ---
+  POST    /media/upload
+  GET     /media/{file_id:path}/thumb
+  GET     /media/{file_id:path}
+
+--- memory ---
+  GET     /memory/short-term/{session_id}
+  POST    /memory/short-term/{session_id}
+  DELETE  /memory/short-term/{session_id}
+  POST    /memory/long-term/add
+  POST    /memory/long-term/search
+  GET     /memory/graph/entities
+  POST    /memory/graph/entities
+  POST    /memory/graph/relations
+  POST    /memory/graph/apply-decay
+  POST    /memory/hook/process
+  GET     /memory/pipeline/run
+  GET     /memory/pipeline/health
+  GET     /memory/pipeline/dead-letter
+
+--- orchestrator ---
+  POST    /chat/full
+  GET     /chat/stages
+
+--- push ---
+  POST    /push/register
+  POST    /push/unregister
+  GET     /push/devices
+  GET     /push/prefs
+  PATCH   /push/prefs
+  GET     /push/devices-full
+  DELETE  /push/devices-full/{device_id}
+  GET     /push/active
+  POST    /push/kick/{device_id}
+  POST    /push/enable/{device_id}
+
+--- resilience ---
+  GET     /resilience/breaker/stats
+  POST    /resilience/breaker/reset
+  POST    /resilience/breaker/force-open
+  GET     /resilience/degradation
+  POST    /resilience/degradation/recover
+  POST    /resilience/chat
+  POST    /resilience/simulate-outage
+  POST    /resilience/simulate-recovery
+
+--- routing ---
+  POST    /routing/classify
+  POST    /routing/route
+  GET     /routing/personas
+  POST    /routing/persona/inject
+  POST    /routing/fuse
+
+--- safety ---
+  POST    /safety/check-input
+  POST    /safety/check-output
+  POST    /safety/chat
+
+--- session ---
+  POST    /session/start
+  POST    /session/activity
+  GET     /session/stats/{child_id}
+  GET     /session/should-warn/{child_id}
+  GET     /session/is-exhausted/{child_id}
+  GET     /session/is-idle/{child_id}
+  POST    /session/end
+  POST    /session/parent/pause
+  GET     /session/parent/has-pause/{child_id}
+  POST    /session/parent/consume-pause
+  POST    /session/parent/end-session
+  GET     /session/parent/paused/{child_id}
+  POST    /session/parent/clear-pause
+
+--- tools ---
+  GET     /tools/matrix
+  GET     /tools/allowed/{agent}
+  POST    /tools/check
+  POST    /tools/revoke
+  POST    /tools/grant
+  GET     /tools/audit
+
+--- treehole ---
+  POST    /treehole/engage
+  GET     /treehole/summaries/{child_id}
+  POST    /treehole/aggregate
+  POST    /treehole/should-activate
+  POST    /treehole/purge-expired
+  POST    /treehole/purge-all
+  GET     /treehole/store-stats
+
+--- tutoring ---
+  POST    /tutoring/ask
+  GET     /tutoring/strategies
+  GET     /tutoring/difficulty
+
+=== 分布 ===
+  POST   : 75
+  GET    : 49
+  DELETE : 2
+  PATCH  : 1

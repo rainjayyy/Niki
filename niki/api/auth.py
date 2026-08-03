@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from niki.auth import (
     AccountLifecycle,
@@ -67,6 +68,10 @@ from niki.services.two_factor import get_two_factor_service
 
 from niki.api._i18n import localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
+from niki.schemas.requests import (
+    SMSSendRequest,
+    SMSLoginRequest,
+)
 from niki.services.phone_change import (
     EmailChangeAlreadyUsed,
     EmailChangeCodeInvalid,
@@ -108,6 +113,12 @@ _lifecycle = AccountLifecycle()
 # `audit_logs` table (BE-COMP-004). The hook is set lazily so tests
 # that override the audit service are picked up.
 # ---------------------------------------------------------------------------
+
+
+def _request_id(request: Request) -> str:
+    """Pull the X-Request-ID header or mint a fresh UUIDv4."""
+    import uuid as _uuid
+    return request.headers.get("X-Request-ID") or str(_uuid.uuid4())
 
 
 def _audit_hook_factory():
@@ -631,8 +642,17 @@ async def captcha_verify(payload: dict) -> dict:
         "captcha_answer) pair is mandatory."
     ),
 )
+# IMPORTANT: keep `payload` typed as the Pydantic model below
+# (`SMSSendRequest`) — FastAPI validates it BEFORE the @limiter.limit
+# decorator fires, so bad requests return 400/422 without burning
+# rate-limit budget. Replacing this with `payload: dict` regresses the
+# P2 bug surfaced by frontend testing (bad phone → 429 on the 4th
+# call instead of 400 INVALID_PHONE_FORMAT every time).
 @limiter.limit("3/minute")
-async def sms_send(request: Request, payload: dict) -> dict:
+async def sms_send(
+    request: Request,
+    payload: SMSSendRequest,
+) -> dict:
     """Send a 6-digit SMS code to `phone`.
 
     Dev mode echoes the code back so the frontend can use it directly;
@@ -646,20 +666,12 @@ async def sms_send(request: Request, payload: dict) -> dict:
     if the client sends one we still verify it (so the round-trip
     is exercisable), but absence is fine.
     """
-    phone = payload.get("phone")
-    if not phone or not validate_phone(phone):
-        raise HTTPException(
-            status_code=400,
-            detail=localized_error_response(
-                request,
-                code="INVALID_PHONE_FORMAT",
-                key="auth.invalid_phone_format",
-            ),
-        )
+    phone = payload.phone
 
     settings = get_settings()
-    captcha_id = payload.get("captcha_id")
-    captcha_answer = payload.get("captcha_answer")
+    captcha_id = payload.captcha_id
+    captcha_answer = payload.captcha_answer
+
     if captcha_id is not None or captcha_answer is not None:
         # Client opted into captcha — verify regardless of flag.
         ok = await get_captcha_service().verify(
@@ -695,18 +707,33 @@ async def sms_send(request: Request, payload: dict) -> dict:
     try:
         code = await get_sms_service().send(phone)
     except SMSRateLimited as exc:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": exc.code,
-                "message": get_translator().translate(
-                    _AUTH_KEY_BY_CODE.get(exc.code, "auth.sms_rate_limited"),
-                    resolve_lang(request),
-                    default=exc.message,
-                ),
+        # SMS service's own per-phone cooldown (60s after consume) —
+        # NOT the slowapi 3/minute rate limit. Use the §6.3 structured
+        # shape so the frontend interceptor treats it like every other
+        # 4xx; the slowapi 429 (RATE_LIMIT_EXCEEDED) uses the same
+        # shape via `niki.middleware.rate_limit`.
+        msg = get_translator().translate(
+            _AUTH_KEY_BY_CODE.get(exc.code, "auth.sms_rate_limited"),
+            resolve_lang(request),
+            default=exc.message,
+        )
+        body = {
+            "success": False,
+            "data": None,
+            "error": {
+                "code": exc.code,
+                "message": msg,
+                "detail": {
+                    "retry_after_seconds": int(exc.retry_after_seconds),
+                },
+            },
+            "error_code": exc.code,
+            "error_detail": {
                 "retry_after_seconds": int(exc.retry_after_seconds),
             },
-        ) from exc
+            "request_id": _request_id(request),
+        }
+        return JSONResponse(status_code=429, content=body)
     body: dict = {"phone": phone, "status": "sent"}
     if settings.debug:
         # Echo the code in DEBUG only; production must NEVER do this.
@@ -737,32 +764,23 @@ async def sms_send(request: Request, payload: dict) -> dict:
     ),
 )
 @limiter.limit("10/minute")
-async def sms_login(request: Request, payload: dict) -> dict:
+async def sms_login(
+    request: Request,
+    payload: SMSLoginRequest,
+) -> dict:
     """Verify the SMS code and issue a JWT access + refresh pair.
 
     On a brand-new phone the lifecycle auto-creates a PENDING account
     so login doubles as first-time signup.
+
+    `payload` is typed as `SMSLoginRequest` so FastAPI validates
+    `phone` (11-digit Chinese mobile) and `code` (6-digit numeric)
+    BEFORE the @limiter.limit decorator fires. Bad requests are
+    rejected at the validation layer (400/422) without burning
+    rate-limit budget.
     """
-    phone = payload.get("phone")
-    code = payload.get("code")
-    if not phone or not validate_phone(phone):
-        raise HTTPException(
-            status_code=400,
-            detail=localized_error_response(
-                request,
-                code="INVALID_PHONE_FORMAT",
-                key="auth.invalid_phone_format",
-            ),
-        )
-    if not code or not isinstance(code, str) or len(code) != 6:
-        raise HTTPException(
-            status_code=400,
-            detail=localized_error_response(
-                request,
-                code="SMS_CODE_INVALID",
-                key="auth.sms_code_invalid",
-            ),
-        )
+    phone = payload.phone
+    code = payload.code
 
     try:
         await get_sms_service().verify(phone, code)

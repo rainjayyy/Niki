@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `health` (3 operation(s)).
- * Generated: 2026-07-31T08:34:20Z
+ * Generated: 2026-08-03T09:29:32Z
  */
 
 import { request } from "./client";

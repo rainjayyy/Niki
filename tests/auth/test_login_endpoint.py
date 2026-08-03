@@ -48,7 +48,7 @@ class TestSmsSend:
     def test_invalid_phone_returns_400(self, client: TestClient) -> None:
         resp = client.post("/api/v1/auth/sms/send", json=_send_payload("not-a-phone"))
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "INVALID_PHONE_FORMAT"
+        assert resp.json()["error"]["code"] == "INVALID_PHONE_FORMAT"
 
     def test_resend_within_ttl_returns_200(self, client: TestClient) -> None:
         """Within the active-code window a second send() is idempotent
@@ -71,7 +71,7 @@ class TestSmsSend:
         )
         resp = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         assert resp.status_code == 429
-        assert resp.json()["detail"]["error"] == "SMS_RATE_LIMITED"
+        assert resp.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
 
 
 class TestSmsLogin:
@@ -95,14 +95,14 @@ class TestSmsLogin:
             "/api/v1/auth/sms/login", json=_login_payload("13800138000", "000000")
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "SMS_CODE_INVALID"
+        assert resp.json()["error"]["code"] == "SMS_CODE_INVALID"
 
     def test_unknown_phone_returns_401(self, client: TestClient) -> None:
         resp = client.post(
             "/api/v1/auth/sms/login", json=_login_payload("13800138000", "000000")
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "SMS_CODE_INVALID"
+        assert resp.json()["error"]["code"] == "SMS_CODE_INVALID"
 
     def test_login_token_works_on_protected_endpoint(self, client: TestClient) -> None:
         send = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
@@ -133,14 +133,14 @@ class TestSmsLogin:
             "/api/v1/auth/sms/login", json=_login_payload("bad", "000000")
         )
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "INVALID_PHONE_FORMAT"
+        assert resp.json()["error"]["code"] == "INVALID_PHONE_FORMAT"
 
     def test_login_missing_code_returns_400(self, client: TestClient) -> None:
         resp = client.post(
             "/api/v1/auth/sms/login", json={"phone": "13800138000"}
         )
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "SMS_CODE_INVALID"
+        assert resp.json()["error"]["code"] == "SMS_CODE_INVALID"
 
     def test_login_two_distinct_phones_get_distinct_accounts(
         self, client: TestClient

@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `media` (5 operation(s)).
- * Generated: 2026-07-31T08:34:20Z
+ * Generated: 2026-08-03T09:29:32Z
  */
 
 import { request } from "./client";
@@ -87,6 +87,8 @@ export async function getMedia(
  * Return a server-resized thumbnail (BE-MEDIA-001-rollout). Bounds: 1 ≤ w,h ≤ 2048. Cached in-process (LRU 100 entries) keyed by `(file_id, w, h)`. CDN can cache the result too (Cache-Control: public, max-age=86400).
  *
  * @remarks `GET /api/v1/media/{file_id}/thumb`
+ * @param h - Height in [1, 2048]
+ * @param w - Width in [1, 2048]
  */
 export async function getMediaThumb(
   fileId: string,

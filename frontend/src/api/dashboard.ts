@@ -3,11 +3,15 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `dashboard` (12 operation(s)).
- * Generated: 2026-07-31T08:34:20Z
+ * Generated: 2026-08-03T09:29:32Z
  */
 
 import { request } from "./client";
 import type { RequestOptions } from "./client";
+import type {
+  RecordHighRiskRequest,
+  RecordSafetyValveRequest,
+} from "./models";
 
 /**
  * Dismiss many alerts in a single round trip (BE-API-005)
@@ -35,7 +39,7 @@ export async function postDashboardAlertsBatchDismiss(
  * @remarks `POST /api/v1/dashboard/alerts/record/high-risk`
  */
 export async function postDashboardAlertsRecordHighRisk(
-  body: Record<string, unknown>,
+  body: RecordHighRiskRequest,
   options?: RequestOptions,
 ): Promise<Record<string, unknown>> {
   return request<Record<string, unknown>>(
@@ -53,7 +57,7 @@ export async function postDashboardAlertsRecordHighRisk(
  * @remarks `POST /api/v1/dashboard/alerts/record/safety-valve`
  */
 export async function postDashboardAlertsRecordSafetyValve(
-  body: Record<string, unknown>,
+  body: RecordSafetyValveRequest,
   options?: RequestOptions,
 ): Promise<Record<string, unknown>> {
   return request<Record<string, unknown>>(

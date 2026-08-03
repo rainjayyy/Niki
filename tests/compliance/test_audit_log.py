@@ -265,7 +265,7 @@ class TestAdminAuditEndpoint:
         self, client: TestClient, repo: InMemoryAuditLogRepository
     ) -> None:
         resp = client.get("/api/v1/admin/audit", params={"limit": 5000})
-        assert resp.status_code == 422
+        assert resp.status_code == 400
 
     def test_limit_applies(
         self, client: TestClient, repo: InMemoryAuditLogRepository
