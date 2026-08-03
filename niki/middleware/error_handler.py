@@ -216,12 +216,19 @@ def setup_error_handlers(app: FastAPI) -> None:
             if hasattr(exc, "errors")
             else str(exc)
         ) or "Request validation failed"
+        # exc.errors() can carry the raw input body which may contain
+        # `bytes` objects that the JSON encoder can't serialise. Strip
+        # the `input` field — the structured loc/msg/type is enough.
+        safe_errors: list[dict[str, Any]] = []
+        if hasattr(exc, "errors"):
+            for err in exc.errors():
+                safe_errors.append({k: v for k, v in err.items() if k != "input"})
         return _structured(
             status_code=422,
             code="REQUEST_VALIDATION_ERROR",
             message=msg,
             request_id=request_id,
-            detail={"errors": exc.errors() if hasattr(exc, "errors") else []},
+            detail={"errors": safe_errors},
         )
 
     @app.exception_handler(Exception)
