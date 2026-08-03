@@ -90,10 +90,16 @@ services:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      # `chromadb/chroma` is a slim image without curl/wget/Python.
+      # Default Docker CMD-SHELL is /bin/sh (dash on Debian), which
+      # doesn't support /dev/tcp. Force bash explicitly. The probe
+      # opens a TCP connection and reads the heartbeat response —
+      # succeeds iff the server is bound AND serving HTTP 200.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8000 && echo -e \"GET /api/v2/heartbeat HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q nanosecond\\ heartbeat <&3'"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
     restart: unless-stopped
     networks:
       - niki-network
