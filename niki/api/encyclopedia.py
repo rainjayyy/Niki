@@ -44,8 +44,17 @@ _fact_checker = FactChecker(_kb)
 _input_gateway = InputSafetyGateway()
 
 
+# Wire the production LLM via the factory — returns the real
+# MinimaxClient when MINIMAX_API_KEY is set, otherwise the stub.
+# The factory is a process-wide singleton; tests can swap it via
+# `niki.infrastructure.llm.factory.reset_for_tests()`.
+from niki.infrastructure.llm.factory import get_or_create_llm as _get_llm  # noqa: E402
+
+_llm = _get_llm()
+
+
 _agent = EncyclopediaAgent(
-    llm=_EncyclopediaStub(),
+    llm=_llm,
     knowledge_base=_kb,
     fact_checker=_fact_checker,
     persona="gentle",
@@ -62,7 +71,7 @@ def _get_agent(child_age: int) -> EncyclopediaAgent:
     """Return a per-child_age agent instance (cached)."""
     if child_age not in _agent_cache:
         _agent_cache[child_age] = EncyclopediaAgent(
-            llm=_EncyclopediaStub(),
+            llm=_llm,
             knowledge_base=_kb,
             fact_checker=_fact_checker,
             persona="gentle",

@@ -44,8 +44,14 @@ _input_gateway = InputSafetyGateway()
 # Module-level singletons
 _dashboard = DashboardService()
 _baseline = EmotionBaseline()
+
+# Wire the production LLM via the factory — see encyclopedia.py
+from niki.infrastructure.llm.factory import get_or_create_llm as _get_llm  # noqa: E402
+
+_llm = _get_llm()
+
 _orchestrator = EmotionAgent(
-    llm=_StubLLM(),
+    llm=_llm,
     baseline=_baseline,
     persona="gentle",
     child_age=7,
@@ -101,7 +107,7 @@ async def express_emotion(payload: dict,
     # ISS-08: use a per-call fresh agent so concurrent requests with
     # different child_ages don't mutate the singleton state.
     fresh_agent = EmotionAgent(
-        llm=_StubLLM(),
+        llm=_llm,
         baseline=_baseline,
         persona="gentle",
         child_age=child_age,

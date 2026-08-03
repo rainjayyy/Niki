@@ -30,9 +30,15 @@ router = APIRouter(prefix="/tutoring", tags=[
 _input_gateway = InputSafetyGateway()
 
 
+# Wire the production LLM via the factory — see encyclopedia.py
+from niki.infrastructure.llm.factory import get_or_create_llm as _get_llm  # noqa: E402
+
+_llm = _get_llm()
+
+
 # Module-level singletons
 _agent = TutoringAgent(
-    llm=_StubLLM(),
+    llm=_llm,
     persona="gentle",
     child_age=7,
 )
@@ -45,7 +51,7 @@ def _get_agent(child_age: int) -> TutoringAgent:
     """Return a per-child_age Tutoring agent (cached)."""
     if child_age not in _agent_cache:
         _agent_cache[child_age] = TutoringAgent(
-            llm=_StubLLM(),
+            llm=_llm,
             persona="gentle",
             child_age=child_age,
         )

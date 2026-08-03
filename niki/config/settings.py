@@ -45,6 +45,20 @@ class Settings(BaseSettings):
     deepseek_timeout: int = 30  # seconds
     deepseek_max_retries: int = 3
 
+    # --- Minimax (primary LLM — replaces DeepSeek-V4 by default) ---
+    # Anthropic-Messages-compatible API at api.minimaxi.com/anthropic.
+    # All Niki agents currently route through this single client;
+    # DeepSeek / doubao remain as fallback providers (BE-LLM-ops).
+    minimax_api_key: str = ""
+    minimax_base_url: str = "https://api.minimaxi.com/anthropic"
+    minimax_model: str = "MiniMax-M3"
+    minimax_timeout: int = 30  # seconds
+    minimax_max_retries: int = 3
+
+    # BE-LLM-ops: provider selection. "minimax" → primary, "deepseek" /
+    # "doubao" → fallback (used when primary is unavailable or rate-limited).
+    primary_llm_provider: str = "minimax"
+
     # --- doubao (lightweight — classification / checking / preprocessing) ---
     doubao_api_key: str = ""
     doubao_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
