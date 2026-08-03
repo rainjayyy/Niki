@@ -712,6 +712,7 @@ X-Device-Id: <UUID>
 | 完成 | ID | 缺口 | 当前状态 | 前端影响 | 替代方案 | 建议实现 | 工作量 |
 |:-:|---|---|---|---|---|---|---|
 | ✅ | **BE-AUTH-005** | **短信验证码（`POST /auth/sms/send` + `POST /auth/sms/verify`）** | ✅ 已完成：in-memory SMSCodeService + 5 分钟 TTL + 60s 节流；阿里云 SMS 后续替换 | 登录流程跑得通 | — | — | 1.5 天 |
+| ❌ | **BE-AUTH-002-real** | **接真 SMS 厂商（阿里云 / 腾讯云）** | mock 已跑通但**不发短信**——`/sms/send` 响应里 `dev_code` 字段直接返回验证码，生产环境必须接阿里云 Dysmsapi 真发 | demo / 内测够用；正式上线前必须接 | 继续用 mock（仅适合内部测试） | 个人身份证可注册阿里云 → 申请签名 + 模板（1-2 工作日审核）→ 拿 AccessKey 写 `AliyunSMSCodeService`；code 存 Redis；prod 配置 `echo_sms_code_in_response=false` | 1-2 天（不含商务审核等待） |
 | ✅ | **BE-AUTH-006** | **换绑手机 / 换绑邮箱流程** | ✅ 已完成：`POST /auth/phone/change/request` + `/verify` + `/{id}/cancel` + `/confirm-now`（跳过冷静期）+ `POST /auth/email/change/request` + `/verify`；7 天冷静期 + cron sweep；lateral-auth 跨家长 404；每次状态迁移写 `audit_logs` | 家长端可换号 / 换邮箱；冷静期防误操作 | — | 1 天 |
 
 #### 7.2.2 Device（1 项）
