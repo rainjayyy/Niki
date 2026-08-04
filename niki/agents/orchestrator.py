@@ -142,6 +142,7 @@ class ChatOrchestrator:
         self,
         child_age: int = 7,
         persona: str | None = "gentle",
+        llm=None,
     ) -> None:
         self.child_age = child_age
         self.persona = persona
@@ -163,22 +164,31 @@ class ChatOrchestrator:
         # ISS-12: lock for thread-safe _update_age/_update_persona
         self._lock = asyncio.Lock()
 
-        # Re-create the encyclopedia agent with stub LLM
-        self._stub_llm = _StubDeepSeek()
+        # Resolve the production LLM via the factory. Callers may inject
+        # one (`llm=`), otherwise we ask the factory — which returns a
+        # real MinimaxClient when MINIMAX_API_KEY is set, else the stub.
+        from niki.infrastructure.llm.factory import get_or_create_llm
+
+        self._llm = llm if llm is not None else get_or_create_llm()
+        # The per-agent sub-LMs must expose `.chat(messages, ...)` — the
+        # factory returns a BaseLLMClient which satisfies that. When the
+        # factory is in stub mode we still pass it through (it echoes a
+        # safe phrase), so the full safety+classify+dispatch pipeline is
+        # exercisable without network.
         self._encyclopedia_agent = EncyclopediaAgent(
-            llm=self._stub_llm,
+            llm=self._llm,
             knowledge_base=self._kb,
             fact_checker=self._fact_checker,
             persona=persona or "gentle",
             child_age=child_age,
         )
         self._tutoring_agent = TutoringAgent(
-            llm=self._stub_llm,
+            llm=self._llm,
             persona=persona or "gentle",
             child_age=child_age,
         )
         self._emotion_agent = EmotionAgent(
-            llm=self._stub_llm,
+            llm=self._llm,
             baseline=self._emotion_baseline,
             persona=persona or "gentle",
             child_age=child_age,
