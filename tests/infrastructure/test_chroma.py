@@ -18,7 +18,8 @@ def test_collection_constants() -> None:
 
 
 @pytest.mark.integration
-def test_chroma_health_check() -> None:
+@pytest.mark.asyncio
+async def test_chroma_health_check() -> None:
     """Integration: health check should work when ChromaDB is available."""
-    result = ChromaClient.health_check()
+    result = await ChromaClient.health_check()
     assert result["status"] in ("healthy", "unhealthy")

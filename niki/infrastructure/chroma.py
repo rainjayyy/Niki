@@ -117,11 +117,17 @@ class ChromaClient:
                 logger.debug("chroma.collection_exists", collection=name)
 
     @classmethod
-    def health_check(cls) -> dict[str, Any]:
+    @classmethod
+    async def health_check(cls) -> dict[str, Any]:
         """Check ChromaDB connectivity via a lightweight HTTP heartbeat.
 
         Uses the /api/v2/heartbeat endpoint directly to avoid the heavier
         chromadb client telemetry calls. Returns a dict with status and latency.
+
+        NOTE: must be async — `HeartbeatService.register` awaits the ping
+        fn (`await reg.ping_fn()`). Every other infra client exposes an
+        async health_check; keeping this one sync raised
+        `TypeError: object dict can't be used in 'await' expression`.
 
         Returns:
             Dict with 'status' and 'latency_ms' keys.
@@ -130,8 +136,8 @@ class ChromaClient:
         url = f"http://{settings.chroma_host}:{settings.chroma_port}/api/v2/heartbeat"
         try:
             start = time.monotonic()
-            with httpx.Client(timeout=5.0) as http:
-                resp = http.get(url)
+            async with httpx.AsyncClient(timeout=5.0) as http:
+                resp = await http.get(url)
             latency = (time.monotonic() - start) * 1000
             if resp.status_code == 200:
                 return {"status": "healthy", "latency_ms": round(latency, 2)}

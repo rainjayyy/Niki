@@ -102,9 +102,9 @@ async def _check_postgres() -> dict:
 
 async def _check_chroma() -> dict:
     try:
-        # ChromaClient.health_check is sync; offload to a
-        # worker thread so we don't block the event loop.
-        r = await asyncio.to_thread(ChromaClient.health_check)
+        # ChromaClient.health_check is async (as of the heartbeat fix);
+        # await it directly — it uses httpx.AsyncClient internally.
+        r = await ChromaClient.health_check()
         return r
     except Exception as exc:
         return {"name": "chroma", "status": "unhealthy",
