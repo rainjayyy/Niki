@@ -119,6 +119,11 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
     process-wide provider). Delegates the actual HTTP + SSE parsing to
     `MinimaxClient.stream(...)`; this class only adapts the prompt into
     a `messages` array and yields the text chunks it returns.
+
+    Unlike the `/chat/full` agent pipeline (which injects the Niki
+    persona + age guardrails into the system prompt), this raw SSE
+    endpoint must do the same explicitly — otherwise the model
+    introduces itself as "MiniMax-M3" instead of Niki.
     """
 
     def __init__(self, client=None) -> None:
@@ -158,8 +163,78 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
             messages,
             temperature=0.7,
             max_tokens=1024,
+            system=_build_streaming_system_prompt(
+                persona=persona,
+                child_age=child_age,
+            ),
         ):
             yield chunk
+
+
+# Shared system-prompt builder for the raw streaming endpoint.
+# Kept module-level so tests can assert on it and so it mirrors the
+# agent pipeline's persona + age-guardrail injection (see
+# `niki.agents.base.BaseAgent`).
+_PERSONA_FRAGMENTS: dict[str, str] = {
+    "lively": (
+        "你是一个热情阳光的AI伙伴，名叫Niki。"
+        "多用感叹号和拟声词，说「哇塞」「太酷了」——像阳光般热情。"
+        "用活泼的语气和小朋友交流。"
+    ),
+    "gentle": (
+        "你是一个温柔耐心的AI伙伴，名叫Niki。"
+        "说话轻柔缓慢，多用拥抱和鼓励的话语——像云朵般柔软。"
+        "像耐心的幼儿园老师一样呵护小朋友。"
+    ),
+    "rigorous": (
+        "你是一个可靠严谨的AI伙伴，名叫Niki。"
+        "说话准确认真，不夸夸其谈也不冷漠——像图书管理员般可靠。"
+        "用清晰有条理的方式帮助小朋友理解世界。"
+    ),
+}
+
+_AGE_GUARDRAILS: dict[int, str] = {
+    5: "每句话不超过10个字。每次回答不超过5句话。",
+    8: "每句话不超过15个字。每次回答不超过8句话。",
+    12: "每句话不超过20个字。每次回答不超过12句话。",
+}
+
+
+def _build_streaming_system_prompt(
+    *,
+    persona: str | None = None,
+    child_age: int | None = None,
+) -> str:
+    """Build the Niki identity + persona + age guardrails for the raw
+    streaming path.
+
+    Without this the model answers as its own identity (e.g. "我是
+    MiniMax-M3") instead of Niki, and ignores age-appropriate length
+    limits. Mirrors the agent pipeline's `get_system_prompt_with_persona()`.
+    """
+    persona_frag = _PERSONA_FRAGMENTS.get(persona or "gentle", _PERSONA_FRAGMENTS["gentle"])
+
+    guardrail = ""
+    if child_age is not None:
+        for age, text in sorted(_AGE_GUARDRAILS.items()):
+            if child_age <= age:
+                guardrail = text
+                break
+        if not guardrail:
+            guardrail = _AGE_GUARDRAILS[12]
+
+    return (
+        f"{persona_frag}\n\n"
+        "你是儿童智能陪伴助手，名字叫Niki，不是别的AI模型。\n"
+        "当小朋友问「你是谁」时，回答「我是Niki，你的AI小伙伴」。\n"
+        "【规则】\n"
+        "1. 不知道就诚实说「Niki也不确定」，绝不编造。\n"
+        "2. 用简单、生动、有趣的比喻解释。\n"
+        "3. 避免恐惧词汇（死亡、怪物、灾难等），用更温柔的词替代。\n"
+        "4. 绝不询问住址、电话等隐私信息。\n"
+        "5. 回答要简短、友好、充满鼓励。\n"
+        + (f"【年龄适配】{guardrail}\n" if guardrail else "")
+    )
 
 
 # ---------------------------------------------------------------------------
