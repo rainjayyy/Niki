@@ -79,7 +79,7 @@ class TestRefresh:
             "/api/v1/auth/refresh", json={"refresh_token": refresh}
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "TOKEN_REVOKED"
+        assert resp.json()["error"]["code"] == "TOKEN_REVOKED"
         # Reset the shared singleton for downstream test isolation.
         from niki.auth.token_blacklist import set_blacklist, InMemoryTokenBlacklist
 
@@ -93,24 +93,24 @@ class TestRefreshErrors:
             "/api/v1/auth/refresh", json={"refresh_token": access}
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "WRONG_TOKEN_TYPE"
+        assert resp.json()["error"]["code"] == "WRONG_TOKEN_TYPE"
 
     def test_garbage_refresh_rejected(self, client: TestClient) -> None:
         resp = client.post(
             "/api/v1/auth/refresh", json={"refresh_token": "not-a-jwt"}
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "MALFORMED_TOKEN"
+        assert resp.json()["error"]["code"] == "MALFORMED_TOKEN"
 
     def test_missing_refresh_rejected(self, client: TestClient) -> None:
         resp = client.post("/api/v1/auth/refresh", json={})
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "INVALID_REFRESH_TOKEN"
+        assert resp.json()["error"]["code"] == "INVALID_REFRESH_TOKEN"
 
     def test_non_string_refresh_rejected(self, client: TestClient) -> None:
         resp = client.post("/api/v1/auth/refresh", json={"refresh_token": 12345})
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "INVALID_REFRESH_TOKEN"
+        assert resp.json()["error"]["code"] == "INVALID_REFRESH_TOKEN"
 
     def test_expired_refresh_rejected(self, client: TestClient) -> None:
         import time
@@ -121,4 +121,4 @@ class TestRefreshErrors:
             "/api/v1/auth/refresh", json={"refresh_token": refresh}
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "TOKEN_EXPIRED"
+        assert resp.json()["error"]["code"] == "TOKEN_EXPIRED"

@@ -66,7 +66,7 @@ from niki.metrics import get_registry
 from niki.services.audit_log import get_audit_log_service
 from niki.services.two_factor import get_two_factor_service
 
-from niki.api._i18n import localized_error_response, resolve_lang
+from niki.api._i18n import error_response, localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
 from niki.schemas.requests import (
     SMSSendRequest,
@@ -197,17 +197,22 @@ _AUTH_KEY_BY_CODE: dict[str, str] = {
 
 
 def _error_response(request: Request, exc: AuthError) -> dict:
-    """Render an AuthError using the localized `message` field.
+    """Render an AuthError as the full §6.3 response envelope.
 
-    Preserves the §6.3 contract: `error` is the machine-readable
-    CODE, `message` is rendered through the i18n catalog using the
-    request's resolved language. The exception's own `.message`
-    (English, set by `AuthError.__init__`) is used as the fallback
-    when no catalog entry exists yet for the code.
+    Returns the `{"success": false, "error": {...}, ...}` shape so
+    callers can do `return JSONResponse(status_code=..., content=...)`
+    instead of `raise HTTPException(detail=...)` — the latter wraps
+    the payload in a `{"detail": ...}` envelope that's incompatible
+    with the rest of the API.
+
+    The localized `message` field is rendered through the i18n
+    catalog using the request's resolved language. The exception's
+    own `.message` (English, set by `AuthError.__init__`) is used
+    as the fallback when no catalog entry exists yet for the code.
     """
     key = _AUTH_KEY_BY_CODE.get(exc.code)
     if key is not None:
-        return localized_error_response(
+        return error_response(
             request,
             code=exc.code,
             key=key,
@@ -215,7 +220,12 @@ def _error_response(request: Request, exc: AuthError) -> dict:
         )
     # Unknown code → keep the exception's literal message so we
     # never regress existing error text.
-    return {"error": exc.code, "message": exc.message}
+    return error_response(
+        request,
+        code=exc.code,
+        key="",
+        fallback_message=exc.message,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -246,19 +256,21 @@ _EMAIL_CHANGE_STATUS: dict[str, int] = {
 
 def _raise_change_error(
     request: Request, exc: PhoneChangeError | EmailChangeError
-) -> None:
-    """Map a phone/email change service exception to an HTTPException.
+) -> JSONResponse:
+    """Map a phone/email change service exception to a §6.3 JSONResponse.
 
     Centralised so endpoints don't repeat the same boilerplate.
+    Returns a `JSONResponse` with the full envelope — callers do
+    `return _raise_change_error(request, exc)`.
     """
     if isinstance(exc, EmailChangeError):
         status = _EMAIL_CHANGE_STATUS.get(exc.code, 400)
     else:
         status = _PHONE_CHANGE_STATUS.get(exc.code, 400)
-    raise HTTPException(
+    return JSONResponse(
         status_code=status,
-        detail=_error_response(request, exc),
-    ) from exc
+        content=_error_response(request, exc),
+    )
 
 
 def _client_ip(request: Request) -> str | None:
@@ -294,12 +306,9 @@ async def signup_start(request: Request, payload: dict) -> dict:
             email=payload.get("email"),
         )
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
     except KeyError as exc:
-        raise HTTPException(status_code=400, detail=f"Missing field: {exc}") from exc
+        raise HTTPException(status_code=400, detail=f"Missing field: {exc}")
 
     return {
         "account": account.to_dict(),
@@ -330,10 +339,7 @@ async def signup_real_name(request: Request, payload: dict) -> dict:
             id_number=payload["id_number"],
         )
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
 
     return {"account": account.to_dict()}
 
@@ -355,10 +361,7 @@ async def signup_face(request: Request, payload: dict) -> dict:
             reference_image_url=payload.get("reference_image_url"),
         )
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
 
     return {"account": account.to_dict()}
 
@@ -383,10 +386,7 @@ async def signup_consent(request: Request, payload: dict) -> dict:
             sign_child_consent=payload.get("sign_child_consent", True),
         )
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
 
     # BE-COMP-004: consent is the single most compliance-relevant
     # event on the account — PIPL Art. 14 requires we can show when
@@ -452,14 +452,11 @@ async def whoami(
 async def get_account(request: Request, parent_id: str) -> dict:
     account = await _lifecycle.get_account(parent_id)
     if account is None:
-        raise HTTPException(
-            status_code=404,
-            detail=localized_error_response(
+        return JSONResponse(status_code=404, content=error_response(
                 request,
                 code="NOT_FOUND",
                 key="auth.not_found",
-            ),
-        )
+            ))
     progress = await _lifecycle.get_progress(parent_id)
     return {
         "account": account.to_dict(),
@@ -504,10 +501,7 @@ async def deletion_request(
     try:
         account = await _lifecycle.request_deletion(parent_id)
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
     return {
         "account": account.to_dict(),
         "deletion_window_remaining_days": account.deletion_window_remaining_days,
@@ -528,10 +522,7 @@ async def deletion_complete(request: Request, payload: dict) -> dict:
     try:
         account = await _lifecycle.complete_deletion(parent_id)
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
     return {"account": account.to_dict()}
 
 
@@ -547,14 +538,11 @@ async def deletion_complete(request: Request, payload: dict) -> dict:
 async def get_consent_document(request: Request, consent_type: str) -> dict:
     """Get the consent document text (parent or child version)."""
     if consent_type not in ("parent", "child"):
-        raise HTTPException(
-            status_code=400,
-            detail=localized_error_response(
+        return JSONResponse(status_code=400, content=error_response(
                 request,
                 code="INVALID_CONSENT_TYPE",
                 key="auth.invalid_consent_type",
-            ),
-        )
+            ))
     consent = _lifecycle.get_consent_manager()
     if consent_type == "parent":
         return {
@@ -679,29 +667,23 @@ async def sms_send(
             captcha_answer if captcha_answer is not None else "",
         )
         if not ok:
-            raise HTTPException(
-                status_code=400,
-                detail=localized_error_response(
+            return JSONResponse(status_code=400, content=error_response(
                     request,
                     code="CAPTCHA_INVALID",
                     key="auth.captcha_invalid",
                     fallback_message=(
                         "Captcha challenge missing, expired, or wrong"
-                    ),
-                ),
+                    )),
             )
     elif settings.sms_captcha_required:
         # Production mode: captcha is mandatory.
-        raise HTTPException(
-            status_code=400,
-            detail=localized_error_response(
+        return JSONResponse(status_code=400, content=error_response(
                 request,
                 code="CAPTCHA_INVALID",
                 key="auth.captcha_required",
                 fallback_message=(
                     "Captcha is required to send an SMS code"
-                ),
-            ),
+                )),
         )
 
     try:
@@ -791,10 +773,7 @@ async def sms_login(
             method="sms",
             reason=reason,
         ).inc()
-        raise HTTPException(
-            status_code=401,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=401, content=_error_response(request, exc))
 
     # Find or auto-create the account.
     account = await _lifecycle.find_by_phone(phone)
@@ -811,10 +790,7 @@ async def sms_login(
                 phone=phone,
             )
         except AuthError as exc:
-            raise HTTPException(
-                status_code=400,
-                detail=_error_response(request, exc),
-            ) from exc
+            return JSONResponse(status_code=400, content=_error_response(request, exc))
 
     settings = get_settings()
 
@@ -913,15 +889,12 @@ async def refresh(request: Request, payload: dict) -> dict:
     """
     refresh_token = payload.get("refresh_token")
     if not refresh_token or not isinstance(refresh_token, str):
-        raise HTTPException(
-            status_code=400,
-            detail=localized_error_response(
+        return JSONResponse(status_code=400, content=error_response(
                 request,
                 code="INVALID_REFRESH_TOKEN",
                 key="auth.invalid_refresh_token",
                 fallback_message="refresh_token required",
-            ),
-        )
+            ))
 
     try:
         claims = verify_token(
@@ -930,10 +903,7 @@ async def refresh(request: Request, payload: dict) -> dict:
             is_revoked=get_blacklist().is_revoked_sync,
         )
     except JWTError as exc:
-        raise HTTPException(
-            status_code=401,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=401, content=_error_response(request, exc))
 
     parent_id = claims["sub"]
     old_jti = claims.get("jti")
@@ -987,15 +957,12 @@ async def logout(
     """
     if not authorization or not authorization.lower().startswith("bearer "):
         # Should be impossible — the dep would have raised 401.
-        raise HTTPException(
-            status_code=401,
-            detail=localized_error_response(
+        return JSONResponse(status_code=401, content=error_response(
                 request,
                 code="MISSING_TOKEN",
                 key="auth.missing_token",
                 fallback_message="Bearer token required",
-            ),
-        )
+            ))
     token = authorization[7:].strip()
     try:
         claims = verify_token(
@@ -1005,14 +972,11 @@ async def logout(
         )
     except JWTError:
         # Dep already validated; this is purely defensive.
-        raise HTTPException(
-            status_code=401,
-            detail=localized_error_response(
+        return JSONResponse(status_code=401, content=error_response(
                 request,
                 code="INVALID_TOKEN",
                 key="auth.token_invalid",
-            ),
-        )
+            ))
     jti = claims.get("jti")
     if jti:
         await get_blacklist().revoke(jti)
@@ -1051,12 +1015,9 @@ async def phone_change_request(
             password=password,
         )
     except PhoneChangeError as exc:
-        _raise_change_error(request, exc)
+        return _raise_change_error(request, exc)
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
     return view_to_dict(view, "phone")
 
 
@@ -1084,18 +1045,15 @@ async def phone_change_verify(
             sms_code=code,
         )
     except PhoneChangeError as exc:
-        _raise_change_error(request, exc)
+        return _raise_change_error(request, exc)
     if view.parent_id != parent.id:
         # Lateral-auth: never reveal the row exists if it doesn't
         # belong to the caller.
-        raise HTTPException(
-            status_code=404,
-            detail=localized_error_response(
+        return JSONResponse(status_code=404, content=error_response(
                 request,
                 code="PHONE_CHANGE_NOT_FOUND",
                 key="auth.phone_change_not_found",
-            ),
-        )
+            ))
     return view_to_dict(view, "phone")
 
 
@@ -1176,10 +1134,7 @@ async def email_change_request(
     except EmailChangeError as exc:
         _raise_change_error(request, exc)
     except AuthError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=_error_response(request, exc),
-        ) from exc
+        return JSONResponse(status_code=400, content=_error_response(request, exc))
     return result
 
 

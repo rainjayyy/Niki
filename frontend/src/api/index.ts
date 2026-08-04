@@ -7,7 +7,7 @@
  * Usage:
  *   import { configure, getHealth } from "@/api";
  *   configure({ baseUrl: "https://api.niki.example", getToken });
- * Generated: 2026-08-03T09:29:32Z
+ * Generated: 2026-08-04T02:50:10Z
  */
 
 export * from "./client";

@@ -135,14 +135,22 @@ async def require_2fa_for_sensitive_ops(
         parent_id=parent.id,
         endpoint=f"{request.method} {request.url.path}",
     )
+    # §6.3 envelope: raise an HTTPException whose detail IS the
+    # envelope. The `error_handler.http_exception_handler` detects the
+    # envelope (has `success: false` + `error.code`) and passes it
+    # through verbatim instead of wrapping under `{"detail": ...}`.
+    from niki.api._i18n import error_response
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail={
-            "error": "TWO_FA_REQUIRED",
-            "message": (
+        detail=error_response(
+            request,
+            code="TWO_FA_REQUIRED",
+            key="auth.2fa_required",
+            fallback_message=(
                 "2FA is enabled on this account. Provide "
                 f"{HEADER_TOTP_CODE} or {HEADER_BACKUP_CODE} "
                 "header, or call POST /auth/2fa/verify first."
             ),
-        },
+        ),
     )

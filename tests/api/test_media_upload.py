@@ -184,7 +184,7 @@ class TestUploadRejections:
         )
         assert r.status_code == 400
         body = r.json()
-        assert body["detail"]["error"] == "EMPTY_FILE"
+        assert body["error"]["code"] == "EMPTY_FILE"
 
     def test_unsupported_mime_returns_415(self, client: TestClient) -> None:
         r = client.post(
@@ -193,7 +193,7 @@ class TestUploadRejections:
         )
         assert r.status_code == 415
         body = r.json()
-        assert body["detail"]["error"] == "INVALID_MIME_TYPE"
+        assert body["error"]["code"] == "INVALID_MIME_TYPE"
 
     def test_text_plain_rejected(self, client: TestClient) -> None:
         r = client.post(
@@ -217,8 +217,8 @@ class TestUploadRejections:
         )
         assert r.status_code == 413
         body = r.json()
-        assert body["detail"]["error"] == "FILE_TOO_LARGE"
-        assert body["detail"]["max_bytes"] == 10 * 1024 * 1024
+        assert body["error"]["code"] == "FILE_TOO_LARGE"
+        assert body["error"]["max_bytes"] == 10 * 1024 * 1024
 
     def test_missing_file_returns_422(self, client: TestClient) -> None:
         # Empty multipart — no `file` field at all.
@@ -329,13 +329,13 @@ class TestMediaRetrievalErrors:
     def test_get_unknown_id_returns_404(self, client: TestClient) -> None:
         r = client.get("/api/v1/media/f-deadbeef")
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "FILE_NOT_FOUND"
+        assert r.json()["error"]["code"] == "FILE_NOT_FOUND"
 
     def test_get_malformed_id_returns_404(self, client: TestClient) -> None:
         # No `f-` prefix and not path-traversal — still 404 (not 500).
         r = client.get("/api/v1/media/not-a-file-id")
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "FILE_NOT_FOUND"
+        assert r.json()["error"]["code"] == "FILE_NOT_FOUND"
 
     def test_get_path_traversal_returns_404_not_500(
         self, client: TestClient

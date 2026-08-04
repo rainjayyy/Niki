@@ -203,8 +203,8 @@ class TestOcrEndpoint:
             files={"file": ("big.png", too_big, "image/png")},
         )
         assert r.status_code == 413, r.text
-        detail = r.json()["detail"]
-        assert detail["error"] == "OCR_IMAGE_TOO_LARGE"
+        detail = r.json()["error"]
+        assert detail["code"] == "OCR_IMAGE_TOO_LARGE"
         assert detail["max_bytes"] == 5 * 1024 * 1024
         assert detail["size_bytes"] >= 6 * 1024 * 1024
 
@@ -220,7 +220,7 @@ class TestOcrEndpoint:
             },
         )
         assert r.status_code == 415, r.text
-        assert r.json()["detail"]["error"] == "UNSUPPORTED_OCR_MIME"
+        assert r.json()["error"]["code"] == "UNSUPPORTED_OCR_MIME"
 
     def test_empty_file_returns_400(self, client: TestClient) -> None:
         r = client.post(
@@ -228,7 +228,7 @@ class TestOcrEndpoint:
             files={"file": ("empty.png", b"", "image/png")},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_FILE"
+        assert r.json()["error"]["code"] == "EMPTY_FILE"
 
     def test_mock_backend_returns_deterministic_text(
         self, client: TestClient
@@ -266,4 +266,4 @@ class TestOcrEndpoint:
         finally:
             set_ocr_backend(saved)
         assert r.status_code == 503
-        assert r.json()["detail"]["error"] == "OCR_QUOTA_EXCEEDED"
+        assert r.json()["error"]["code"] == "OCR_QUOTA_EXCEEDED"

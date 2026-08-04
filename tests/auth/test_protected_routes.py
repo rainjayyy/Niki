@@ -51,7 +51,7 @@ class TestProtectedRoutesNoToken:
         resp = client.request(method, path)
         assert resp.status_code == 401, f"{method} {path} returned {resp.status_code}"
         body = resp.json()
-        assert body["detail"]["error"] == "MISSING_TOKEN"
+        assert body["error"]["code"] == "MISSING_TOKEN"
 
     @pytest.mark.parametrize(("method", "path"), PROTECTED_ROUTES)
     def test_returns_401_with_garbage_token(
@@ -61,7 +61,7 @@ class TestProtectedRoutesNoToken:
             method, path, headers={"Authorization": "Bearer not-a-jwt"}
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "MALFORMED_TOKEN"
+        assert resp.json()["error"]["code"] == "MALFORMED_TOKEN"
 
 
 class TestProtectedRoutesWrongScheme:

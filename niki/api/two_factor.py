@@ -21,8 +21,9 @@ from __future__ import annotations
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 
-from niki.api._i18n import localized_error_response
+from niki.api._i18n import error_response, localized_error_response
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 from niki.auth.jwt_service import (
@@ -195,38 +196,38 @@ async def enroll_verify(
             parent.id, totp_code
         )
     except TwoFactorNotEnrolled as exc:
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code=exc.code,
                 key="auth.2fa_not_enrolled",
                 fallback_message=exc.message,
             ),
-        ) from exc
+        )
     except TwoFactorAlreadyEnrolled as exc:
-        raise HTTPException(
+        return JSONResponse(
             status_code=409,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code=exc.code,
                 key="auth.2fa_already_enrolled",
                 fallback_message=exc.message,
             ),
-        ) from exc
+        )
     except TwoFactorInvalidCode as exc:
         get_registry().LOGIN_FAILURE_TOTAL.labels(
             method="totp", reason=exc.code
         ).inc()
-        raise HTTPException(
+        return JSONResponse(
             status_code=401,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code=exc.code,
                 key="auth.2fa_invalid_code",
                 fallback_message=exc.message,
             ),
-        ) from exc
+        )
 
     await get_audit_log_service().log_event(
         EVENT_ENROLL_COMPLETED,
@@ -489,9 +490,9 @@ async def login(request: Request, payload: dict) -> dict:
     partial_token = payload.get("partial_token")
     totp_code = payload.get("totp_code")
     if not partial_token or not isinstance(partial_token, str):
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code="INVALID_TOKEN",
                 key="auth.token_invalid",
@@ -499,9 +500,9 @@ async def login(request: Request, payload: dict) -> dict:
             ),
         )
     if not totp_code or not isinstance(totp_code, str):
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code="TWO_FA_INVALID_CODE",
                 key="auth.2fa_invalid_code",
@@ -514,25 +515,27 @@ async def login(request: Request, payload: dict) -> dict:
             is_revoked=get_blacklist().is_revoked_sync,
         )
     except JWTError as exc:
-        raise HTTPException(
+        return JSONResponse(
             status_code=401,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code=exc.code,
                 key="auth.token_invalid",
                 fallback_message=exc.message,
             ),
-        ) from exc
+        )
     if claims.get("scope") != SCOPE_2FA_PENDING:
-        raise HTTPException(
+        return JSONResponse(
             status_code=401,
-            detail={
-                "error": "INVALID_PARTIAL_TOKEN",
-                "message": (
+            content=error_response(
+                request,
+                code="INVALID_PARTIAL_TOKEN",
+                key="auth.token_invalid",
+                fallback_message=(
                     "The provided token is not a 2fa_pending partial "
                     "token; use /auth/sms/login to obtain one."
                 ),
-            },
+            ),
         )
     parent_id = claims["sub"]
 
@@ -541,15 +544,15 @@ async def login(request: Request, payload: dict) -> dict:
             parent_id, totp_code
         )
     except TwoFactorNotEnrolled as exc:
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code=exc.code,
                 key="auth.2fa_not_enrolled",
                 fallback_message=exc.message,
             ),
-        ) from exc
+        )
     except TwoFactorInvalidCode as exc:
         get_registry().LOGIN_FAILURE_TOTAL.labels(
             method="totp_2fa_login", reason=exc.code
@@ -564,15 +567,15 @@ async def login(request: Request, payload: dict) -> dict:
             reason="2FA login verification failed",
             client_ip=_client_ip(request),
         )
-        raise HTTPException(
+        return JSONResponse(
             status_code=401,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code=exc.code,
                 key="auth.2fa_invalid_code",
                 fallback_message=exc.message,
             ),
-        ) from exc
+        )
 
     settings = get_settings()
     access = issue_access_token(parent_id, scope=SCOPE_FULL)

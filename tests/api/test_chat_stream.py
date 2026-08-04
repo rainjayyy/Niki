@@ -128,35 +128,35 @@ class TestStreamErrors:
             "/api/v1/chat/stream", json={"text": ""}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_whitespace_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
         r = client_with_fast_mock.post(
             "/api/v1/chat/stream", json={"text": "   \n  "}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_missing_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
         r = client_with_fast_mock.post(
             "/api/v1/chat/stream", json={}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_too_long_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
         r = client_with_fast_mock.post(
             "/api/v1/chat/stream", json={"text": "x" * 1001}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "TEXT_TOO_LONG"
+        assert r.json()["error"]["code"] == "TEXT_TOO_LONG"
 
     def test_non_string_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
         r = client_with_fast_mock.post(
             "/api/v1/chat/stream", json={"text": 123}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
 
 class TestProviderUnit:

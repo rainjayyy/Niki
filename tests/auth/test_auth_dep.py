@@ -50,7 +50,7 @@ class TestWhoami:
         assert resp.status_code == 401
         body = resp.json()
         # §6.3 structured error code
-        assert body["detail"]["error"] == "MISSING_TOKEN"
+        assert body["error"]["code"] == "MISSING_TOKEN"
         assert "WWW-Authenticate" in resp.headers
 
     def test_garbage_token_returns_401(self, client: TestClient) -> None:
@@ -59,7 +59,7 @@ class TestWhoami:
             headers=_bearer("not-a-jwt"),
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "MALFORMED_TOKEN"
+        assert resp.json()["error"]["code"] == "MALFORMED_TOKEN"
 
     def test_expired_token_returns_401(self, client: TestClient) -> None:
         import time
@@ -68,7 +68,7 @@ class TestWhoami:
         time.sleep(1.5)
         resp = client.get("/api/v1/auth/whoami", headers=_bearer(token))
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "TOKEN_EXPIRED"
+        assert resp.json()["error"]["code"] == "TOKEN_EXPIRED"
 
     def test_revoked_token_returns_401(self, client: TestClient) -> None:
         token = issue_access_token("parent_demo", ttl_seconds=60)
@@ -83,7 +83,7 @@ class TestWhoami:
         asyncio.run(get_blacklist().revoke(claims["jti"]))
         resp = client.get("/api/v1/auth/whoami", headers=_bearer(token))
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "TOKEN_REVOKED"
+        assert resp.json()["error"]["code"] == "TOKEN_REVOKED"
 
     def test_wrong_scheme_returns_401(self, client: TestClient) -> None:
         token = issue_access_token("parent_demo", ttl_seconds=60)
@@ -92,4 +92,4 @@ class TestWhoami:
             headers={"Authorization": f"Basic {token}"},
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "MISSING_TOKEN"
+        assert resp.json()["error"]["code"] == "MISSING_TOKEN"

@@ -235,7 +235,7 @@ class TestGet:
     ) -> None:
         r = client.get("/api/v1/webhooks/does-not-exist")
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "WEBHOOK_NOT_FOUND"
+        assert r.json()["error"]["code"] == "WEBHOOK_NOT_FOUND"
 
 
 class TestUpdate:
@@ -327,7 +327,7 @@ class TestLateralAuth:
         sub = _register(client)
         r = other_client.get(f"/api/v1/webhooks/{sub['id']}")
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "WEBHOOK_NOT_FOUND"
+        assert r.json()["error"]["code"] == "WEBHOOK_NOT_FOUND"
 
     def test_cross_owner_patch_returns_404(
         self, client: TestClient, other_client: TestClient
@@ -405,7 +405,7 @@ class TestValidation:
             },
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "WEBHOOK_URL_NOT_HTTPS"
+        assert r.json()["error"]["code"] == "WEBHOOK_URL_NOT_HTTPS"
 
     def test_http_url_allowed_when_insecure_flag_set(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -443,7 +443,7 @@ class TestValidation:
         # are correct from the spec's perspective.
         assert r.status_code in (400, 422)
         if r.status_code == 400:
-            assert "error" in r.json()["detail"]
+            assert "code" in r.json()["error"]
 
     def test_too_many_event_types_returns_422(
         self, client: TestClient
@@ -485,7 +485,7 @@ class TestValidation:
             },
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "WEBHOOK_INVALID_EVENT_TYPE"
+        assert r.json()["error"]["code"] == "WEBHOOK_INVALID_EVENT_TYPE"
 
 
 # ---------------------------------------------------------------------------

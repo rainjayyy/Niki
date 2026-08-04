@@ -68,7 +68,7 @@ class TestLateralCheckHooks:
             "/api/v1/dashboard/weekly-report/c_victim",
         )
         assert r.status_code == 403
-        assert r.json()["detail"]["error"] == "PARENT_CHILD_MISMATCH"
+        assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
     async def test_parent_mismatch_records_audit(
         self, client: TestClient
@@ -79,7 +79,7 @@ class TestLateralCheckHooks:
             json={"child_id": "c1"},
         )
         assert r.status_code == 403
-        assert r.json()["detail"]["error"] == "PARENT_MISMATCH"
+        assert r.json()["error"]["code"] == "PARENT_MISMATCH"
 
         # Audit log should now contain a parent_mismatch event
         # attributed to p_actor → p_someone_else.

@@ -473,7 +473,7 @@ class TestTwoFactorEndpoints:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 401
-        assert r.json()["detail"]["error"] == "TWO_FA_INVALID_CODE"
+        assert r.json()["error"]["code"] == "TWO_FA_INVALID_CODE"
 
     def test_verify_endpoint_returns_scope_token(
         self, client: TestClient
@@ -628,7 +628,7 @@ class TestTwoFactorEndpoints:
             json={"partial_token": partial, "totp_code": "000000"},
         )
         assert r.status_code == 401
-        assert r.json()["detail"]["error"] == "TWO_FA_INVALID_CODE"
+        assert r.json()["error"]["code"] == "TWO_FA_INVALID_CODE"
 
     def test_deletion_request_blocked_when_2fa_enabled_without_proof(
         self, client: TestClient
@@ -656,7 +656,7 @@ class TestTwoFactorEndpoints:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 401, r.text
-        assert r.json()["detail"]["error"] == "TWO_FA_REQUIRED"
+        assert r.json()["error"]["code"] == "TWO_FA_REQUIRED"
 
     def test_deletion_request_with_totp_header_succeeds(
         self, client: TestClient

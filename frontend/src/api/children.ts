@@ -3,7 +3,7 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `children` (2 operation(s)).
- * Generated: 2026-08-03T09:29:32Z
+ * Generated: 2026-08-04T02:50:10Z
  */
 
 import { request } from "./client";

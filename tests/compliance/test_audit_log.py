@@ -251,7 +251,7 @@ class TestAdminAuditEndpoint:
             "/api/v1/admin/audit", params={"actor_parent_id": "p_other"}
         )
         assert resp.status_code == 403
-        assert resp.json()["detail"]["error"] == "FORBIDDEN"
+        assert resp.json()["error"]["code"] == "FORBIDDEN"
 
     def test_own_id_is_allowed_explicitly(
         self, client: TestClient, repo: InMemoryAuditLogRepository

@@ -82,7 +82,7 @@ class TestSizeLimits:
             files={"audio": ("empty.wav", b"", "audio/wav")},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_AUDIO"
+        assert r.json()["error"]["code"] == "EMPTY_AUDIO"
 
     def test_oversized_audio_returns_413(self, client: TestClient) -> None:
         big = b"x" * (5 * 1024 * 1024 + 1)
@@ -91,8 +91,8 @@ class TestSizeLimits:
             files={"audio": ("big.wav", big, "audio/wav")},
         )
         assert r.status_code == 413
-        body = r.json()["detail"]
-        assert body["error"] == "AUDIO_TOO_LARGE"
+        body = r.json()["error"]
+        assert body["code"] == "AUDIO_TOO_LARGE"
         assert body["max_bytes"] == 5 * 1024 * 1024
 
     def test_exactly_max_size_is_allowed(self, client: TestClient) -> None:
@@ -118,7 +118,7 @@ class TestProviderFailures:
             files={"audio": ("x.wav", b"abc", "audio/wav")},
         )
         assert r.status_code == 503
-        assert r.json()["detail"]["error"] == "ASR_TIMEOUT"
+        assert r.json()["error"]["code"] == "ASR_TIMEOUT"
 
 
 class TestMockProviderUnit:

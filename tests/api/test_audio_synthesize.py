@@ -87,30 +87,30 @@ class TestInputLimits:
     def test_empty_text_returns_400(self, client: TestClient) -> None:
         r = client.post("/api/v1/audio/synthesize", json={"text": ""})
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_whitespace_only_text_returns_400(self, client: TestClient) -> None:
         r = client.post("/api/v1/audio/synthesize", json={"text": "   "})
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_missing_text_returns_400(self, client: TestClient) -> None:
         r = client.post("/api/v1/audio/synthesize", json={})
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_non_string_text_returns_400(self, client: TestClient) -> None:
         r = client.post("/api/v1/audio/synthesize", json={"text": 123})
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_TEXT"
+        assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_too_long_text_returns_400(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/audio/synthesize", json={"text": "x" * 1001}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "TEXT_TOO_LONG"
-        assert r.json()["detail"]["max_chars"] == 1000
+        assert r.json()["error"]["code"] == "TEXT_TOO_LONG"
+        assert r.json()["error"]["max_chars"] == 1000
 
     def test_exactly_max_length_allowed(self, client: TestClient) -> None:
         r = client.post(
@@ -131,7 +131,7 @@ class TestProviderFailures:
             "/api/v1/audio/synthesize", json={"text": "hi"}
         )
         assert r.status_code == 503
-        assert r.json()["detail"]["error"] == "TTS_QUOTA"
+        assert r.json()["error"]["code"] == "TTS_QUOTA"
 
 
 class TestMockProviderUnit:

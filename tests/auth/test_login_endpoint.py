@@ -71,7 +71,9 @@ class TestSmsSend:
         )
         resp = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         assert resp.status_code == 429
-        assert resp.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+        # The SMS-service cooldown (not the slowapi IP limit) fires
+        # here — its code is SMS_RATE_LIMITED.
+        assert resp.json()["error"]["code"] == "SMS_RATE_LIMITED"
 
 
 class TestSmsLogin:

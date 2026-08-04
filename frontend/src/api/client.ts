@@ -4,7 +4,7 @@
  * Re-run `make ts-sdk` after any backend route change.
  * Runtime helper: base URL, query encoding, bearer auth, §6.3 errors.
  * Zero dependencies — native `fetch` only (ES2020 / Node 18+).
- * Generated: 2026-08-03T09:29:32Z
+ * Generated: 2026-08-04T02:50:10Z
  */
 
 /** Per-call overrides. `signal` enables cancellation via `AbortController`. */

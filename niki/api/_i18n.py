@@ -95,13 +95,74 @@ def localized_error_response(
         lang,
         default=fallback_message,
     )
+    # Legacy §6.3-inner key: `error` carries the code. New endpoints
+    # should use `error_response()` (which builds the full envelope
+    # with the `code` key); keeping `error` here preserves the shape
+    # for endpoints that still return `HTTPException(detail=...)`.
     body: dict[str, Any] = {"error": code, "message": message}
     if extra:
         body.update(extra)
     return body
 
 
+def error_response(
+    request: Request | None,
+    code: str,
+    key: str,
+    *,
+    extra: dict[str, Any] | None = None,
+    fallback_message: str | None = None,
+) -> dict[str, Any]:
+    """Build a complete §6.3 response envelope for an error.
+
+    This is the endpoint-level counterpart to `localized_error_response`
+    (which returns only the inner `error` object). The returned dict is
+    the full body to pass to `JSONResponse(content=...)`:
+
+        {
+          "success": false,
+          "data": null,
+          "error": {"code": "...", "message": "...", ...extra},
+          "error_code": "...",
+          "error_detail": ...,
+          "request_id": "..."
+        }
+
+    Frontend / TS SDK (BE-API-007) reads `response.error.code`; all
+    endpoints should return this shape so the interceptor has a single
+    contract to parse.
+    """
+    lang = resolve_lang(request)
+    translator = get_translator()
+    message = translator.translate(
+        key,
+        lang,
+        default=fallback_message,
+    )
+    inner: dict[str, Any] = {"code": code, "message": message}
+    if extra:
+        inner.update(extra)
+
+    request_id = (
+        request.headers.get("X-Request-ID")
+        if request is not None
+        else None
+    )
+    if not request_id:
+        import uuid as _uuid
+        request_id = str(_uuid.uuid4())
+    return {
+        "success": False,
+        "data": None,
+        "error": inner,
+        "error_code": inner.get("code"),
+        "error_detail": inner.get("detail"),
+        "request_id": request_id,
+    }
+
+
 __all__ = [
     "localized_error_response",
+    "error_response",
     "resolve_lang",
 ]

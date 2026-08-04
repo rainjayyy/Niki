@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from niki.auth.account import ParentAccount
@@ -39,9 +40,22 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def _unauthorized(code: str, message: str) -> HTTPException:
+    """Return a 401 HTTPException whose detail IS the §6.3 envelope.
+
+    `get_current_parent` raises this from a dependency on auth
+    failure. The `error_handler.http_exception_handler` detects the
+    envelope (has `success: false` + `error.code`) and passes it
+    through verbatim, so the client sees the flat envelope:
+
+        {"success": false, "error": {"code": "...", "message": "..."}, ...}
+
+    Callers do `raise _unauthorized(...)`.
+    """
+    from niki.api._i18n import error_response
+
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail={"error": code, "message": message},
+        detail=error_response(None, code, "", fallback_message=message),
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -54,7 +68,8 @@ async def get_current_parent(
 ) -> ParentAccount:
     """Authenticate the caller via a Bearer JWT and return the account.
 
-    On failure raises HTTP 401 with a structured error body.
+    On failure raises HTTP 401 with the §6.3 envelope (handled by
+    `error_handler.http_exception_handler`).
 
     Side effects:
       * Sets `request.state.jwt_scope` (default `"full"` for
@@ -75,7 +90,7 @@ async def get_current_parent(
             is_revoked=get_blacklist().is_revoked_sync,
         )
     except JWTError as exc:
-        raise _unauthorized(exc.code, exc.message) from exc
+        raise _unauthorized(exc.code, exc.message)
 
     parent_id = claims["sub"]
     # BE-AUTH-007: stash scope + iat on request.state for downstream

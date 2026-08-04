@@ -321,4 +321,4 @@ class TestEndpointTemplateParam:
             params={"template": "bogus"},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_TEMPLATE"
+        assert r.json()["error"]["code"] == "INVALID_TEMPLATE"

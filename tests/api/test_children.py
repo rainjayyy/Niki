@@ -60,7 +60,7 @@ class TestRegisterChild:
             headers={'Authorization': f'Bearer {tok}'},
         )
         assert r.status_code == 403
-        assert r.json()['detail']['error'] == 'PARENT_MISMATCH'
+        assert r.json()['error']['code'] == 'PARENT_MISMATCH'
 
     def test_register_already_owned_409(self, client: TestClient) -> None:
         tok = issue_access_token('p1', ttl_seconds=60)
@@ -86,7 +86,7 @@ class TestRegisterChild:
             headers={'Authorization': f'Bearer {tok}'},
         )
         assert r.status_code == 400
-        assert r.json()['detail']['error'] == 'BAD_REQUEST'
+        assert r.json()['error']['code'] == 'BAD_REQUEST'
 
     def test_register_without_token_in_normal_mode(self, client: TestClient) -> None:
         # The conftest fake_auth_override is active here so the dep

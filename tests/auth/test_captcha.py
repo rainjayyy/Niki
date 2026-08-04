@@ -245,7 +245,7 @@ class TestSmsSendWithCaptcha:
             },
         )
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "CAPTCHA_INVALID"
+        assert resp.json()["error"]["code"] == "CAPTCHA_INVALID"
 
     def test_sms_send_without_captcha_in_prod_mode_returns_400(
         self,
@@ -257,7 +257,7 @@ class TestSmsSendWithCaptcha:
             "/api/v1/auth/sms/send", json={"phone": "13800138000"}
         )
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "CAPTCHA_INVALID"
+        assert resp.json()["error"]["code"] == "CAPTCHA_INVALID"
 
     def test_sms_send_in_prod_mode_with_valid_captcha_succeeds(
         self,

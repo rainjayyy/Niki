@@ -212,9 +212,9 @@ class TestPostPushTest:
             json={"device_id": "d-victim"},
         )
         assert r.status_code == 404
-        # FastAPI wraps HTTPException(detail=...) under "detail"
-        detail = r.json()["detail"]
-        assert detail["error"] == "DEVICE_NOT_FOUND"
+        # §6.3 envelope: error.code carries the machine-readable code.
+        body = r.json()
+        assert body["error"]["code"] == "DEVICE_NOT_FOUND"
 
     def test_missing_device_id_returns_422(
         self,

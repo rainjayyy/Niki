@@ -240,7 +240,7 @@ class TestCreatePairingCodeEndpoint:
             "/api/v1/pairing/code", json={"child_id": "ghost-child"}
         )
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "CHILD_NOT_FOUND"
+        assert r.json()["error"]["code"] == "CHILD_NOT_FOUND"
 
     def test_child_owned_by_other_parent_returns_403(
         self, client: TestClient
@@ -251,12 +251,12 @@ class TestCreatePairingCodeEndpoint:
             "/api/v1/pairing/code", json={"child_id": "other-child"}
         )
         assert r.status_code == 403
-        assert r.json()["detail"]["error"] == "PARENT_CHILD_MISMATCH"
+        assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
     def test_missing_child_id_returns_400(self, client: TestClient) -> None:
         r = client.post("/api/v1/pairing/code", json={})
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "BAD_REQUEST"
+        assert r.json()["error"]["code"] == "BAD_REQUEST"
 
     def test_non_string_child_id_returns_400(
         self, client: TestClient
@@ -290,7 +290,7 @@ class TestConsumePairingCodeEndpoint:
             "/api/v1/pairing/consume", json={"code": "000000"}
         )
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "PAIRING_CODE_INVALID"
+        assert r.json()["error"]["code"] == "PAIRING_CODE_INVALID"
 
     def test_double_consume_returns_404(self, client: TestClient) -> None:
         created = client.post(
@@ -306,7 +306,7 @@ class TestConsumePairingCodeEndpoint:
             "/api/v1/pairing/consume", json={"code": created["code"]}
         )
         assert r2.status_code == 404
-        assert r2.json()["detail"]["error"] == "PAIRING_CODE_INVALID"
+        assert r2.json()["error"]["code"] == "PAIRING_CODE_INVALID"
 
     def test_malformed_code_returns_400(self, client: TestClient) -> None:
         for bad in ["12345", "abcdef", "", "12345a", "1234567"]:

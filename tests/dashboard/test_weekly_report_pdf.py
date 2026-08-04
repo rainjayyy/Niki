@@ -198,7 +198,7 @@ class TestWeeklyReportPDFEndpoint:
         )
         # 403 PARENT_CHILD_MISMATCH (BE-AUTH-001-rollout-ext)
         assert r.status_code == 403
-        assert r.json()["detail"]["error"] == "PARENT_CHILD_MISMATCH"
+        assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
     def test_endpoint_chinese_in_pdf_body(self, client: TestClient) -> None:
         r = client.get(

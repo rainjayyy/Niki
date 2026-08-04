@@ -146,7 +146,7 @@ class TestAvatarRejections:
             files={"file": ("empty.png", b"", "image/png")},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "EMPTY_FILE"
+        assert r.json()["error"]["code"] == "EMPTY_FILE"
 
     def test_too_large_returns_413(self, client: TestClient) -> None:
         # 2 MB payload — well over the 1 MB avatar cap.
@@ -157,9 +157,9 @@ class TestAvatarRejections:
         )
         assert r.status_code == 413
         body = r.json()
-        assert body["detail"]["error"] == "AVATAR_TOO_LARGE"
-        assert body["detail"]["max_bytes"] == AVATAR_MAX_BYTES
-        assert body["detail"]["size_bytes"] == len(big)
+        assert body["error"]["code"] == "AVATAR_TOO_LARGE"
+        assert body["error"]["max_bytes"] == AVATAR_MAX_BYTES
+        assert body["error"]["size_bytes"] == len(big)
 
     def test_text_returns_415(self, client: TestClient) -> None:
         r = client.post(
@@ -168,10 +168,10 @@ class TestAvatarRejections:
         )
         assert r.status_code == 415
         body = r.json()
-        assert body["detail"]["error"] == "INVALID_AVATAR_MIME"
+        assert body["error"]["code"] == "INVALID_AVATAR_MIME"
         # Only jpg/png are allowed for avatars
-        assert "image/jpeg" in body["detail"]["allowed"]
-        assert "image/png" in body["detail"]["allowed"]
+        assert "image/jpeg" in body["error"]["allowed"]
+        assert "image/png" in body["error"]["allowed"]
 
     def test_webp_rejected_for_avatar(self, client: TestClient) -> None:
         # WebP is allowed by the generic /upload but NOT by /avatar.
@@ -181,7 +181,7 @@ class TestAvatarRejections:
             files={"file": ("avatar.webp", webp, "image/webp")},
         )
         assert r.status_code == 415
-        assert r.json()["detail"]["error"] == "INVALID_AVATAR_MIME"
+        assert r.json()["error"]["code"] == "INVALID_AVATAR_MIME"
 
     def test_missing_file_field_returns_422(self, client: TestClient) -> None:
         r = client.post(
@@ -239,7 +239,7 @@ class TestAvatarLateralAuth:
             data={"child_id": "c_victim"},
         )
         assert r.status_code == 403
-        assert r.json()["detail"]["error"] == "PARENT_CHILD_MISMATCH"
+        assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
     def test_unknown_child_id_returns_404(
         self, authed_client: TestClient
@@ -250,7 +250,7 @@ class TestAvatarLateralAuth:
             data={"child_id": "c_does_not_exist"},
         )
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "CHILD_NOT_FOUND"
+        assert r.json()["error"]["code"] == "CHILD_NOT_FOUND"
 
     def test_owned_child_id_succeeds(
         self, authed_client: TestClient

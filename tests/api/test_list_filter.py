@@ -93,7 +93,7 @@ class TestListQueryParamsDependency:
         r = client.get("/__test/q_order?order=foo")
         assert r.status_code == 400
         body = r.json()
-        assert body["detail"]["error"] == "INVALID_ORDER"
+        assert body["error"]["code"] == "INVALID_ORDER"
 
     def test_invalid_range_returns_400(self) -> None:
         client = self._build_app_with_route()
@@ -109,7 +109,7 @@ class TestListQueryParamsDependency:
             "&until=2026-07-01T00:00:00Z",
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_RANGE"
+        assert r.json()["error"]["code"] == "INVALID_RANGE"
 
     def test_whitespace_keyword_treated_as_none(self) -> None:
         client = self._build_app_with_route()
@@ -230,7 +230,7 @@ class TestAuthAuditFilter:
         client = _audit_client(monkeypatch)
         r = client.get("/api/v1/auth/audit/recent?order=foo")
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_ORDER"
+        assert r.json()["error"]["code"] == "INVALID_ORDER"
 
     def test_invalid_sort_returns_400(
         self, monkeypatch: pytest.MonkeyPatch
@@ -238,7 +238,7 @@ class TestAuthAuditFilter:
         client = _audit_client(monkeypatch)
         r = client.get("/api/v1/auth/audit/recent?sort=evil")
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_SORT"
+        assert r.json()["error"]["code"] == "INVALID_SORT"
 
     def test_since_until_filter(
         self, monkeypatch: pytest.MonkeyPatch
@@ -531,7 +531,7 @@ class TestTreeholeSummariesFilter:
             "/api/v1/treehole/summaries/c-flt?order=foo",
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_ORDER"
+        assert r.json()["error"]["code"] == "INVALID_ORDER"
 
     def test_sort_order_asc(
         self, treehole_client: TestClient

@@ -204,7 +204,7 @@ class TestValidation:
             json={"severities": ["info", "panic"]},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_SEVERITY"
+        assert r.json()["error"]["code"] == "INVALID_SEVERITY"
 
     def test_invalid_event_type_returns_400(
         self, client: TestClient
@@ -214,7 +214,7 @@ class TestValidation:
             json={"muted_event_types": [""]},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_EVENT_TYPE"
+        assert r.json()["error"]["code"] == "INVALID_EVENT_TYPE"
 
     def test_event_type_must_be_list(
         self, client: TestClient
@@ -224,7 +224,7 @@ class TestValidation:
             json={"muted_event_types": "safety_block"},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_EVENT_TYPE"
+        assert r.json()["error"]["code"] == "INVALID_EVENT_TYPE"
 
     def test_severities_must_be_list(
         self, client: TestClient
@@ -233,7 +233,7 @@ class TestValidation:
             "/api/v1/push/prefs", json={"severities": "critical"}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_SEVERITY"
+        assert r.json()["error"]["code"] == "INVALID_SEVERITY"
 
     def test_quiet_start_equal_quiet_end_rejected(
         self, client: TestClient
@@ -243,7 +243,7 @@ class TestValidation:
             json={"quiet_start": 8, "quiet_end": 8},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_QUIET_HOUR"
+        assert r.json()["error"]["code"] == "INVALID_QUIET_HOUR"
 
     def test_dnd_until_naive_iso_rejected(
         self, client: TestClient
@@ -254,7 +254,7 @@ class TestValidation:
             json={"dnd_until": "2027-01-01T00:00:00"},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_QUIET_HOUR"
+        assert r.json()["error"]["code"] == "INVALID_QUIET_HOUR"
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +436,7 @@ class TestI18nKeys:
         assert r.status_code == 400
         # Chinese translation should be present (not the literal
         # key, not English).
-        msg = r.json()["detail"]["message"]
+        msg = r.json()["error"]["message"]
         assert "panic" not in msg
         assert msg != "media.invalid_severity"
 
@@ -449,6 +449,6 @@ class TestI18nKeys:
             headers={"Accept-Language": "en-US"},
         )
         assert r.status_code == 400
-        msg = r.json()["detail"]["message"]
+        msg = r.json()["error"]["message"]
         assert "panic" not in msg
         assert msg != "media.invalid_severity"

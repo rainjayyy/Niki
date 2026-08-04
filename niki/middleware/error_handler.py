@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -255,6 +255,68 @@ def setup_error_handlers(app: FastAPI) -> None:
     # --------------------------------------------------------------------
     # FastAPI built-ins — wrap into the §6.3 shape too
     # --------------------------------------------------------------------
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
+        """Handle `HTTPException` with §6.3 consistency.
+
+        FastAPI's default HTTPException handler wraps `detail` under
+        `{"detail": ...}`. That breaks the §6.3 contract the frontend
+        reads (`response.error.code`). We intercept:
+
+        1. If `detail` is ALREADY a §6.3 envelope (has `success` +
+           `error.code`), pass it through as-is — used by
+           dependencies that raise `HTTPException(detail=envelope)`
+           (e.g. `require_2fa_for_sensitive_ops`).
+        2. If `detail` is a legacy `{"error": code, "message": ...}`
+           object (from `localized_error_response`), wrap it into a
+           fresh envelope so `response.error.code` still works.
+        3. Otherwise fall back to FastAPI's default `{"detail": ...}`
+           so nothing else regresses.
+        """
+        detail = exc.detail
+        if isinstance(detail, dict) and detail.get("success") is False:
+            # Already enveloped — emit verbatim.
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=detail,
+                headers=exc.headers,
+            )
+        if isinstance(detail, dict) and isinstance(
+            detail.get("error"), str
+        ):
+            # Legacy `{"error": code, "message": ..., ...extra}` → wrap
+            # into the §6.3 envelope. Preserve any extra fields (e.g.
+            # `max_bytes`, `limit`, `received`) under the inner
+            # `error` object so callers that read `error.max_bytes`
+            # keep working.
+            from niki.api._i18n import error_response
+
+            extra = {
+                k: v
+                for k, v in detail.items()
+                if k not in ("error", "message")
+            }
+            body = error_response(
+                request,
+                code=detail["error"],
+                key="",
+                fallback_message=str(detail.get("message", "")),
+                extra=extra or None,
+            )
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=body,
+                headers=exc.headers,
+            )
+        # Fall back to FastAPI default.
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": detail},
+            headers=exc.headers,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(

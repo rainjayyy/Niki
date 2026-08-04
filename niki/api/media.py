@@ -31,7 +31,7 @@ import re
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
@@ -53,7 +53,7 @@ from niki.media.ocr import (
 )
 from niki.middleware.rate_limit import limiter
 
-from niki.api._i18n import localized_error_response, resolve_lang
+from niki.api._i18n import error_response, localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
 
 router = APIRouter(prefix="/media", tags=[
@@ -612,9 +612,9 @@ async def get_thumbnail(
 
     bare_id = _extract_file_id(file_id)
     if bare_id is None:
-        raise HTTPException(
+        return JSONResponse(
             status_code=404,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code="FILE_NOT_FOUND",
                 key="media.file_not_found",
@@ -623,9 +623,9 @@ async def get_thumbnail(
 
     result = build_thumbnail(file_id=bare_id, w=w, h=h)
     if result is None:
-        raise HTTPException(
+        return JSONResponse(
             status_code=404,
-            detail=localized_error_response(
+            content=error_response(
                 request,
                 code="FILE_NOT_FOUND",
                 key="media.file_not_found",

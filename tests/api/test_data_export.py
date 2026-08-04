@@ -104,7 +104,7 @@ class TestDataExport:
         )
         assert r.status_code == 403
         body = r.json()
-        assert body["detail"]["error"] == "PARENT_MISMATCH"
+        assert body["error"]["code"] == "PARENT_MISMATCH"
 
     def test_returns_401_without_token(self) -> None:
         # No dep override; expect the real JWT path to deny an anonymous request.

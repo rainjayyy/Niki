@@ -94,7 +94,7 @@ class TestLogoutHappyPath:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "TOKEN_REVOKED"
+        assert resp.json()["error"]["code"] == "TOKEN_REVOKED"
         # Reset shared singleton for downstream test isolation.
         set_blacklist(InMemoryTokenBlacklist())
 
@@ -109,7 +109,7 @@ class TestLogoutErrors:
         # absent (the handler always reads the header itself).
         resp = client_with_fake_auth.post("/api/v1/auth/logout")
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "MISSING_TOKEN"
+        assert resp.json()["error"]["code"] == "MISSING_TOKEN"
 
     def test_wrong_scheme_returns_401(
         self, client_with_fake_auth: TestClient
@@ -119,7 +119,7 @@ class TestLogoutErrors:
             headers={"Authorization": "Basic abc"},
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "MISSING_TOKEN"
+        assert resp.json()["error"]["code"] == "MISSING_TOKEN"
 
     def test_unparseable_token_returns_401_via_dep(
         self, client_with_real_auth: TestClient
@@ -129,7 +129,7 @@ class TestLogoutErrors:
             headers={"Authorization": "Bearer not-a-jwt"},
         )
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "MALFORMED_TOKEN"
+        assert resp.json()["error"]["code"] == "MALFORMED_TOKEN"
 
 
 class TestFullJwtLifecycle:
@@ -189,7 +189,7 @@ class TestFullJwtLifecycle:
             headers={"Authorization": f"Bearer {access_v2}"},
         )
         assert who.status_code == 401
-        assert who.json()["detail"]["error"] == "TOKEN_REVOKED"
+        assert who.json()["error"]["code"] == "TOKEN_REVOKED"
 
         # 6) The new refresh v2 still works (rotation is for refresh, not
         # affected by access revocation)

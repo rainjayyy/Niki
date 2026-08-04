@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from niki.api._i18n import localized_error_response, resolve_lang
+from niki.api._i18n import error_response, localized_error_response, resolve_lang
 from niki.auth.account import ParentAccount
 from niki.schemas.requests import PushTestRequest
 from niki.auth.dependencies import get_current_parent
@@ -895,7 +895,7 @@ class _PushTestHistory(BaseModel):
 _limiter = get_limiter()
 
 
-def _push_device_not_found(request: Request) -> HTTPException:
+def _push_device_not_found(request: Request) -> JSONResponse:
     """Return the uniform 404 for `device_id` not owned by caller.
 
     Used by both POST /push/test (cross-parent 404) and any
@@ -903,10 +903,12 @@ def _push_device_not_found(request: Request) -> HTTPException:
     `push.device_not_found` key; the *same* message is returned
     for "doesn't exist" and "exists but not yours" so an attacker
     can't use the endpoint as a device-id oracle.
+
+    Returns a §6.3 `JSONResponse` envelope (callers `return` it).
     """
-    return HTTPException(
+    return JSONResponse(
         status_code=404,
-        detail=localized_error_response(
+        content=error_response(
             request,
             code="DEVICE_NOT_FOUND",
             key="push.device_not_found",
@@ -983,7 +985,7 @@ async def send_test_push(
         None,
     )
     if device is None:
-        raise _push_device_not_found(request)
+        return _push_device_not_found(request)
 
     title = payload.title or "测试推送"
     body = payload.body or "这是一条测试推送"

@@ -239,8 +239,8 @@ class TestCursorPagination:
         bad = "this-is-not-a-cursor"
         r = client.get(f"/api/v1/notifications?cursor={bad}")
         assert r.status_code == 400
-        body = r.json()["detail"]
-        assert body["error"] == "INVALID_CURSOR"
+        body = r.json()["error"]
+        assert body["code"] == "INVALID_CURSOR"
         # i18n message is the Chinese default (no Accept-Language).
         assert body["message"]
 
@@ -255,7 +255,7 @@ class TestCursorPagination:
         tampered = f"{head}.{bad_sig}"
         r = client.get(f"/api/v1/notifications?cursor={tampered}")
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_CURSOR"
+        assert r.json()["error"]["code"] == "INVALID_CURSOR"
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +318,7 @@ class TestFilters:
     ) -> None:
         r = client.get("/api/v1/notifications?severity=critical,banana")
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_SEVERITY"
+        assert r.json()["error"]["code"] == "INVALID_SEVERITY"
 
     def test_severity_case_insensitive(
         self, client: TestClient, repo: InMemoryDashboardRepository
@@ -350,8 +350,8 @@ class TestMarkRead:
     ) -> None:
         r = client.post("/api/v1/notifications/never-existed/read")
         assert r.status_code == 404
-        body = r.json()["detail"]
-        assert body["error"] == "NOTIFICATION_NOT_FOUND"
+        body = r.json()["error"]
+        assert body["code"] == "NOTIFICATION_NOT_FOUND"
 
     def test_mark_read_other_parents_id_returns_404(
         self,
@@ -368,7 +368,7 @@ class TestMarkRead:
         # Lateral-auth: 404 (not 403) so the existence of the id
         # doesn't leak to other parents.
         assert r.status_code == 404
-        assert r.json()["detail"]["error"] == "NOTIFICATION_NOT_FOUND"
+        assert r.json()["error"]["code"] == "NOTIFICATION_NOT_FOUND"
         # Repo untouched.
         assert repo._alerts[a1]["read_at"] is None
 

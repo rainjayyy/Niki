@@ -98,7 +98,7 @@ class TestRegister:
             },
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_CHANNEL"
+        assert r.json()["error"]["code"] == "INVALID_CHANNEL"
 
     def test_register_invalid_device_id_returns_400(
         self, client: TestClient
@@ -113,7 +113,7 @@ class TestRegister:
             },
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_DEVICE_ID"
+        assert r.json()["error"]["code"] == "INVALID_DEVICE_ID"
 
     def test_register_missing_token_returns_400(
         self, client: TestClient
@@ -126,7 +126,7 @@ class TestRegister:
             },
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_PUSH_TOKEN"
+        assert r.json()["error"]["code"] == "INVALID_PUSH_TOKEN"
 
 
 class TestUnregister:
@@ -236,7 +236,7 @@ class TestPrefs:
             "/api/v1/push/prefs", json={"quiet_start": 99}
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_QUIET_HOUR"
+        assert r.json()["error"]["code"] == "INVALID_QUIET_HOUR"
 
     def test_patch_invalid_channels_returns_400(
         self, client: TestClient
@@ -246,7 +246,7 @@ class TestPrefs:
             json={"enabled_channels": ["apns", "wechat"]},
         )
         assert r.status_code == 400
-        assert r.json()["detail"]["error"] == "INVALID_ENABLED_CHANNELS"
+        assert r.json()["error"]["code"] == "INVALID_ENABLED_CHANNELS"
 
     def test_patch_high_risk_only(self, client: TestClient) -> None:
         r = client.patch(

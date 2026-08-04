@@ -307,10 +307,10 @@ class TestBatchEndpoints:
         assert resp.status_code == 400
         body = resp.json()
         # §6.3 shape — error.code lives in `detail.error`.
-        assert body["detail"]["error"] == "BATCH_TOO_LARGE"
-        assert body["detail"]["limit"] == BATCH_MAX_ITEMS
-        assert body["detail"]["received"] == BATCH_MAX_ITEMS + 1
-        assert body["detail"]["field"] == "items"
+        assert body["error"]["code"] == "BATCH_TOO_LARGE"
+        assert body["error"]["limit"] == BATCH_MAX_ITEMS
+        assert body["error"]["received"] == BATCH_MAX_ITEMS + 1
+        assert body["error"]["field"] == "items"
 
     def test_relations_batch_over_cap_returns_400(
         self, client: TestClient,
@@ -324,7 +324,7 @@ class TestBatchEndpoints:
             json={"items": too_many},
         )
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"] == "BATCH_TOO_LARGE"
+        assert resp.json()["error"]["code"] == "BATCH_TOO_LARGE"
 
     def test_alerts_batch_dismiss_over_cap_returns_400(
         self, client: TestClient,
@@ -338,8 +338,8 @@ class TestBatchEndpoints:
         )
         assert resp.status_code == 400
         body = resp.json()
-        assert body["detail"]["error"] == "BATCH_TOO_LARGE"
-        assert body["detail"]["field"] == "alert_ids"
+        assert body["error"]["code"] == "BATCH_TOO_LARGE"
+        assert body["error"]["field"] == "alert_ids"
 
     def test_entities_batch_at_cap_is_accepted(
         self, client: TestClient,
