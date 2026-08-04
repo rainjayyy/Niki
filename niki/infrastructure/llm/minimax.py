@@ -167,3 +167,79 @@ class MinimaxClient(BaseLLMClient):
         )
 
         return result
+
+    async def stream(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        system: str | None = None,
+        **kwargs: Any,
+    ):
+        """Stream a chat completion from Minimax (Anthropic SSE).
+
+        POSTs `/v1/messages` with `"stream": true` and yields the
+        incremental `content_block_delta.delta.text` chunks as they
+        arrive, so the SSE wrapper can forward them live.
+
+        The upstream emits `text/event-stream` lines:
+            event: content_block_delta
+            data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}
+
+        Yields:
+            Successive plain-text chunks (no SSE framing — the
+            endpoint adds the `data: ` wrapper).
+        """
+        # Same normalization as `chat()`: extract system prompt from
+        # the messages array if the caller put it there.
+        normalized: list[dict[str, str]] = []
+        for m in messages:
+            if m.get("role") == "system":
+                if system is None:
+                    system = m.get("content", "")
+                continue
+            normalized.append({"role": m["role"], "content": m["content"]})
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": normalized,
+            "temperature": temperature,
+            "stream": True,
+            **kwargs,
+        }
+        if system:
+            payload["system"] = system
+
+        logger.debug(
+            "minimax.stream.start",
+            model=self.model,
+            message_count=len(normalized),
+        )
+
+        async with self.client.stream(
+            "POST", "/v1/messages", json=payload
+        ) as response:
+            self._handle_http_error(response.status_code, self.provider_name)
+            async for line in response.aiter_lines():
+                line = line.strip()
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[len("data: "):]
+                if data_str == "[DONE]":
+                    break
+                import json as _json
+
+                try:
+                    event = _json.loads(data_str)
+                except _json.JSONDecodeError:
+                    continue
+                etype = event.get("type")
+                if etype != "content_block_delta":
+                    continue
+                delta = event.get("delta") or {}
+                if delta.get("type") != "text_delta":
+                    continue
+                text = delta.get("text") or ""
+                if text:
+                    yield text

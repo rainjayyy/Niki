@@ -200,6 +200,29 @@ def _reset_metrics_registry() -> None:
     reset_metrics()
 
 
+@pytest.fixture(autouse=True)
+def _reset_llm_factory() -> None:
+    """Drop the process-wide LLM client + streaming provider singletons
+    between tests so a test that injects a mock/stub doesn't leak into
+    the next test (the factory caches the first provider it builds).
+
+    The factory re-resolves on the next `get_or_create_llm()` /
+    `get_streaming_provider()` call, picking up whatever env is set.
+    """
+    from niki.infrastructure.llm.factory import (
+        reset_for_tests as reset_llm_factory,
+    )
+    from niki.infrastructure.llm.streaming import (
+        reset_for_tests as reset_streaming,
+    )
+
+    reset_llm_factory()
+    reset_streaming()
+    yield
+    reset_llm_factory()
+    reset_streaming()
+
+
 # Endpoints that import `get_current_parent` and bind it locally.
 # To globally override the dependency without rewriting each test to
 # mint a JWT, we patch the function on every module that imported it
