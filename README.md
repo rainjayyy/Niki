@@ -311,8 +311,8 @@ Niki/
 | 编号 | 严重度 | 描述 | 位置 |
 |---|---|---|---|
 | ISS-02 | P0 ✅ | `/emotion/express` 等 3 个直接 agent 端点绕过输入安全网关 — **已修**（端点层加 `InputSafetyGateway` + 4 个回归测试） | `niki/api/{emotion,encyclopedia,tutoring}.py` |
-| ISS-03 | P0 | Treehole 7 天 purge 后 `encrypted_payloads` 仍残留 | `niki/treehole/purge.py` |
-| ISS-04 | P0 | 账户 30 天删除时 consent 记录未清除 | `niki/auth/lifecycle.py` |
+| ISS-03 | P0 ✅ | Treehole 7 天 purge 后 `encrypted_payloads` 仍残留 — **已修**（存储统一为单行 + sentinel byte 回归测试） | `niki/treehole/purge.py` |
+| ISS-04 | P0 ✅ | 账户 30 天删除时 consent 记录未清除 — **已修**（`ConsentManager.purge_for_parent` + 回归测试） | `niki/auth/lifecycle.py` |
 | ISS-05 | P1 | Pipeline `StepStatus.FAILED` 计数器永远为 0 | `niki/memory/pipeline.py` |
 | ISS-06 | P1 | Dashboard `_build_trend` 类型注解与实现不一致 | `niki/dashboard/service.py` |
 | ISS-07 | P1 | `add_relation(relation="remembers")` 应传枚举而非 str | `niki/memory/hook.py` |
@@ -331,6 +331,8 @@ Niki/
 - ✅ **ISS-02**：`niki/api/{emotion,encyclopedia,tutoring}.py` 三个直接端点加 `InputSafetyGateway` 前置过滤；新增 `tests/api/test_agent_endpoint_safety.py` 4 个端到端回归测试
 - ✅ 3 个 `pytest.mark.skip` 修复：`test_treehole_activated`（改 confidentiality marker 多选一断言）、`test_real_llm_reply_used`（改名为 `test_v1_uses_curated_template_not_llm`，断言 v1 模板路径）、`test_orchestrator_remembers_context`（改走 encyclopedia 路径验证 history 转发）
 - ✅ `SELF_HARM_CN` 词表补全（`niki/safety/dictionaries.py`）：增加 想死 / 不想活 / 活不下去 / 想轻生 / 一了百了；新增 `test_self_harm_phrases_escalate` 参数化测试（8 表达）+ `test_self_harm_phrase_xsiangsi_escalates` 端到端回归（"我好想死啊" 之前会漏检）
+- ✅ **ISS-03**：Treehole purge 后 `encrypted_payload` 不泄漏（sentinel byte 回归测试 + 存储已统一为单行 `TreeholeEngagement`）
+- ✅ **ISS-04**：账户 30 天删除清除 consent 记录（`ConsentManager.purge_for_parent` + 回归测试断言 `records_for_parent == []`）
 
 ---
 

@@ -122,6 +122,68 @@ class TestTreeholePurger:
         assert count == 1
         assert len(mgr.repo._rows) == 1
 
+    async def test_purge_expired_drops_encrypted_payloads(self) -> None:
+        """ISS-03 regression: encrypted_payload bytes must be gone after purge.
+
+        Background: the pre-refactor TreeholeStore kept encrypted_payload
+        bytes in a separate list indexed by the original timestamp. The
+        purge predicate ``ts in ep.get("encrypted", "")`` could never
+        match (base64 ciphertext never contains the literal timestamp),
+        so encrypted_payloads leaked indefinitely. The refactor moved
+        the ciphertext into the row, so ``delete_expired`` is now a
+        single SQL statement — but we still assert defensively that no
+        expired encrypted_payload bytes survive a purge.
+        """
+        now = datetime(2026, 7, 22)
+        # Pre-populate with 3 records whose encrypted_payload contains
+        # a sentinel string we can grep for post-purge.
+        sentinel_a = b"SENTINEL_EXPIRED_A_xxxxxxxxxxxxxx"
+        sentinel_b = b"SENTINEL_EXPIRED_B_yyyyyyyyyy"
+        sentinel_c = b"SENTINEL_EXPIRED_C_zzzzzzzzzz"
+        valid_sentinel = b"SENTINEL_VALID_qqqqqqqqqqq"
+        old_records = [
+            (now - timedelta(days=10), "c-A", "ct-A"),
+            (now - timedelta(days=11), "c-B", "ct-B"),
+            (now - timedelta(days=12), "c-C", "ct-C"),
+        ]
+        new_records = [(now - timedelta(days=1), "c-D", "ct-D")]
+
+        repo = InMemoryTreeholeRepository()
+        import uuid as _uuid
+        for created_at, child_id, _ct in old_records + new_records:
+            payload = (
+                sentinel_a if child_id == "c-A" else
+                sentinel_b if child_id == "c-B" else
+                sentinel_c if child_id == "c-C" else
+                valid_sentinel
+            )
+            repo._rows[str(_uuid.uuid4())] = {
+                "id": str(_uuid.uuid4()),
+                "child_id": child_id,
+                "parent_id": "parent-1",
+                "encrypted_payload": payload,
+                "associated_data": None,
+                "expires_at": created_at + timedelta(days=7),
+                "created_at": created_at,
+            }
+        set_treehole_repository(repo)
+        purger = TreeholePurger(repo=repo)
+
+        count = await purger.purge_expired(now=now)
+        assert count == 3
+        assert len(repo._rows) == 1
+
+        # Defensive: the 3 expired sentinels must not appear in any
+        # surviving row's encrypted_payload. Since rows are deleted
+        # outright, we check the underlying dict.
+        surviving_payloads = [r["encrypted_payload"] for r in repo._rows.values()]
+        for sentinel in (sentinel_a, sentinel_b, sentinel_c):
+            assert sentinel not in surviving_payloads, (
+                f"encrypted_payload {sentinel!r} leaked after purge"
+            )
+        # And the valid record's payload is still there.
+        assert valid_sentinel in surviving_payloads
+
 
 class TestTreeholePurgerAcceptsRepo:
     """Make sure TreeholePurger's repo= parameter is honored."""

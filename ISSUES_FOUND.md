@@ -44,23 +44,24 @@
   - 同期扩展 `SELF_HARM_CN` 词表（增加 想死 / 不想活 / 活不下去 / 想轻生 / 一了百了），并新增 `test_self_harm_phrases_escalate` 参数化测试覆盖 8 个常见表达（含 "我好想死啊" 这类之前漏掉的）
 - 关联：ISS-01（已独立修复）
 
-### ISS-03 Treehole 加密载荷在 7 天 purge 后仍残留
+### ISS-03 Treehole 加密载荷在 7 天 purge 后仍残留 ✅ 已修（2026-10-09）
 
 - 位置：niki/treehole/purge.py:60-68
 - PRD 依据：第 61-64 条"7 天自动清除"
-- 症状：purge_expired 用 ts in ep.get("encrypted", "") or ts in str(ep) 判断是否清除。encrypted 是 base64 密文，永远不包含原始时间戳字符串
-- 影响：summaries 和 pending_purge 都清干净，唯独 encrypted_payloads 无限增长
-- 测试盲点：tests/treehole/test_purge.py 只断言 len(store.summaries) == 2，没看 encrypted_payloads 长度
-- 建议：purge 应按"对应索引同步"或"按时间戳匹配"在三个 list 上对齐操作
+- 症状（旧描述，已过时）：原 `TreeholeStore` 把 summaries / pending_purge / encrypted_payloads 分开存，purge 谓词 `ts in ep.get("encrypted", "")` 对 base64 密文永远 False，导致 encrypted_payloads 无限增长
+- **修复**（2026-10-09）：在更早的重构中，存储已经统一为单行 `TreeholeEngagement`（`encrypted_payload` 作为 row 字段），`delete_expired` 现在是单条 SQL/单行 `dict.pop`，结构性泄漏不可能再发生
+- 回归测试：`tests/treehole/test_purge.py::test_purge_expired_drops_encrypted_payloads` — 用 3 个 sentinel byte 串预填过期记录，purge 后断言**没有任何 sentinel 残留在 `repo._rows` 任何行的 `encrypted_payload` 字段中**。直接打"encrypted_payload 不泄漏"这条不变量，不依赖 `len(rows)` 的隐式证明
+- 关联：BE-STORG-001-ext-B
 
-### ISS-04 账号 30 天删除不清除 consent 记录
+### ISS-04 账号 30 天删除不清除 consent 记录 ✅ 已修（2026-10-09）
 
 - 位置：niki/auth/lifecycle.py:289-293
 - PRD 依据：第 35 条"30 天数据清除承诺"
-- 症状：_purge_account_data 注释写"Remove consent records (best-effort) - In production: would iterate self._consent._records"，但实际代码没做
-- 影响：账号被删 30 天后，consent 记录仍留在内存，违反数据删除承诺
-- 测试盲点：测试只验证 account.status == DELETED，不验证 consent 记录数量
-- 建议：在 _purge_account_data 里显式调用 self._consent._records.clear()，或给 ConsentManager 加 purge_for_parent(parent_id) 方法
+- 症状（旧描述，已过时）：`_purge_account_data` 注释说"Remove consent records (best-effort)"但实际没做
+- **修复**（2026-10-09）：
+  - `niki/auth/consent.py:206` 新增 `ConsentManager.purge_for_parent(parent_id) -> int` 方法，按 parent_id 过滤清除
+  - `niki/auth/lifecycle.py:279` 在 `complete_deletion` 末尾调用 `self._consent.purge_for_parent(parent_id)`，记录返回的 `erased` 数量并以 `auth.deletion.consent_purged` 事件上报结构化日志
+  - 新增 `tests/auth/test_lifecycle.py::test_complete_deletion_erases_consent_records` 回归测试 — 注册账号 + 签 consent + 走完 deletion，断言 `lifecycle.get_consent_manager().records_for_parent(account.id) == []`
 
 ---
 
@@ -347,5 +348,5 @@
 
 - **ISS-20 建议补一个 mock-based 单元测试**（用 `fakeredis.aioredis` 或 monkeypatch）以防回归。当前烟囱测试只验证了"Redis 不可达时不抛"，没验证"Redis 可达时真删了"。这块在能接 docker 的 CI 环境里建议补上。
 - **ISS-18 建议补一个 import-level sanity 测试**（`assert len(DEFAULT_L1_ENTRIES) == 13`）防止以后又被无声重复定义。
-- **本次未涉及**：ISS-03 / ISS-04 两个 P0 仍待修（涉及 Treehole 加密残留、consent 记录残留），优先级高于 ISS-20。**ISS-02 已修**（见 ISS-02 标题 ✅ + 详情）。
+- **本次未涉及**：P0 已全部修完（ISS-01..ISS-04 全部 ✅）。剩余工程化债以 P1-P3 为主，详见各条。
 

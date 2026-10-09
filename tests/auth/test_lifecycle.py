@@ -163,6 +163,48 @@ class TestDeletionFlow:
         # Account should no longer be in storage
         assert await lifecycle.get_account(account.id) is None
 
+    async def test_complete_deletion_erases_consent_records(
+        self, lifecycle: AccountLifecycle
+    ) -> None:
+        """ISS-04 regression: account deletion MUST erase consent records.
+
+        Background: the original implementation had a TODO comment
+        saying "Remove consent records (best-effort) - In production:
+        would iterate self._consent._records", but did NOT actually
+        call any purge method. The fix added ConsentManager.purge_for_parent
+        and wired it into AccountLifecycle.complete_deletion. This test
+        guards that wiring: after deletion, the parent's consent records
+        must be gone (PRD #35 — 30-day data erasure commitment).
+        """
+        account, _ = await lifecycle.start_signup(
+            name="张三",
+            id_number="110101199003078811",
+            phone="13800138000",
+        )
+        # Sign both parent + child consent (sign_consent does both by default).
+        await lifecycle.sign_consent(
+            parent_id=account.id,
+            typed_signature="张三",
+            ip_address="1.2.3.4",
+            device_fingerprint="abc123",
+        )
+        # Sanity: consent records exist before deletion.
+        consent_before = lifecycle.get_consent_manager().records_for_parent(account.id)
+        assert len(consent_before) >= 1, (
+            "test precondition: at least one consent record expected before deletion"
+        )
+
+        # Delete the account.
+        await lifecycle.request_deletion(account.id)
+        await lifecycle.complete_deletion(account.id)
+
+        # Postcondition: NO consent records for the deleted parent.
+        consent_after = lifecycle.get_consent_manager().records_for_parent(account.id)
+        assert consent_after == [], (
+            f"ISS-04: consent records leaked after account deletion: "
+            f"{consent_after!r}"
+        )
+
     async def test_complete_deletion_without_request_raises(
         self, lifecycle: AccountLifecycle
     ) -> None:
