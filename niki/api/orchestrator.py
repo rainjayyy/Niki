@@ -13,9 +13,15 @@ from fastapi import APIRouter
 
 from niki.agents.orchestrator import ChatOrchestrator, ChatResult
 
-router = APIRouter(prefix="/chat", tags=[
-    {"name": "chat", "description": "Chat orchestrator API endpoints — the end-to-end pipeline."}
-])
+router = APIRouter(
+    prefix="/chat",
+    tags=[
+        {
+            "name": "chat",
+            "description": "Chat orchestrator API endpoints — the end-to-end pipeline.",
+        }
+    ],
+)
 
 # Module-level singleton (default config: 7-year-old, gentle persona)
 _orchestrator = ChatOrchestrator(child_age=7, persona="gentle")

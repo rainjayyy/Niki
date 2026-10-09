@@ -26,9 +26,15 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/config", tags=[
-    {"name": "config", "description": "Client configuration endpoint (BE-MISC-001 + BE-MISC-002)."}
-])
+router = APIRouter(
+    prefix="/config",
+    tags=[
+        {
+            "name": "config",
+            "description": "Client configuration endpoint (BE-MISC-001 + BE-MISC-002).",
+        }
+    ],
+)
 
 
 # Non-flag defaults — static across versions and deploys.
@@ -45,8 +51,14 @@ DEFAULT_CLIENT_CONFIG: dict = {
     "cooldown_days": 7,
     # Push channels enabled by default
     "enabled_channels": [
-        "hms", "mipush", "oppo", "vivo", "flyme",
-        "apns", "fcm", "web",
+        "hms",
+        "mipush",
+        "oppo",
+        "vivo",
+        "flyme",
+        "apns",
+        "fcm",
+        "web",
     ],
 }
 
@@ -113,10 +125,7 @@ async def get_client_config(
             status_code=503,
             detail={
                 "error": "FEATURE_FLAGS_UNAVAILABLE",
-                "message": (
-                    "feature_flags_default in settings is invalid; "
-                    "see server logs."
-                ),
+                "message": ("feature_flags_default in settings is invalid; see server logs."),
             },
         ) from exc
 

@@ -134,9 +134,7 @@ async def enroll(
 ) -> dict:
     """Begin TOTP enrollment for the authenticated parent."""
     try:
-        payload = await get_two_factor_service().begin_enrollment(
-            parent.id
-        )
+        payload = await get_two_factor_service().begin_enrollment(parent.id)
     except TwoFactorAlreadyEnrolled as exc:
         raise HTTPException(
             status_code=409,
@@ -192,9 +190,7 @@ async def enroll_verify(
             ),
         )
     try:
-        backup_codes = await get_two_factor_service().verify_enrollment(
-            parent.id, totp_code
-        )
+        backup_codes = await get_two_factor_service().verify_enrollment(parent.id, totp_code)
     except TwoFactorNotEnrolled as exc:
         return JSONResponse(
             status_code=400,
@@ -216,9 +212,7 @@ async def enroll_verify(
             ),
         )
     except TwoFactorInvalidCode as exc:
-        get_registry().LOGIN_FAILURE_TOTAL.labels(
-            method="totp", reason=exc.code
-        ).inc()
+        get_registry().LOGIN_FAILURE_TOTAL.labels(method="totp", reason=exc.code).inc()
         return JSONResponse(
             status_code=401,
             content=error_response(
@@ -292,9 +286,7 @@ async def verify(
             ),
         ) from exc
     except (TwoFactorInvalidCode, TwoFactorBackupCodeInvalid) as exc:
-        get_registry().LOGIN_FAILURE_TOTAL.labels(
-            method="totp", reason=exc.code
-        ).inc()
+        get_registry().LOGIN_FAILURE_TOTAL.labels(method="totp", reason=exc.code).inc()
         await get_audit_log_service().log_event(
             EVENT_VERIFY_FAILURE,
             severity="warning",
@@ -305,11 +297,7 @@ async def verify(
             reason=f"2FA verification failed ({method})",
             client_ip=_client_ip(request),
         )
-        key = (
-            "auth.2fa_backup_code_invalid"
-            if method == "backup"
-            else "auth.2fa_invalid_code"
-        )
+        key = "auth.2fa_backup_code_invalid" if method == "backup" else "auth.2fa_invalid_code"
         raise HTTPException(
             status_code=401,
             detail=localized_error_response(
@@ -326,9 +314,7 @@ async def verify(
         ttl_seconds=settings.totp_reauth_window_seconds,
         scope=SCOPE_FULL_REAUTH,
     )
-    audit_event = (
-        EVENT_BACKUP_USED if method == "backup" else EVENT_VERIFY_SUCCESS
-    )
+    audit_event = EVENT_BACKUP_USED if method == "backup" else EVENT_VERIFY_SUCCESS
     await get_audit_log_service().log_event(
         audit_event,
         actor_parent_id=parent.id,
@@ -361,9 +347,7 @@ async def disable(
     request: Request,
     payload: dict,
     parent: Annotated[ParentAccount, Depends(get_current_parent)],
-    x_reauth_password: Annotated[
-        Optional[str], Header(alias="X-Reauth-Password")
-    ] = None,
+    x_reauth_password: Annotated[Optional[str], Header(alias="X-Reauth-Password")] = None,
 ) -> dict:
     """Disable 2FA for the parent."""
     reauth = _reauth_token_from_request(payload, x_reauth_password)
@@ -414,16 +398,12 @@ async def regenerate_backup_codes(
     request: Request,
     payload: dict,
     parent: Annotated[ParentAccount, Depends(get_current_parent)],
-    x_reauth_password: Annotated[
-        Optional[str], Header(alias="X-Reauth-Password")
-    ] = None,
+    x_reauth_password: Annotated[Optional[str], Header(alias="X-Reauth-Password")] = None,
 ) -> dict:
     """Regenerate the parent's 10 backup codes."""
     reauth = _reauth_token_from_request(payload, x_reauth_password)
     try:
-        codes = await get_two_factor_service().regenerate_backup_codes(
-            parent.id, reauth
-        )
+        codes = await get_two_factor_service().regenerate_backup_codes(parent.id, reauth)
     except TwoFactorReauthRequired as exc:
         raise HTTPException(
             status_code=401,
@@ -540,9 +520,7 @@ async def login(request: Request, payload: dict) -> dict:
     parent_id = claims["sub"]
 
     try:
-        await get_two_factor_service().verify_code(
-            parent_id, totp_code
-        )
+        await get_two_factor_service().verify_code(parent_id, totp_code)
     except TwoFactorNotEnrolled as exc:
         return JSONResponse(
             status_code=400,
@@ -554,9 +532,7 @@ async def login(request: Request, payload: dict) -> dict:
             ),
         )
     except TwoFactorInvalidCode as exc:
-        get_registry().LOGIN_FAILURE_TOTAL.labels(
-            method="totp_2fa_login", reason=exc.code
-        ).inc()
+        get_registry().LOGIN_FAILURE_TOTAL.labels(method="totp_2fa_login", reason=exc.code).inc()
         await get_audit_log_service().log_event(
             EVENT_LOGIN_FAILURE,
             severity="warning",
@@ -580,9 +556,7 @@ async def login(request: Request, payload: dict) -> dict:
     settings = get_settings()
     access = issue_access_token(parent_id, scope=SCOPE_FULL)
     refresh = issue_refresh_token(parent_id)
-    get_registry().LOGIN_SUCCESS_TOTAL.labels(
-        method="totp_2fa_login"
-    ).inc()
+    get_registry().LOGIN_SUCCESS_TOTAL.labels(method="totp_2fa_login").inc()
     await get_audit_log_service().log_event(
         EVENT_LOGIN_SUCCESS,
         actor_parent_id=parent_id,

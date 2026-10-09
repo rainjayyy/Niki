@@ -46,6 +46,4 @@ class WeeklyReport(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<WeeklyReport child_id={self.child_id} week={self.week_start}>"
-        )
+        return f"<WeeklyReport child_id={self.child_id} week={self.week_start}>"

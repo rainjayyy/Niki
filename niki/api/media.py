@@ -56,9 +56,10 @@ from niki.middleware.rate_limit import limiter
 from niki.api._i18n import error_response, localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
 
-router = APIRouter(prefix="/media", tags=[
-    {"name": "media", "description": "Media API endpoints (BE-MEDIA-001, BE-MEDIA-004)."}
-])
+router = APIRouter(
+    prefix="/media",
+    tags=[{"name": "media", "description": "Media API endpoints (BE-MEDIA-001, BE-MEDIA-004)."}],
+)
 
 
 # Accepts the bare id and the synthetic access_url scheme.
@@ -157,10 +158,7 @@ async def ocr(
             status_code=415,
             detail={
                 "error": "UNSUPPORTED_OCR_MIME",
-                "message": (
-                    "file must be image/jpeg, image/png, "
-                    "image/webp, or image/gif"
-                ),
+                "message": ("file must be image/jpeg, image/png, image/webp, or image/gif"),
                 "mime_type": detected or file.content_type or "unknown",
             },
         )
@@ -229,9 +227,7 @@ def validate_image_for_avatar(
             status_code=413,
             detail={
                 "error": "AVATAR_TOO_LARGE",
-                "message": (
-                    f"avatar exceeds {max_bytes} bytes"
-                ),
+                "message": (f"avatar exceeds {max_bytes} bytes"),
                 "max_bytes": max_bytes,
                 "size_bytes": len(content),
             },
@@ -243,9 +239,7 @@ def validate_image_for_avatar(
             status_code=415,
             detail={
                 "error": "INVALID_AVATAR_MIME",
-                "message": (
-                    "avatar must be image/jpeg or image/png"
-                ),
+                "message": ("avatar must be image/jpeg or image/png"),
                 "mime_type": detected or mime_type or "unknown",
                 "allowed": ["image/jpeg", "image/png"],
             },
@@ -276,9 +270,7 @@ async def _assert_parent_owns_child(
 
     registered = get_child_registry().get_parent_of(child_id)
     endpoint = f"{request.method} {request.url.path}"
-    client_ip: Optional[str] = (
-        request.client.host if request.client else None
-    )
+    client_ip: Optional[str] = request.client.host if request.client else None
     if registered is None:
         await get_auth_audit_logger().log_violation(
             "child_not_found",
@@ -295,9 +287,7 @@ async def _assert_parent_owns_child(
                 request,
                 code="CHILD_NOT_FOUND",
                 key="auth.child_not_found",
-                fallback_message=(
-                    f"No child registered with id {child_id!r}"
-                ),
+                fallback_message=(f"No child registered with id {child_id!r}"),
             ),
         )
     if registered != parent.id:
@@ -507,9 +497,7 @@ async def upload_avatar(
         )
 
     if child_id:
-        child_id = await _assert_parent_owns_child(
-            request, parent, child_id
-        )
+        child_id = await _assert_parent_owns_child(request, parent, child_id)
 
     mime = validate_image_for_avatar(raw, file.content_type)
 

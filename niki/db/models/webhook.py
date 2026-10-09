@@ -49,14 +49,16 @@ from niki.db.base import Base
 # validator in `niki.api.webhooks` can do a single O(1) membership
 # check rather than walking a list. New event types are added here
 # AND to the validator simultaneously.
-VALID_EVENT_TYPES: frozenset[str] = frozenset({
-    "account.deleted",
-    "deletion.completed",
-    "deletion.requested",
-    "safety.escalated",
-    "safety.blocked",
-    "audit.high_risk",
-})
+VALID_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        "account.deleted",
+        "deletion.completed",
+        "deletion.requested",
+        "safety.escalated",
+        "safety.blocked",
+        "audit.high_risk",
+    }
+)
 
 # Hard cap on how many event_types a single subscription can
 # request. 10 is generous (the spec ships 6 today) but stops a
@@ -89,40 +91,26 @@ class WebhookSubscription(Base):
 
     __tablename__ = "webhook_subscriptions"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
-    owner_id: Mapped[str] = mapped_column(
-        String(16), nullable=False, index=True
-    )
-    target_url: Mapped[str] = mapped_column(
-        String(2048), nullable=False
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    owner_id: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    target_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     # HMAC secret used to sign the request body. Stored in clear
     # so the dispatcher can re-derive the signature on each attempt;
     # see `niki.services.webhook.sign_payload` for the algorithm.
     # NEVER returned via the API after creation.
-    secret: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )
+    secret: Mapped[str] = mapped_column(String(64), nullable=False)
     event_types: Mapped[list[str]] = mapped_column(
         "event_types",
         JSON().with_variant(JSONB(), "postgresql"),
         nullable=False,
         default=list,
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
-    failure_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_delivery_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    disabled_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -164,21 +152,11 @@ class WebhookSubscription(Base):
             "is_active": self.is_active,
             "failure_count": self.failure_count,
             "last_delivery_at": (
-                self.last_delivery_at.isoformat()
-                if self.last_delivery_at else None
+                self.last_delivery_at.isoformat() if self.last_delivery_at else None
             ),
-            "disabled_at": (
-                self.disabled_at.isoformat()
-                if self.disabled_at else None
-            ),
-            "created_at": (
-                self.created_at.isoformat()
-                if self.created_at else None
-            ),
-            "updated_at": (
-                self.updated_at.isoformat()
-                if self.updated_at else None
-            ),
+            "disabled_at": (self.disabled_at.isoformat() if self.disabled_at else None),
+            "created_at": (self.created_at.isoformat() if self.created_at else None),
+            "updated_at": (self.updated_at.isoformat() if self.updated_at else None),
         }
 
     def to_created_dict(self) -> dict[str, Any]:
@@ -204,9 +182,7 @@ class WebhookDelivery(Base):
 
     __tablename__ = "webhook_deliveries"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     subscription_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("webhook_subscriptions.id", ondelete="CASCADE"),
@@ -215,12 +191,8 @@ class WebhookDelivery(Base):
     # Idempotency key. Typically the audit_logs.id of the event
     # that triggered the dispatch, but a fresh uuid4() is fine
     # when there's no source event.
-    event_id: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )
-    event_type: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(
         "payload",
         JSON().with_variant(JSONB(), "postgresql"),
@@ -229,27 +201,17 @@ class WebhookDelivery(Base):
     )
     # Denormalised so the deliveries history doesn't break when a
     # subscription is later updated or deleted.
-    target_url: Mapped[str] = mapped_column(
-        String(2048), nullable=False
-    )
-    attempt_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    target_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_attempt_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    last_status_code: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True
-    )
-    last_error: Mapped[Optional[str]] = mapped_column(
-        String(1024), nullable=True
-    )
+    last_status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     # Set on the first 2xx response. Stays NULL on permanent
     # failure so `WHERE delivered_at IS NULL` is the "needs
     # follow-up" set.
-    delivered_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -278,18 +240,9 @@ class WebhookDelivery(Base):
             "payload": dict(self.payload or {}),
             "target_url": self.target_url,
             "attempt_count": self.attempt_count,
-            "last_attempt_at": (
-                self.last_attempt_at.isoformat()
-                if self.last_attempt_at else None
-            ),
+            "last_attempt_at": (self.last_attempt_at.isoformat() if self.last_attempt_at else None),
             "last_status_code": self.last_status_code,
             "last_error": self.last_error,
-            "delivered_at": (
-                self.delivered_at.isoformat()
-                if self.delivered_at else None
-            ),
-            "created_at": (
-                self.created_at.isoformat()
-                if self.created_at else None
-            ),
+            "delivered_at": (self.delivered_at.isoformat() if self.delivered_at else None),
+            "created_at": (self.created_at.isoformat() if self.created_at else None),
         }

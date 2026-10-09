@@ -21,10 +21,7 @@ router = APIRouter(
     tags=[
         {
             "name": "safety",
-            "description": (
-                "Safety API endpoints — child-facing chat with "
-                "input/output gateways."
-            ),
+            "description": ("Safety API endpoints — child-facing chat with input/output gateways."),
         },
     ],
 )
@@ -32,10 +29,7 @@ chat_router = APIRouter(
     tags=[
         {
             "name": "chat",
-            "description": (
-                "Safety API endpoints — child-facing chat with "
-                "input/output gateways."
-            ),
+            "description": ("Safety API endpoints — child-facing chat with input/output gateways."),
         },
     ],
 )
@@ -78,8 +72,7 @@ async def check_input(payload: dict) -> dict:
         "matched_category": verdict.matched_category,
         "matched_words": verdict.matched_words,
         "topic_matches": [
-            {"topic": m.topic, "matched_text": m.matched_text}
-            for m in verdict.topic_matches
+            {"topic": m.topic, "matched_text": m.matched_text} for m in verdict.topic_matches
         ],
         "reason": verdict.reason,
         "is_blocked": verdict.is_blocked,
@@ -189,9 +182,7 @@ async def chat(payload: dict) -> dict:
     elif input_verdict.is_escalation:
         # Self-harm: produce a caring response AND flag for parent alert
         llm_response = (
-            "宝贝，Niki听到你说的话了。"
-            "不管发生什么，Niki都在这里陪着你。"
-            "我们一起想想办法，好不好？"
+            "宝贝，Niki听到你说的话了。不管发生什么，Niki都在这里陪着你。我们一起想想办法，好不好？"
         )
     else:
         # Normal: use provided mock

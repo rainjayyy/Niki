@@ -19,26 +19,25 @@ from niki.resilience import (
     DegradationNotifier,
 )
 
-router = APIRouter(prefix="/resilience", tags=[
-    {"name": "resilience", "description": "Resilience API endpoints — PRD #57-#60."}
-])
+router = APIRouter(
+    prefix="/resilience",
+    tags=[{"name": "resilience", "description": "Resilience API endpoints — PRD #57-#60."}],
+)
 
 # Module-level singletons
 _breaker = CircuitBreaker()
 _notifier = DegradationNotifier()
 
+
 # Stub DeepSeek that fails (to trigger breaker)
 class _FailingDeepSeek:
-    async def chat(
-        self, messages, temperature=0.7, max_tokens=512, **kwargs
-    ):
+    async def chat(self, messages, temperature=0.7, max_tokens=512, **kwargs):
         raise RuntimeError("simulated DeepSeek-V4 outage")
+
 
 # Stub DeepSeek that succeeds
 class _WorkingDeepSeek:
-    async def chat(
-        self, messages, temperature=0.7, max_tokens=512, **kwargs
-    ):
+    async def chat(self, messages, temperature=0.7, max_tokens=512, **kwargs):
         return {
             "content": "DeepSeek-V4 working normally",
             "model": "deepseek-v4",
@@ -46,17 +45,17 @@ class _WorkingDeepSeek:
             "finish_reason": "stop",
         }
 
+
 # Stub doubao fallback
 class _StubDoubao:
-    async def chat(
-        self, messages, temperature=0.7, max_tokens=512, **kwargs
-    ):
+    async def chat(self, messages, temperature=0.7, max_tokens=512, **kwargs):
         return {
             "content": "doubao fallback working (slightly simpler)",
             "model": "doubao-lite",
             "usage": {"total_tokens": 5},
             "finish_reason": "stop",
         }
+
 
 # Default: working primary + fallback
 _client = CircuitBreakerAwareClient(

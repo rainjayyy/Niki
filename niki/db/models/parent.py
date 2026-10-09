@@ -52,12 +52,8 @@ class Parent(Base):
     # BE-AUTH-006: email stored as hash for dedup without PII (mirrors
     # phone_hash). `email` stays raw for display; `email_verified`
     # gates whether recovery emails may be sent to it.
-    email_hash: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
-    )
-    email_verified: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    email_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Lifecycle state
     status: Mapped[ParentStatus] = mapped_column(
@@ -77,9 +73,7 @@ class Parent(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
-    verified_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deletion_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -136,14 +130,10 @@ class Parent(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "verified_at": self.verified_at.isoformat() if self.verified_at else None,
             "deletion_requested_at": (
-                self.deletion_requested_at.isoformat()
-                if self.deletion_requested_at
-                else None
+                self.deletion_requested_at.isoformat() if self.deletion_requested_at else None
             ),
             "deletion_completed_at": (
-                self.deletion_completed_at.isoformat()
-                if self.deletion_completed_at
-                else None
+                self.deletion_completed_at.isoformat() if self.deletion_completed_at else None
             ),
             "deletion_window_remaining_days": self.deletion_window_days(),
             "child_ids": [c.id for c in self.children],

@@ -21,8 +21,7 @@ router = APIRouter(
         {
             "name": "health",
             "description": (
-                "Health check endpoint — returns status of all "
-                "infrastructure components."
+                "Health check endpoint — returns status of all infrastructure components."
             ),
         },
     ],
@@ -50,7 +49,7 @@ async def health_check() -> HealthResponse:
     # Check all components concurrently
     results = await asyncio.gather(
         _check("redis", RedisClient.health_check()),
-        _check("chromadb", _run_sync_check(ChromaClient.health_check)),
+        _check("chromadb", ChromaClient.health_check()),
         _check("neo4j", Neo4jClient.health_check()),
         _check("postgresql", PostgresClient.health_check()),
         _check("deepseek", _check_llm_health("DeepSeek-V4")),
@@ -61,7 +60,9 @@ async def health_check() -> HealthResponse:
     components: list[HealthStatus] = []
     for result in results:
         if isinstance(result, Exception):
-            components.append(HealthStatus(component="unknown", status="unhealthy", error=str(result)))
+            components.append(
+                HealthStatus(component="unknown", status="unhealthy", error=str(result))
+            )
         else:
             components.append(result)
 
@@ -129,14 +130,20 @@ async def _check(
             result = await asyncio.to_thread(coro)
         else:
             result = coro
-        if isinstance(result, dict) and result.get("status") in ("healthy", "degraded", "unhealthy"):
+        if isinstance(result, dict) and result.get("status") in (
+            "healthy",
+            "degraded",
+            "unhealthy",
+        ):
             return HealthStatus(
                 component=name,
                 status=result["status"],
                 latency_ms=result.get("latency_ms"),
                 error=result.get("error"),
             )
-        return HealthStatus(component=name, status="unhealthy", error="Health check returned no status")
+        return HealthStatus(
+            component=name, status="unhealthy", error="Health check returned no status"
+        )
     except Exception as exc:
         return HealthStatus(component=name, status="unhealthy", error=str(exc))
 
@@ -150,9 +157,7 @@ async def _check_llm_health(provider: str) -> dict[str, object]:
     """Check LLM provider health (placeholder — actual check needs API key)."""
     settings = get_settings()
 
-    api_key = (
-        settings.deepseek_api_key if provider == "DeepSeek-V4" else settings.doubao_api_key
-    )
+    api_key = settings.deepseek_api_key if provider == "DeepSeek-V4" else settings.doubao_api_key
     if not api_key:
         return {"status": "degraded", "latency_ms": None, "error": "API key not configured"}
 

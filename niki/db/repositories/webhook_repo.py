@@ -76,21 +76,15 @@ class WebhookRepository(ABC):
         """
 
     @abstractmethod
-    async def get_subscription(
-        self, subscription_id: str
-    ) -> dict[str, Any] | None:
+    async def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
         """Lookup by id. Returns the row with `secret` populated."""
 
     @abstractmethod
-    async def list_subscriptions_for_owner(
-        self, owner_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_subscriptions_for_owner(self, owner_id: str) -> list[dict[str, Any]]:
         """List every subscription belonging to `owner_id`, newest first."""
 
     @abstractmethod
-    async def list_active_subscriptions_for_event(
-        self, event_type: str
-    ) -> list[dict[str, Any]]:
+    async def list_active_subscriptions_for_event(self, event_type: str) -> list[dict[str, Any]]:
         """List every active subscription whose `event_types`
         includes `event_type`. Used by `WebhookDispatcher.dispatch`.
         """
@@ -241,30 +235,22 @@ class InMemoryWebhookRepository(WebhookRepository):
             self._subs[sub_id] = row
             return deepcopy(row)
 
-    async def get_subscription(
-        self, subscription_id: str
-    ) -> dict[str, Any] | None:
+    async def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._subs.get(subscription_id)
             return deepcopy(row) if row else None
 
-    async def list_subscriptions_for_owner(
-        self, owner_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_subscriptions_for_owner(self, owner_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            rows = [
-                deepcopy(r) for r in self._subs.values()
-                if r["owner_id"] == owner_id
-            ]
+            rows = [deepcopy(r) for r in self._subs.values() if r["owner_id"] == owner_id]
         rows.sort(key=lambda r: r["created_at"], reverse=True)
         return rows
 
-    async def list_active_subscriptions_for_event(
-        self, event_type: str
-    ) -> list[dict[str, Any]]:
+    async def list_active_subscriptions_for_event(self, event_type: str) -> list[dict[str, Any]]:
         with self._lock:
             return [
-                deepcopy(r) for r in self._subs.values()
+                deepcopy(r)
+                for r in self._subs.values()
                 if r["is_active"] and event_type in r["event_types"]
             ]
 
@@ -326,9 +312,7 @@ class InMemoryWebhookRepository(WebhookRepository):
             if delivered:
                 row["failure_count"] = 0
                 return
-            row["failure_count"] = min(
-                row["failure_count"] + 1, MAX_CONSECUTIVE_FAILURES
-            )
+            row["failure_count"] = min(row["failure_count"] + 1, MAX_CONSECUTIVE_FAILURES)
             if row["failure_count"] >= MAX_CONSECUTIVE_FAILURES:
                 row["is_active"] = False
                 row["disabled_at"] = _now()
@@ -401,7 +385,8 @@ class InMemoryWebhookRepository(WebhookRepository):
             if sub is None or sub["owner_id"] != owner_id:
                 return None
             rows = [
-                deepcopy(r) for r in self._delivs.values()
+                deepcopy(r)
+                for r in self._delivs.values()
                 if r["subscription_id"] == subscription_id
             ]
         rows.sort(key=lambda r: r["created_at"], reverse=True)
@@ -445,20 +430,14 @@ class PostgresWebhookRepository(WebhookRepository):
         await self._session.flush()
         return self._sub_to_dict(sub)
 
-    async def get_subscription(
-        self, subscription_id: str
-    ) -> dict[str, Any] | None:
+    async def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
         result = await self._session.execute(
-            select(WebhookSubscription).where(
-                WebhookSubscription.id == subscription_id
-            )
+            select(WebhookSubscription).where(WebhookSubscription.id == subscription_id)
         )
         sub = result.scalar_one_or_none()
         return self._sub_to_dict(sub) if sub else None
 
-    async def list_subscriptions_for_owner(
-        self, owner_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_subscriptions_for_owner(self, owner_id: str) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(WebhookSubscription)
             .where(WebhookSubscription.owner_id == owner_id)
@@ -466,16 +445,12 @@ class PostgresWebhookRepository(WebhookRepository):
         )
         return [self._sub_to_dict(s) for s in result.scalars().all()]
 
-    async def list_active_subscriptions_for_event(
-        self, event_type: str
-    ) -> list[dict[str, Any]]:
+    async def list_active_subscriptions_for_event(self, event_type: str) -> list[dict[str, Any]]:
         # The JSONB `event_types` column doesn't have a GIN index
         # in this iteration; for v1 we filter in Python. A future
         # ticket can add the index if this becomes a hotspot.
         result = await self._session.execute(
-            select(WebhookSubscription).where(
-                WebhookSubscription.is_active.is_(True)
-            )
+            select(WebhookSubscription).where(WebhookSubscription.is_active.is_(True))
         )
         return [
             self._sub_to_dict(s)
@@ -535,16 +510,14 @@ class PostgresWebhookRepository(WebhookRepository):
         # desirable side effect — a malicious owner can't abuse
         # this path because no PII flows through it.
         result = await self._session.execute(
-            select(WebhookSubscription).where(
-                WebhookSubscription.id == subscription_id
-            )
+            select(WebhookSubscription).where(WebhookSubscription.id == subscription_id)
         )
         sub = result.scalar_one_or_none()
         if sub is None:
             return
         now = _now()
-        new_failure = 0 if delivered else min(
-            (sub.failure_count or 0) + 1, MAX_CONSECUTIVE_FAILURES
+        new_failure = (
+            0 if delivered else min((sub.failure_count or 0) + 1, MAX_CONSECUTIVE_FAILURES)
         )
         new_active = sub.is_active
         new_disabled_at = sub.disabled_at
@@ -578,20 +551,25 @@ class PostgresWebhookRepository(WebhookRepository):
         # Idempotency via `ON CONFLICT DO NOTHING` on the
         # (event_id, subscription_id) UNIQUE constraint. The
         # caller treats `None` as "already existed".
-        stmt = pg_insert(WebhookDelivery).values(
-            id=str(uuid4()),
-            subscription_id=subscription_id,
-            event_id=event_id,
-            event_type=event_type,
-            payload=dict(payload or {}),
-            target_url=target_url,
-            attempt_count=0,
-        ).on_conflict_do_nothing(
-            index_elements=[
-                WebhookDelivery.event_id,
-                WebhookDelivery.subscription_id,
-            ],
-        ).returning(WebhookDelivery)
+        stmt = (
+            pg_insert(WebhookDelivery)
+            .values(
+                id=str(uuid4()),
+                subscription_id=subscription_id,
+                event_id=event_id,
+                event_type=event_type,
+                payload=dict(payload or {}),
+                target_url=target_url,
+                attempt_count=0,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    WebhookDelivery.event_id,
+                    WebhookDelivery.subscription_id,
+                ],
+            )
+            .returning(WebhookDelivery)
+        )
         result = await self._session.execute(stmt)
         row = result.scalar_one_or_none()
         if row is None:
@@ -640,16 +618,12 @@ class PostgresWebhookRepository(WebhookRepository):
 
     # ---- helpers ----
 
-    async def _owned(
-        self, subscription_id: str, owner_id: str
-    ) -> WebhookSubscription | None:
+    async def _owned(self, subscription_id: str, owner_id: str) -> WebhookSubscription | None:
         """Fetch a subscription, asserting owner. Used by every
         write path so a cross-owner request collapses to None
         without an extra query."""
         result = await self._session.execute(
-            select(WebhookSubscription).where(
-                WebhookSubscription.id == subscription_id
-            )
+            select(WebhookSubscription).where(WebhookSubscription.id == subscription_id)
         )
         sub = result.scalar_one_or_none()
         if sub is None or sub.owner_id != owner_id:

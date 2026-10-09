@@ -39,14 +39,10 @@ class AccountVerification(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    __table_args__ = (
-        UniqueConstraint("parent_id", "step_name", name="uq_verification_step"),
-    )
+    __table_args__ = (UniqueConstraint("parent_id", "step_name", name="uq_verification_step"),)
 
     def __repr__(self) -> str:
         return (

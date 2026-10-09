@@ -75,33 +75,15 @@ class AuditLog(Base):
 
     __tablename__ = "audit_logs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
-    event_type: Mapped[str] = mapped_column(
-        String(64), nullable=False, index=True
-    )
-    severity: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=SEVERITY_INFO
-    )
-    actor_parent_id: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True, index=True
-    )
-    target_parent_id: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True
-    )
-    target_child_id: Mapped[Optional[str]] = mapped_column(
-        String(36), nullable=True
-    )
-    endpoint: Mapped[Optional[str]] = mapped_column(
-        String(256), nullable=True
-    )
-    method: Mapped[Optional[str]] = mapped_column(
-        String(8), nullable=True
-    )
-    reason: Mapped[str] = mapped_column(
-        String(512), nullable=False, default=""
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default=SEVERITY_INFO)
+    actor_parent_id: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
+    target_parent_id: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    target_child_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    endpoint: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    method: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    reason: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     # `metadata` is reserved on the SQLAlchemy declarative class, so
     # the Python attribute is `event_metadata` while the DB column
     # keeps the name the ticket specifies.
@@ -111,9 +93,7 @@ class AuditLog(Base):
         nullable=False,
         default=dict,
     )
-    client_ip: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True
-    )
+    client_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

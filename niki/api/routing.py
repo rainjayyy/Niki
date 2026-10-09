@@ -66,9 +66,7 @@ def _intent_result_to_dict(result) -> dict:
             {
                 "category": i.category.value,
                 "confidence": i.confidence,
-                "tutoring_subtype": (
-                    i.tutoring_subtype.value if i.tutoring_subtype else None
-                ),
+                "tutoring_subtype": (i.tutoring_subtype.value if i.tutoring_subtype else None),
             }
             for i in result.intents
         ],
@@ -84,9 +82,7 @@ def _routing_decision_to_dict(decision) -> dict:
         "all_agents": [a.value for a in decision.all_agents],
         "rationale": decision.rationale,
         "intent_result": (
-            _intent_result_to_dict(decision.intent_result)
-            if decision.intent_result
-            else None
+            _intent_result_to_dict(decision.intent_result) if decision.intent_result else None
         ),
     }
 

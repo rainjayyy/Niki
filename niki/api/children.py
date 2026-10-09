@@ -17,17 +17,26 @@ from __future__ import annotations
 
 from typing import Optional
 
+import structlog
+
 from fastapi import APIRouter
 from fastapi import Depends, HTTPException, Request
 
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 from niki.services.auth_audit import get_auth_audit_logger
-from niki.services.child_registry import get_child_registry
 
-router = APIRouter(prefix="/children", tags=[
-    {"name": "children", "description": "Children API endpoints (BE-STOR-001-ext-E)."}
-])
+logger = structlog.get_logger(__name__)
+
+from niki.services.child_registry import (
+    get_child_registry,
+    persist_child_to_postgres,
+)
+
+router = APIRouter(
+    prefix="/children",
+    tags=[{"name": "children", "description": "Children API endpoints (BE-STOR-001-ext-E)."}],
+)
 
 
 async def _audit_parent_mismatch(
@@ -38,16 +47,13 @@ async def _audit_parent_mismatch(
 ) -> None:
     """Emit a `parent_mismatch` audit event for the children admin routes."""
     endpoint = f"{request.method} /api/v1/children/{endpoint_suffix}"
-    client_ip: Optional[str] = (
-        request.client.host if request.client else None
-    )
+    client_ip: Optional[str] = request.client.host if request.client else None
     await get_auth_audit_logger().log_violation(
         "parent_mismatch",
         actor_parent_id=parent.id,
         target_parent_id=target_parent_id,
         reason=(
-            f"Parent {parent.id!r} tried to act as "
-            f"{target_parent_id!r} via children admin endpoint"
+            f"Parent {parent.id!r} tried to act as {target_parent_id!r} via children admin endpoint"
         ),
         endpoint=endpoint,
         method=request.method,
@@ -83,9 +89,7 @@ async def register_child(
     parent.
     """
     if parent.id != parent_id:
-        await _audit_parent_mismatch(
-            request, parent, parent_id, f"register/{parent_id}"
-        )
+        await _audit_parent_mismatch(request, parent, parent_id, f"register/{parent_id}")
         raise HTTPException(
             status_code=403,
             detail={
@@ -113,6 +117,10 @@ async def register_child(
             },
         )
     registry.register(child_id, parent_id, name=name)
+    try:
+        await persist_child_to_postgres(child_id, parent_id, name=name)
+    except Exception as exc:
+        logger.warning("children.persist_failed", error=str(exc), child_id=child_id)
     return {
         "child_id": child_id,
         "parent_id": parent_id,
@@ -133,9 +141,7 @@ async def list_children(
 ) -> dict:
     """List child_ids owned by the calling parent."""
     if parent.id != parent_id:
-        await _audit_parent_mismatch(
-            request, parent, parent_id, f"list/{parent_id}"
-        )
+        await _audit_parent_mismatch(request, parent, parent_id, f"list/{parent_id}")
         raise HTTPException(
             status_code=403,
             detail={
@@ -144,4 +150,31 @@ async def list_children(
             },
         )
     child_ids = get_child_registry().list_children_of(parent_id)
-    return {"parent_id": parent_id, "count": len(child_ids), "child_ids": child_ids}
+    children: list[dict[str, str]] = [{"id": cid, "name": ""} for cid in child_ids]
+    if child_ids:
+        try:
+            from sqlalchemy import text
+
+            from niki.infrastructure.postgres import PostgresClient
+
+            async for session in PostgresClient.get_session():
+                rows = (
+                    (
+                        await session.execute(
+                            text("SELECT id, name FROM children WHERE parent_id = :pid"),
+                            {"pid": parent_id},
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+                by_id = {row["id"]: row["name"] for row in rows}
+                children = [{"id": cid, "name": by_id.get(cid, "")} for cid in child_ids]
+        except Exception:
+            pass
+    return {
+        "parent_id": parent_id,
+        "count": len(child_ids),
+        "child_ids": child_ids,
+        "children": children,
+    }

@@ -21,9 +21,10 @@ from niki.tools import ToolAccessChecker, ToolMatrix, ToolName
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/tools", tags=[
-    {"name": "tools", "description": "Tool permission API endpoints — PRD #54."}
-])
+router = APIRouter(
+    prefix="/tools",
+    tags=[{"name": "tools", "description": "Tool permission API endpoints — PRD #54."}],
+)
 
 # Module-level singleton
 _matrix = ToolMatrix()
@@ -35,7 +36,9 @@ _checker = ToolAccessChecker(_matrix)
     summary="Return the full tool permission matrix",
     description="Return the full tool permission matrix.",
 )
-async def get_matrix(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_matrix(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Return the full tool permission matrix."""
     return {
         "matrix": _matrix.to_dict(),
@@ -48,8 +51,10 @@ async def get_matrix(parent: ParentAccount = Depends(get_current_parent),) -> di
     summary="List all tools an agent can use",
     description="List all tools an agent can use.",
 )
-async def get_allowed_tools(agent: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_allowed_tools(
+    agent: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """List all tools an agent can use."""
     tools = _matrix.get_allowed_tools(agent)
     return {
@@ -67,8 +72,10 @@ async def get_allowed_tools(agent: str,
             Request body: {"agent": "tutoring_agent", "tool": "search_api"}
             """,
 )
-async def check_access(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def check_access(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Check whether an agent can use a tool.
 
     Request body: {"agent": "tutoring_agent", "tool": "search_api"}
@@ -94,8 +101,10 @@ async def check_access(payload: dict,
     summary="Revoke all access to a tool (admin)",
     description="Revoke all access to a tool (admin).",
 )
-async def revoke_tool(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def revoke_tool(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Revoke all access to a tool (admin)."""
     tool_str = payload.get("tool", "")
     try:
@@ -113,8 +122,10 @@ async def revoke_tool(payload: dict,
     summary="Grant a tool to one or more agents (admin)",
     description="Grant a tool to one or more agents (admin).",
 )
-async def grant_tool(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def grant_tool(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Grant a tool to one or more agents (admin)."""
     tool_str = payload.get("tool", "")
     agents = payload.get("agents", [])
@@ -136,7 +147,9 @@ async def grant_tool(payload: dict,
     summary="Get the access-check audit log (PRD: 降级不降安全)",
     description="Get the access-check audit log (PRD: 降级不降安全).",
 )
-async def get_audit(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_audit(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get the access-check audit log (PRD: 降级不降安全)."""
     return {
         "total_checks": len(_checker.checks),

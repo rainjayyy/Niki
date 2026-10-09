@@ -110,3 +110,9 @@ __all__ = [
     "PhoneChangeStatus",
     "VALID_PHONE_CHANGE_STATUSES",
 ]
+from niki.db.models.letter import ParentLetter
+from niki.db.models.child_data import (
+    ChildAchievement,
+    ChatSession,
+    WeeklyReportHistory,
+)

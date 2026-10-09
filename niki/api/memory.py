@@ -43,15 +43,15 @@ from niki.memory import (
     MemorySource,
     NightlyPipeline,
     RelationType,
-    ShortTermMemory,
+)
+from niki.memory.short_term import get_short_term_memory
+
+router = APIRouter(
+    prefix="/memory",
+    tags=[{"name": "memory", "description": "Memory system API endpoints — PRD #45-#51."}],
 )
 
-router = APIRouter(prefix="/memory", tags=[
-    {"name": "memory", "description": "Memory system API endpoints — PRD #45-#51."}
-])
-
 # Module-level singletons
-_short_term = ShortTermMemory()
 _long_term = LongTermMemory()
 _graph = CognitiveGraph()
 _pipeline = NightlyPipeline(_long_term, _graph)
@@ -84,10 +84,7 @@ def _enforce_batch_cap(
                     "received": len(payload),
                     "field": field_name,
                 },
-                fallback_message=(
-                    f"batch {field_name} accepts at most "
-                    f"{BATCH_MAX_ITEMS} items"
-                ),
+                fallback_message=(f"batch {field_name} accepts at most {BATCH_MAX_ITEMS} items"),
             ),
         )
     return payload
@@ -108,10 +105,12 @@ def _turn_to_dict(turn: ConversationTurn) -> dict[str, Any]:
     summary="Get recent conversation turns for a session",
     description="Get recent conversation turns for a session.",
 )
-async def get_recent_turns(session_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_recent_turns(
+    session_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get recent conversation turns for a session."""
-    turns = await _short_term.get_recent(session_id)
+    turns = await get_short_term_memory().get_recent(session_id)
     return {
         "session_id": session_id,
         "count": len(turns),
@@ -124,8 +123,11 @@ async def get_recent_turns(session_id: str,
     summary="Append a turn to the session's recent memory",
     description="Append a turn to the session's recent memory.",
 )
-async def append_turn(session_id: str, payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def append_turn(
+    session_id: str,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Append a turn to the session's recent memory."""
     turn = ConversationTurn(
         role=payload.get("role", "child"),
@@ -133,7 +135,7 @@ async def append_turn(session_id: str, payload: dict,
         intent=payload.get("intent"),
         metadata=payload.get("metadata", {}),
     )
-    turns = await _short_term.append(session_id, turn)
+    turns = await get_short_term_memory().append(session_id, turn)
     return {
         "session_id": session_id,
         "count": len(turns),
@@ -146,10 +148,12 @@ async def append_turn(session_id: str, payload: dict,
     summary="Clear a session's recent memory",
     description="Clear a session's recent memory.",
 )
-async def clear_session(session_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def clear_session(
+    session_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Clear a session's recent memory."""
-    await _short_term.clear(session_id)
+    await get_short_term_memory().clear(session_id)
     return {"session_id": session_id, "cleared": True}
 
 
@@ -158,8 +162,10 @@ async def clear_session(session_id: str,
     summary="Add a memory record to long-term storage",
     description="Add a memory record to long-term storage.",
 )
-async def add_long_term_record(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_long_term_record(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add a memory record to long-term storage."""
     record = MemoryRecord(
         id=payload.get("id", ""),
@@ -172,9 +178,7 @@ async def add_long_term_record(payload: dict,
         metadata=payload.get("metadata", {}),
     )
     if not record.id:
-        record.id = LongTermMemory.make_id(
-            record.child_id, record.content, record.source.value
-        )
+        record.id = LongTermMemory.make_id(record.child_id, record.content, record.source.value)
     record_id = await _long_term.add(record)
     return {"id": record_id, "stored": True}
 
@@ -184,8 +188,10 @@ async def add_long_term_record(payload: dict,
     summary="Semantic search over long-term memory",
     description="Semantic search over long-term memory.",
 )
-async def search_long_term(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def search_long_term(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Semantic search over long-term memory."""
     records = await _long_term.search(
         query=payload["query"],
@@ -251,8 +257,10 @@ async def list_entities(
     summary="Add an entity (with automatic alignment/dedup)",
     description="Add an entity (with automatic alignment/dedup).",
 )
-async def add_entity(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_entity(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add an entity (with automatic alignment/dedup)."""
     entity = _hook._aligner.align(
         EntityNode(
@@ -269,8 +277,10 @@ async def add_entity(payload: dict,
     summary="Add a relation between two entities",
     description="Add a relation between two entities.",
 )
-async def add_relation(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_relation(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add a relation between two entities."""
     edge = _graph.add_relation(
         source=payload["source"],
@@ -302,8 +312,11 @@ async def add_relation(payload: dict,
                  "skipped":  [{"name": "...", "reason": "..."}, ...]}
             """,
 )
-async def add_entities_batch(request: Request, payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_entities_batch(
+    request: Request,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add many entities in a single round trip (BE-API-005).
 
     Replaces the 5+ sequential POSTs the parent dashboard used to
@@ -321,7 +334,9 @@ async def add_entities_batch(request: Request, payload: dict,
          "skipped":  [{"name": "...", "reason": "..."}, ...]}
     """
     items = _enforce_batch_cap(
-        request, payload.get("items"), field_name="items",
+        request,
+        payload.get("items"),
+        field_name="items",
     )
     return _graph.add_entities_batch(items)
 
@@ -340,8 +355,11 @@ async def add_entities_batch(request: Request, payload: dict,
                  "skipped":  [{"source": "...", "reason": "..."}, ...]}
             """,
 )
-async def add_relations_batch(request: Request, payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_relations_batch(
+    request: Request,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add many relations in a single round trip (BE-API-005).
 
     Body:
@@ -352,7 +370,9 @@ async def add_relations_batch(request: Request, payload: dict,
          "skipped":  [{"source": "...", "reason": "..."}, ...]}
     """
     items = _enforce_batch_cap(
-        request, payload.get("items"), field_name="items",
+        request,
+        payload.get("items"),
+        field_name="items",
     )
     return _graph.add_relations_batch(items)
 
@@ -362,7 +382,9 @@ async def add_relations_batch(request: Request, payload: dict,
     summary="Apply PRD #50 time decay to all relations",
     description="Apply PRD #50 time decay to all relations.",
 )
-async def apply_time_decay(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def apply_time_decay(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Apply PRD #50 time decay to all relations."""
     count = _graph.apply_decay()
     return {"decayed_edges": count}
@@ -373,8 +395,10 @@ async def apply_time_decay(parent: ParentAccount = Depends(get_current_parent),)
     summary="Run the daytime memory hook on a child message",
     description="Run the daytime memory hook on a child message.",
 )
-async def hook_process(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def hook_process(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Run the daytime memory hook on a child message."""
     candidates = await _hook.process(
         child_id=payload["child_id"],
@@ -399,7 +423,9 @@ async def hook_process(payload: dict,
     summary="Trigger a pipeline run (for testing/admin)",
     description="Trigger a pipeline run (for testing/admin).",
 )
-async def run_pipeline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def run_pipeline(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Trigger a pipeline run (for testing/admin)."""
     run = await _pipeline.run()
     return run.to_dict()
@@ -410,7 +436,9 @@ async def run_pipeline(parent: ParentAccount = Depends(get_current_parent),) -> 
     summary="Get pipeline health status (PRD #47)",
     description="Get pipeline health status (PRD #47).",
 )
-async def pipeline_health(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def pipeline_health(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get pipeline health status (PRD #47)."""
     return _pipeline.health_check()
 
@@ -420,6 +448,8 @@ async def pipeline_health(parent: ParentAccount = Depends(get_current_parent),) 
     summary="Get the dead-letter queue contents (PRD #47)",
     description="Get the dead-letter queue contents (PRD #47).",
 )
-async def pipeline_dead_letter(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def pipeline_dead_letter(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get the dead-letter queue contents (PRD #47)."""
     return {"items": _pipeline.get_dead_letter()}

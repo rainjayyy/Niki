@@ -63,9 +63,12 @@ from niki.services.push_delivery import (
 )
 
 
-router = APIRouter(prefix="/push", tags=[
-    {"name": "push", "description": "Push notification registration endpoints (BE-PUSH-001)."}
-])
+router = APIRouter(
+    prefix="/push",
+    tags=[
+        {"name": "push", "description": "Push notification registration endpoints (BE-PUSH-001)."}
+    ],
+)
 
 
 # Token format is opaque — vendor-specific. Just enforce a sane
@@ -114,9 +117,7 @@ def _bad_request(
     )
 
 
-def _validate_register_payload(
-    request: Request, payload: dict
-) -> tuple[str, str, str, str]:
+def _validate_register_payload(request: Request, payload: dict) -> tuple[str, str, str, str]:
     if not isinstance(payload, dict):
         raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
 
@@ -169,9 +170,7 @@ async def register(
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
     """Register (or re-register) the calling parent's device."""
-    device_id, channel, push_token, platform = _validate_register_payload(
-        request, payload
-    )
+    device_id, channel, push_token, platform = _validate_register_payload(request, payload)
     repo = get_push_device_repository()
     row = await repo.upsert(
         parent_id=parent.id,
@@ -265,9 +264,7 @@ async def list_devices(
     }
 
 
-def _validate_quiet_hour(
-    request: Request, value: Any, field: str
-) -> int | None:
+def _validate_quiet_hour(request: Request, value: Any, field: str) -> int | None:
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool):
@@ -288,9 +285,7 @@ def _validate_quiet_hour(
 def _validate_channels(request: Request, value: Any) -> list[str]:
     if value is None:
         return []
-    if not isinstance(value, list) or not all(
-        isinstance(c, str) for c in value
-    ):
+    if not isinstance(value, list) or not all(isinstance(c, str) for c in value):
         raise _bad_request(
             request,
             "INVALID_ENABLED_CHANNELS",
@@ -320,9 +315,7 @@ def _validate_severities(request: Request, value: Any) -> list[str]:
     """
     if value is None:
         return []
-    if not isinstance(value, list) or not all(
-        isinstance(s, str) for s in value
-    ):
+    if not isinstance(value, list) or not all(isinstance(s, str) for s in value):
         raise _bad_request(
             request,
             "INVALID_SEVERITY",
@@ -356,9 +349,7 @@ def _validate_event_types(request: Request, value: Any) -> list[str]:
     """
     if value is None:
         return []
-    if not isinstance(value, list) or not all(
-        isinstance(e, str) for e in value
-    ):
+    if not isinstance(value, list) or not all(isinstance(e, str) for e in value):
         raise _bad_request(
             request,
             "INVALID_EVENT_TYPE",
@@ -575,32 +566,19 @@ async def update_prefs(
     """
     if not isinstance(payload, dict):
         raise _bad_request(request, "BAD_REQUEST", "body must be a JSON object")
-    quiet_start = _validate_quiet_hour(
-        request, payload.get("quiet_start"), "quiet_start"
-    )
-    quiet_end = _validate_quiet_hour(
-        request, payload.get("quiet_end"), "quiet_end"
-    )
+    quiet_start = _validate_quiet_hour(request, payload.get("quiet_start"), "quiet_start")
+    quiet_end = _validate_quiet_hour(request, payload.get("quiet_end"), "quiet_end")
     # BE-PUSH-004: refuse equal quiet hours when both are set
     # (an empty window would otherwise silently disable quiet
     # hours without the caller noticing).
-    if (
-        quiet_start is not None
-        and quiet_end is not None
-        and quiet_start == quiet_end
-    ):
+    if quiet_start is not None and quiet_end is not None and quiet_start == quiet_end:
         raise _bad_request(
             request,
             "INVALID_QUIET_HOUR",
             "quiet_start and quiet_end must differ",
         )
-    if (
-        "enabled_channels" in payload
-        and payload["enabled_channels"] is not None
-    ):
-        enabled_channels = _validate_channels(
-            request, payload["enabled_channels"]
-        )
+    if "enabled_channels" in payload and payload["enabled_channels"] is not None:
+        enabled_channels = _validate_channels(request, payload["enabled_channels"])
     else:
         enabled_channels = None
     high_risk_only = payload.get("high_risk_only")
@@ -627,13 +605,8 @@ async def update_prefs(
         severities = _validate_severities(request, payload["severities"])
     else:
         severities = None
-    if (
-        "muted_event_types" in payload
-        and payload["muted_event_types"] is not None
-    ):
-        muted_event_types = _validate_event_types(
-            request, payload["muted_event_types"]
-        )
+    if "muted_event_types" in payload and payload["muted_event_types"] is not None:
+        muted_event_types = _validate_event_types(request, payload["muted_event_types"])
     else:
         muted_event_types = None
 
@@ -651,6 +624,7 @@ async def update_prefs(
     )
     row.pop("parent_id", None)
     return row
+
 
 # BE-DEV-002: device list + per-device unregister endpoints
 @router.get(
@@ -676,6 +650,7 @@ async def list_my_devices(
     "我的设备" panel.
     """
     from niki.db.repositories import get_push_device_repository
+
     repo = get_push_device_repository()
     devices = await repo.list_for_parent(parent.id)
     safe = [
@@ -712,6 +687,7 @@ async def unregister_my_device(
     unregister a victim's device.
     """
     from niki.db.repositories import get_push_device_repository
+
     repo = get_push_device_repository()
     # delete_by_device_id already filters by parent_id; no
     # separate method needed.
@@ -739,6 +715,7 @@ async def list_active_devices(
     panel and to expose a "踢下线" button per device.
     """
     from niki.db.repositories import get_push_device_repository
+
     repo = get_push_device_repository()
     devices = await repo.list_active_for_parent(parent.id)
     safe = [
@@ -755,7 +732,7 @@ async def list_active_devices(
 
 @router.post(
     "/kick/{device_id}",
-    summary="Disable a single device (BE-DEV-003: \"踢下线\" flow)",
+    summary='Disable a single device (BE-DEV-003: "踢下线" flow)',
     description="""
             Disable a single device (BE-DEV-003: "踢下线" flow).
             
@@ -777,6 +754,7 @@ async def kick_device(
     parent (the repo's set_enabled filters by parent_id).
     """
     from niki.db.repositories import get_push_device_repository
+
     repo = get_push_device_repository()
     updated = await repo.set_enabled(parent.id, device_id, False)
     return {"kicked": updated}
@@ -802,6 +780,7 @@ async def re_enable_device(
     scoping as /kick.
     """
     from niki.db.repositories import get_push_device_repository
+
     repo = get_push_device_repository()
     updated = await repo.set_enabled(parent.id, device_id, True)
     return {"enabled": updated}
@@ -925,10 +904,7 @@ def _push_device_not_found(request: Request) -> JSONResponse:
             "description": "Dry-run delivery accepted.",
             "headers": {
                 "X-Push-Test-Mode": {
-                    "description": (
-                        "Always `dry-run` until BE-PUSH-002 wires real"
-                        " vendor SDKs."
-                    ),
+                    "description": ("Always `dry-run` until BE-PUSH-002 wires real vendor SDKs."),
                     "schema": {"type": "string"},
                 },
             },
@@ -1015,9 +991,7 @@ async def send_test_push(
     # (BE-COMP-004) so support tooling can correlate a parent's
     # "I got pinged at 10:42" complaint with our test-fire record.
     audit_svc = get_audit_log_service()
-    client_ip = (
-        request.client.host if request.client else None
-    )
+    client_ip = request.client.host if request.client else None
     # We deliberately do NOT include `title` / `body` in metadata:
     # they're user-controlled text and AuditLogService scrubs
     # PII-shaped keys anyway, but skipping them keeps the audit

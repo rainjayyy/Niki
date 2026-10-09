@@ -143,13 +143,10 @@ def error_response(
     if extra:
         inner.update(extra)
 
-    request_id = (
-        request.headers.get("X-Request-ID")
-        if request is not None
-        else None
-    )
+    request_id = request.headers.get("X-Request-ID") if request is not None else None
     if not request_id:
         import uuid as _uuid
+
         request_id = str(_uuid.uuid4())
     return {
         "success": False,

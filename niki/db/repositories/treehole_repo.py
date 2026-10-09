@@ -114,35 +114,23 @@ class InMemoryTreeholeRepository(TreeholeRepository):
 
     async def list_all(self) -> list[dict[str, Any]]:
         now = datetime.now(timezone.utc)
-        return [
-            dict(r) for r in self._rows.values() if r["expires_at"] > now
-        ]
+        return [dict(r) for r in self._rows.values() if r["expires_at"] > now]
 
     async def delete_expired(self, now: datetime | None = None) -> int:
         now = now or datetime.now(timezone.utc)
-        expired = [
-            k for k, r in self._rows.items() if r["expires_at"] <= now
-        ]
+        expired = [k for k, r in self._rows.items() if r["expires_at"] <= now]
         for k in expired:
             self._rows.pop(k, None)
         if expired:
-            logger.info(
-                "treehole_repo.purged_expired", count=len(expired)
-            )
+            logger.info("treehole_repo.purged_expired", count=len(expired))
         return len(expired)
 
     async def delete_all_for_child(self, child_id: str) -> int:
-        keys = [
-            k
-            for k, r in self._rows.items()
-            if r["child_id"] == child_id
-        ]
+        keys = [k for k, r in self._rows.items() if r["child_id"] == child_id]
         for k in keys:
             self._rows.pop(k, None)
         if keys:
-            logger.info(
-                "treehole_repo.purged_for_child", child_id=child_id, count=len(keys)
-            )
+            logger.info("treehole_repo.purged_for_child", child_id=child_id, count=len(keys))
         return len(keys)
 
     async def delete_all(self) -> int:
@@ -205,9 +193,7 @@ class PostgresTreeholeRepository(TreeholeRepository):
     async def delete_expired(self, now: datetime | None = None) -> int:
         now = now or datetime.now(timezone.utc)
         result = await self._session.execute(
-            delete(TreeholeEngagement).where(
-                TreeholeEngagement.expires_at <= now
-            )
+            delete(TreeholeEngagement).where(TreeholeEngagement.expires_at <= now)
         )
         count = result.rowcount or 0
         if count:
@@ -216,15 +202,11 @@ class PostgresTreeholeRepository(TreeholeRepository):
 
     async def delete_all_for_child(self, child_id: str) -> int:
         result = await self._session.execute(
-            delete(TreeholeEngagement).where(
-                TreeholeEngagement.child_id == child_id
-            )
+            delete(TreeholeEngagement).where(TreeholeEngagement.child_id == child_id)
         )
         count = result.rowcount or 0
         if count:
-            logger.info(
-                "treehole_repo.purged_for_child", child_id=child_id, count=count
-            )
+            logger.info("treehole_repo.purged_for_child", child_id=child_id, count=count)
         return count
 
     async def delete_all(self) -> int:

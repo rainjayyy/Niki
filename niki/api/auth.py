@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import structlog
+
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -56,6 +58,7 @@ from niki.auth.token_blacklist import (
     get_blacklist,
 )
 from niki.config.settings import get_settings
+from niki.db.repositories.account_repo import persist_parent_account_to_postgres
 from niki.db.models.audit_log import (
     EVENT_CONSENT_SIGNED,
     EVENT_LOGIN_SUCCESS,
@@ -65,6 +68,8 @@ from niki.middleware.rate_limit import limiter
 from niki.metrics import get_registry
 from niki.services.audit_log import get_audit_log_service
 from niki.services.two_factor import get_two_factor_service
+
+logger = structlog.get_logger(__name__)
 
 from niki.api._i18n import error_response, localized_error_response, resolve_lang
 from niki.i18n.translator import get_translator
@@ -118,6 +123,7 @@ _lifecycle = AccountLifecycle()
 def _request_id(request: Request) -> str:
     """Pull the X-Request-ID header or mint a fresh UUIDv4."""
     import uuid as _uuid
+
     return request.headers.get("X-Request-ID") or str(_uuid.uuid4())
 
 
@@ -184,9 +190,7 @@ _AUTH_KEY_BY_CODE: dict[str, str] = {
     "PHONE_CHANGE_CODE_EXPIRED": "auth.phone_change_code_expired",
     "PHONE_CHANGE_NOT_FOUND": "auth.phone_change_not_found",
     "PHONE_CHANGE_ALREADY_PENDING": "auth.phone_change_already_pending",
-    "PHONE_CHANGE_IN_COOLING_PERIOD": (
-        "auth.phone_change_in_cooling_period"
-    ),
+    "PHONE_CHANGE_IN_COOLING_PERIOD": ("auth.phone_change_in_cooling_period"),
     "PHONE_CHANGE_SAME_NUMBER": "auth.phone_change_same_number",
     "PHONE_CHANGE_CANNOT_CANCEL": "auth.phone_change_cannot_cancel",
     "EMAIL_CHANGE_INVALID_FORMAT": "auth.email_change_invalid_format",
@@ -254,9 +258,7 @@ _EMAIL_CHANGE_STATUS: dict[str, int] = {
 }
 
 
-def _raise_change_error(
-    request: Request, exc: PhoneChangeError | EmailChangeError
-) -> JSONResponse:
+def _raise_change_error(request: Request, exc: PhoneChangeError | EmailChangeError) -> JSONResponse:
     """Map a phone/email change service exception to a §6.3 JSONResponse.
 
     Centralised so endpoints don't repeat the same boilerplate.
@@ -305,6 +307,16 @@ async def signup_start(request: Request, payload: dict) -> dict:
             phone=payload["phone"],
             email=payload.get("email"),
         )
+        try:
+            await persist_parent_account_to_postgres(
+                parent_id=account.id,
+                name=payload["name"],
+                id_number=payload["id_number"],
+                phone=payload["phone"],
+                email=payload.get("email"),
+            )
+        except Exception as exc:
+            logger.warning("auth.parent_persist_failed", error=str(exc))
     except AuthError as exc:
         return JSONResponse(status_code=400, content=_error_response(request, exc))
     except KeyError as exc:
@@ -314,10 +326,7 @@ async def signup_start(request: Request, payload: dict) -> dict:
         "account": account.to_dict(),
         "progress": {
             "parent_id": progress.parent_id,
-            "steps": [
-                {"name": s.name, "completed": s.completed}
-                for s in progress.steps
-            ],
+            "steps": [{"name": s.name, "completed": s.completed} for s in progress.steps],
         },
     }
 
@@ -400,13 +409,9 @@ async def signup_consent(request: Request, payload: dict) -> dict:
         method="POST",
         reason="Parent e-signed the consent document(s)",
         metadata={
-            "signed_child_consent": bool(
-                payload.get("sign_child_consent", True)
-            ),
+            "signed_child_consent": bool(payload.get("sign_child_consent", True)),
             "account_status": (
-                account.status.value
-                if hasattr(account.status, "value")
-                else str(account.status)
+                account.status.value if hasattr(account.status, "value") else str(account.status)
             ),
         },
         client_ip=_client_ip(request),
@@ -452,11 +457,14 @@ async def whoami(
 async def get_account(request: Request, parent_id: str) -> dict:
     account = await _lifecycle.get_account(parent_id)
     if account is None:
-        return JSONResponse(status_code=404, content=error_response(
+        return JSONResponse(
+            status_code=404,
+            content=error_response(
                 request,
                 code="NOT_FOUND",
                 key="auth.not_found",
-            ))
+            ),
+        )
     progress = await _lifecycle.get_progress(parent_id)
     return {
         "account": account.to_dict(),
@@ -538,11 +546,14 @@ async def deletion_complete(request: Request, payload: dict) -> dict:
 async def get_consent_document(request: Request, consent_type: str) -> dict:
     """Get the consent document text (parent or child version)."""
     if consent_type not in ("parent", "child"):
-        return JSONResponse(status_code=400, content=error_response(
+        return JSONResponse(
+            status_code=400,
+            content=error_response(
                 request,
                 code="INVALID_CONSENT_TYPE",
                 key="auth.invalid_consent_type",
-            ))
+            ),
+        )
     consent = _lifecycle.get_consent_manager()
     if consent_type == "parent":
         return {
@@ -636,7 +647,7 @@ async def captcha_verify(payload: dict) -> dict:
 # rate-limit budget. Replacing this with `payload: dict` regresses the
 # P2 bug surfaced by frontend testing (bad phone → 429 on the 4th
 # call instead of 400 INVALID_PHONE_FORMAT every time).
-@limiter.limit("3/minute")
+@limiter.limit(get_settings().sms_send_rate_limit)
 async def sms_send(
     request: Request,
     payload: SMSSendRequest,
@@ -667,23 +678,25 @@ async def sms_send(
             captcha_answer if captcha_answer is not None else "",
         )
         if not ok:
-            return JSONResponse(status_code=400, content=error_response(
+            return JSONResponse(
+                status_code=400,
+                content=error_response(
                     request,
                     code="CAPTCHA_INVALID",
                     key="auth.captcha_invalid",
-                    fallback_message=(
-                        "Captcha challenge missing, expired, or wrong"
-                    )),
+                    fallback_message=("Captcha challenge missing, expired, or wrong"),
+                ),
             )
     elif settings.sms_captcha_required:
         # Production mode: captcha is mandatory.
-        return JSONResponse(status_code=400, content=error_response(
+        return JSONResponse(
+            status_code=400,
+            content=error_response(
                 request,
                 code="CAPTCHA_INVALID",
                 key="auth.captcha_required",
-                fallback_message=(
-                    "Captcha is required to send an SMS code"
-                )),
+                fallback_message=("Captcha is required to send an SMS code"),
+            ),
         )
 
     try:
@@ -786,9 +799,18 @@ async def sms_login(
         try:
             account, _ = await _lifecycle.start_signup(
                 name=f"家长{phone[-4:]}",
-                id_number="110101199003078811",
+                id_number=f"1101011990{phone[-8:]}",
                 phone=phone,
             )
+            try:
+                await persist_parent_account_to_postgres(
+                    parent_id=account.id,
+                    name=f"家长{phone[-4:]}",
+                    id_number=f"1101011990{phone[-8:]}",
+                    phone=phone,
+                )
+            except Exception as exc:
+                logger.warning("auth.parent_persist_failed_sms", error=str(exc))
         except AuthError as exc:
             return JSONResponse(status_code=400, content=_error_response(request, exc))
 
@@ -798,9 +820,7 @@ async def sms_login(
     # login must NOT issue full tokens. Instead we issue a
     # short-lived `2fa_pending` partial token that the client
     # exchanges at `POST /auth/2fa/login` for the full pair.
-    twofa_enabled = await get_two_factor_service().is_enabled(
-        account.id
-    )
+    twofa_enabled = await get_two_factor_service().is_enabled(account.id)
     if twofa_enabled:
         partial = issue_access_token(
             account.id,
@@ -889,12 +909,15 @@ async def refresh(request: Request, payload: dict) -> dict:
     """
     refresh_token = payload.get("refresh_token")
     if not refresh_token or not isinstance(refresh_token, str):
-        return JSONResponse(status_code=400, content=error_response(
+        return JSONResponse(
+            status_code=400,
+            content=error_response(
                 request,
                 code="INVALID_REFRESH_TOKEN",
                 key="auth.invalid_refresh_token",
                 fallback_message="refresh_token required",
-            ))
+            ),
+        )
 
     try:
         claims = verify_token(
@@ -957,12 +980,15 @@ async def logout(
     """
     if not authorization or not authorization.lower().startswith("bearer "):
         # Should be impossible — the dep would have raised 401.
-        return JSONResponse(status_code=401, content=error_response(
+        return JSONResponse(
+            status_code=401,
+            content=error_response(
                 request,
                 code="MISSING_TOKEN",
                 key="auth.missing_token",
                 fallback_message="Bearer token required",
-            ))
+            ),
+        )
     token = authorization[7:].strip()
     try:
         claims = verify_token(
@@ -972,11 +998,14 @@ async def logout(
         )
     except JWTError:
         # Dep already validated; this is purely defensive.
-        return JSONResponse(status_code=401, content=error_response(
+        return JSONResponse(
+            status_code=401,
+            content=error_response(
                 request,
                 code="INVALID_TOKEN",
                 key="auth.token_invalid",
-            ))
+            ),
+        )
     jti = claims.get("jti")
     if jti:
         await get_blacklist().revoke(jti)
@@ -1049,11 +1078,14 @@ async def phone_change_verify(
     if view.parent_id != parent.id:
         # Lateral-auth: never reveal the row exists if it doesn't
         # belong to the caller.
-        return JSONResponse(status_code=404, content=error_response(
+        return JSONResponse(
+            status_code=404,
+            content=error_response(
                 request,
                 code="PHONE_CHANGE_NOT_FOUND",
                 key="auth.phone_change_not_found",
-            ))
+            ),
+        )
     return view_to_dict(view, "phone")
 
 
@@ -1180,22 +1212,10 @@ def view_to_dict(view, kind: str) -> dict:
         "request_id": view.request_id,
         "parent_id": view.parent_id,
         "status": view.status,
-        "requested_at": view.requested_at.isoformat()
-        if view.requested_at
-        else None,
-        "expires_at": view.expires_at.isoformat()
-        if view.expires_at
-        else None,
-        "effective_at": view.effective_at.isoformat()
-        if view.effective_at
-        else None,
-        "confirmed_at": view.confirmed_at.isoformat()
-        if view.confirmed_at
-        else None,
-        "completed_at": view.completed_at.isoformat()
-        if view.completed_at
-        else None,
-        "cancelled_at": view.cancelled_at.isoformat()
-        if view.cancelled_at
-        else None,
+        "requested_at": view.requested_at.isoformat() if view.requested_at else None,
+        "expires_at": view.expires_at.isoformat() if view.expires_at else None,
+        "effective_at": view.effective_at.isoformat() if view.effective_at else None,
+        "confirmed_at": view.confirmed_at.isoformat() if view.confirmed_at else None,
+        "completed_at": view.completed_at.isoformat() if view.completed_at else None,
+        "cancelled_at": view.cancelled_at.isoformat() if view.cancelled_at else None,
     }

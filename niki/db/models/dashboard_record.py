@@ -38,9 +38,7 @@ class DashboardAlert(Base):
 
     __tablename__ = "dashboard_alerts"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     alert_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     child_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     parent_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -54,9 +52,7 @@ class DashboardAlert(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
-    delivered_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # BE-PUSH-005: parent-facing "read" timestamp for the
     # notification center. Distinct from `delivered_at` (which
     # tracks vendor-side push delivery) — this is when the
@@ -84,10 +80,7 @@ class DashboardAlert(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<DashboardAlert id={self.id} type={self.alert_type} "
-            f"child={self.child_id}>"
-        )
+        return f"<DashboardAlert id={self.id} type={self.alert_type} child={self.child_id}>"
 
 
 class TutoringEvent(Base):
@@ -95,9 +88,7 @@ class TutoringEvent(Base):
 
     __tablename__ = "tutoring_events"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     child_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     parent_id: Mapped[str] = mapped_column(String(16), nullable=False)
     payload: Mapped[Any] = mapped_column(
@@ -120,9 +111,7 @@ class KnowledgeQuery(Base):
 
     __tablename__ = "knowledge_queries"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     child_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     parent_id: Mapped[str] = mapped_column(String(16), nullable=False)
     payload: Mapped[Any] = mapped_column(

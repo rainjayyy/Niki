@@ -49,16 +49,19 @@ class _EmptyBody(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-router = APIRouter(prefix="/notifications", tags=[
-    {
-        "name": "notifications",
-        "description": (
-            "Parent-facing notification center (BE-PUSH-005). Cursor-"
-            "paginated history of all dashboard alerts owned by the "
-            "caller, with mark-single / mark-all read endpoints."
-        ),
-    }
-])
+router = APIRouter(
+    prefix="/notifications",
+    tags=[
+        {
+            "name": "notifications",
+            "description": (
+                "Parent-facing notification center (BE-PUSH-005). Cursor-"
+                "paginated history of all dashboard alerts owned by the "
+                "caller, with mark-single / mark-all read endpoints."
+            ),
+        }
+    ],
+)
 
 # Maximum page size (matches `_pagination.MAX_PAGE_SIZE`).
 _NOTIF_MAX_LIMIT = 100
@@ -71,7 +74,10 @@ _VALID_SEVERITIES = frozenset({"info", "warning", "critical", "urgent"})
 
 
 def _bad_request(
-    request: Request, code: str, key: str, message: str,
+    request: Request,
+    code: str,
+    key: str,
+    message: str,
 ) -> HTTPException:
     return HTTPException(
         status_code=400,
@@ -117,10 +123,14 @@ def _project_notification(row: dict[str, Any]) -> dict[str, Any]:
         "child_id": row.get("child_id"),
         "alert_type": row.get("alert_type"),
         "severity": payload.get("severity"),
-        "title": payload.get("title") or payload.get("problem_summary")
-            or payload.get("original_text") or "",
-        "body": payload.get("body") or payload.get("action_suggestion")
-            or payload.get("niki_response_summary") or "",
+        "title": payload.get("title")
+        or payload.get("problem_summary")
+        or payload.get("original_text")
+        or "",
+        "body": payload.get("body")
+        or payload.get("action_suggestion")
+        or payload.get("niki_response_summary")
+        or "",
         "created_at": (
             row["created_at"].isoformat()
             if isinstance(row.get("created_at"), datetime)
@@ -219,7 +229,8 @@ async def list_notifications(
             # Should not happen — every row has a created_at — but
             # fall back to "now" so the cursor is always usable.
             next_cursor = encode_cursor(
-                last["id"], datetime.now(timezone.utc),
+                last["id"],
+                datetime.now(timezone.utc),
             )
 
     return {

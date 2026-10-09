@@ -44,9 +44,7 @@ class MemoryChunk(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
-    __table_args__ = (
-        Index("ix_memory_chunks_child_created", "child_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_memory_chunks_child_created", "child_id", "created_at"),)
 
     def __repr__(self) -> str:
         snippet = (self.content or "")[:30]

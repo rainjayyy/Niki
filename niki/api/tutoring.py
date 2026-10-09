@@ -22,9 +22,15 @@ from niki.api._stub_llm import _StubLLM
 from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
-router = APIRouter(prefix="/tutoring", tags=[
-    {"name": "tutoring", "description": "Tutoring Agent API endpoints — child-facing homework help."}
-])
+router = APIRouter(
+    prefix="/tutoring",
+    tags=[
+        {
+            "name": "tutoring",
+            "description": "Tutoring Agent API endpoints — child-facing homework help.",
+        }
+    ],
+)
 
 # ISS-02: shared input gateway for direct agent endpoints
 _input_gateway = InputSafetyGateway()

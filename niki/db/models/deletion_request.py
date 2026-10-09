@@ -54,13 +54,9 @@ class DeletionRequest(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     parent: Mapped[Parent] = relationship("Parent", back_populates="deletion_requests")
 
     def __repr__(self) -> str:
-        return (
-            f"<DeletionRequest parent_id={self.parent_id} status={self.status.value}>"
-        )
+        return f"<DeletionRequest parent_id={self.parent_id} status={self.status.value}>"

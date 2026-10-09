@@ -79,17 +79,13 @@ async def query_audit_log(
     event_type: Optional[str] = Query(None, max_length=64),
     since: Optional[datetime] = Query(
         None,
-        description=(
-            "Lower bound (inclusive) on created_at "
-            "(format: YYYY-MM-DD or ISO 8601)."
-        ),
+        description=("Lower bound (inclusive) on created_at (format: YYYY-MM-DD or ISO 8601)."),
     ),
     actor_parent_id: Optional[str] = Query(
         None,
         max_length=16,
         description=(
-            "Must equal the caller's own parent id in v1 "
-            "(cross-parent reads: BE-ADMIN-001)."
+            "Must equal the caller's own parent id in v1 (cross-parent reads: BE-ADMIN-001)."
         ),
     ),
     limit: int = Query(_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT),
@@ -107,9 +103,7 @@ async def query_audit_log(
                 request,
                 code="FORBIDDEN",
                 key="audit.cross_parent_forbidden",
-                fallback_message=(
-                    "You may only query your own audit history"
-                ),
+                fallback_message=("You may only query your own audit history"),
             ),
         )
 

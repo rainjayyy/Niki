@@ -26,9 +26,15 @@ from niki.db.repositories.auth_audit_repo import (
     get_auth_audit_log_repository,
 )
 
-router = APIRouter(prefix="/auth/audit", tags=[
-    {"name": "auth_audit", "description": "Auth audit query endpoints (BE-AUTH-001-rollout-audit)."}
-])
+router = APIRouter(
+    prefix="/auth/audit",
+    tags=[
+        {
+            "name": "auth_audit",
+            "description": "Auth audit query endpoints (BE-AUTH-001-rollout-audit).",
+        }
+    ],
+)
 
 
 _MAX_LIMIT = 200
@@ -101,10 +107,7 @@ async def list_recent_audit(
                 request,
                 code="INVALID_SORT",
                 key="auth_audit.invalid_sort",
-                fallback_message=(
-                    f"sort must be one of "
-                    f"{sorted(_AUDIT_ALLOWED_SORTS)}"
-                ),
+                fallback_message=(f"sort must be one of {sorted(_AUDIT_ALLOWED_SORTS)}"),
             ),
         )
 
@@ -122,20 +125,17 @@ async def list_recent_audit(
     # ---- time-window filter (since inclusive, until exclusive) ----
     if params.since is not None:
         rows = [
-            r for r in rows
-            if r.get("created_at") is not None
-            and r["created_at"] >= params.since
+            r for r in rows if r.get("created_at") is not None and r["created_at"] >= params.since
         ]
     if params.until is not None:
         rows = [
-            r for r in rows
-            if r.get("created_at") is not None
-            and r["created_at"] < params.until
+            r for r in rows if r.get("created_at") is not None and r["created_at"] < params.until
         ]
 
     # ---- keyword substring filter (case-insensitive) ----
     keyword = params.normalized_keyword()
     if keyword is not None:
+
         def _matches(row: dict) -> bool:
             for field in (
                 "actor_parent_id",
@@ -149,6 +149,7 @@ async def list_recent_audit(
                 if keyword in str(value).lower():
                     return True
             return False
+
         rows = [r for r in rows if _matches(r)]
 
     # ---- sort ----

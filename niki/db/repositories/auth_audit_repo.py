@@ -63,8 +63,7 @@ class AuthAuditEvent:
     def __post_init__(self) -> None:
         if self.severity not in _VALID_SEVERITIES:
             raise ValueError(
-                f"invalid severity {self.severity!r}; "
-                f"expected one of {sorted(_VALID_SEVERITIES)}"
+                f"invalid severity {self.severity!r}; expected one of {sorted(_VALID_SEVERITIES)}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -181,9 +180,7 @@ class InMemoryAuthAuditLogRepository(AuthAuditLogRepository):
         if event_type is not None:
             rows = [r for r in rows if r["event_type"] == event_type]
         if actor_parent_id is not None:
-            rows = [
-                r for r in rows if r.get("actor_parent_id") == actor_parent_id
-            ]
+            rows = [r for r in rows if r.get("actor_parent_id") == actor_parent_id]
         # Strip internal _seq from the returned rows so callers
         # don't depend on an implementation detail.
         out = []

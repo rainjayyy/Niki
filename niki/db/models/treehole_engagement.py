@@ -26,9 +26,7 @@ class TreeholeEngagement(Base):
 
     __tablename__ = "treehole_engagements"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     child_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     parent_id: Mapped[str] = mapped_column(String(16), nullable=False)
     encrypted_payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)

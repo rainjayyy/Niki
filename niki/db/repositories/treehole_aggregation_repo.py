@@ -115,7 +115,8 @@ class TreeholeAggregationRepository(ABC):
 
     @abstractmethod
     async def list_all(
-        self, window_kind: str | None = None,
+        self,
+        window_kind: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return every aggregate row. With `window_kind=None`
         (default) returns ALL windows; pass a kind to filter."""
@@ -149,9 +150,7 @@ class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
     """
 
     def __init__(self) -> None:
-        self._rows: dict[
-            tuple[str, str, str], dict[str, Any]
-        ] = {}
+        self._rows: dict[tuple[str, str, str], dict[str, Any]] = {}
         self._lock = threading.Lock()
 
     async def _upsert_one(
@@ -256,16 +255,12 @@ class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
                     latest = (ws_iso, row)
             return deepcopy(latest[1]) if latest else None
 
-    async def list_all(
-        self, window_kind: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def list_all(self, window_kind: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
             if window_kind is None:
                 return [deepcopy(row) for row in self._rows.values()]
             return [
-                deepcopy(row)
-                for (_, kind, _), row in self._rows.items()
-                if kind == window_kind
+                deepcopy(row) for (_, kind, _), row in self._rows.items() if kind == window_kind
             ]
 
     async def reset(
@@ -283,9 +278,7 @@ class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
 
     async def drop_all_for_child(self, child_id: str) -> int:
         with self._lock:
-            to_drop = [
-                k for k in self._rows if k[0] == child_id
-            ]
+            to_drop = [k for k in self._rows if k[0] == child_id]
             for k in to_drop:
                 self._rows.pop(k, None)
             return len(to_drop)
@@ -325,50 +318,43 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
         pos_inc = 1 if valence == "positive" else 0
         neu_inc = 1 if valence not in ("positive", "negative") else 0
 
-        stmt = pg_insert(TreeholeAggregation).values(
-            child_id=child_id,
-            window_kind=window_kind,
-            window_start=window_start,
-            count=1,
-            valence_sum=contrib,
-            negative_count=neg_inc,
-            positive_count=pos_inc,
-            neutral_count=neu_inc,
-            intensity_sum=intensity,
-            category_counts={category: 1},
-            first_engagement_at=engagement_at,
-            last_engagement_at=engagement_at,
-            updated_at=engagement_at,
-        ).on_conflict_do_update(
-            index_elements=[
-                TreeholeAggregation.child_id,
-                TreeholeAggregation.window_kind,
-                TreeholeAggregation.window_start,
-            ],
-            set_={
-                "count": TreeholeAggregation.count + 1,
-                "valence_sum": (
-                    TreeholeAggregation.valence_sum + contrib
-                ),
-                "intensity_sum": (
-                    TreeholeAggregation.intensity_sum + intensity
-                ),
-                "negative_count": (
-                    TreeholeAggregation.negative_count + neg_inc
-                ),
-                "positive_count": (
-                    TreeholeAggregation.positive_count + pos_inc
-                ),
-                "neutral_count": (
-                    TreeholeAggregation.neutral_count + neu_inc
-                ),
-                "last_engagement_at": engagement_at,
-                "updated_at": datetime.now(timezone.utc),
-                "category_counts": (
-                    TreeholeAggregation.category_counts
-                ),
-            },
-        ).returning(TreeholeAggregation)
+        stmt = (
+            pg_insert(TreeholeAggregation)
+            .values(
+                child_id=child_id,
+                window_kind=window_kind,
+                window_start=window_start,
+                count=1,
+                valence_sum=contrib,
+                negative_count=neg_inc,
+                positive_count=pos_inc,
+                neutral_count=neu_inc,
+                intensity_sum=intensity,
+                category_counts={category: 1},
+                first_engagement_at=engagement_at,
+                last_engagement_at=engagement_at,
+                updated_at=engagement_at,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    TreeholeAggregation.child_id,
+                    TreeholeAggregation.window_kind,
+                    TreeholeAggregation.window_start,
+                ],
+                set_={
+                    "count": TreeholeAggregation.count + 1,
+                    "valence_sum": (TreeholeAggregation.valence_sum + contrib),
+                    "intensity_sum": (TreeholeAggregation.intensity_sum + intensity),
+                    "negative_count": (TreeholeAggregation.negative_count + neg_inc),
+                    "positive_count": (TreeholeAggregation.positive_count + pos_inc),
+                    "neutral_count": (TreeholeAggregation.neutral_count + neu_inc),
+                    "last_engagement_at": engagement_at,
+                    "updated_at": datetime.now(timezone.utc),
+                    "category_counts": (TreeholeAggregation.category_counts),
+                },
+            )
+            .returning(TreeholeAggregation)
+        )
         result = await self._session.execute(stmt)
         row = result.scalar_one()
         await self._session.flush()
@@ -423,18 +409,14 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
         row = result.scalar_one_or_none()
         return _row_to_dict(row) if row else None
 
-    async def list_all(
-        self, window_kind: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def list_all(self, window_kind: str | None = None) -> list[dict[str, Any]]:
         stmt = select(TreeholeAggregation).order_by(
             TreeholeAggregation.child_id,
             TreeholeAggregation.window_kind,
             TreeholeAggregation.window_start,
         )
         if window_kind is not None:
-            stmt = stmt.where(
-                TreeholeAggregation.window_kind == window_kind
-            )
+            stmt = stmt.where(TreeholeAggregation.window_kind == window_kind)
         result = await self._session.execute(stmt)
         return [_row_to_dict(r) for r in result.scalars().all()]
 
@@ -446,6 +428,7 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
         window_kind: str = WINDOW_KIND_WEEKLY,
     ) -> None:
         from sqlalchemy import delete
+
         await self._session.execute(
             delete(TreeholeAggregation).where(
                 TreeholeAggregation.child_id == child_id,
@@ -457,10 +440,9 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
 
     async def drop_all_for_child(self, child_id: str) -> int:
         from sqlalchemy import delete
+
         result = await self._session.execute(
-            delete(TreeholeAggregation).where(
-                TreeholeAggregation.child_id == child_id
-            )
+            delete(TreeholeAggregation).where(TreeholeAggregation.child_id == child_id)
         )
         await self._session.flush()
         return result.rowcount or 0

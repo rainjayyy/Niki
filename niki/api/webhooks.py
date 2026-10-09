@@ -151,9 +151,7 @@ def _validate_url(request: Request, raw: Any) -> str:
     we'd rather have explicit).
     """
     if not isinstance(raw, str) or not raw.strip():
-        raise _bad_request(
-            request, "WEBHOOK_INVALID_URL", "target_url is required"
-        )
+        raise _bad_request(request, "WEBHOOK_INVALID_URL", "target_url is required")
     try:
         parsed = HttpUrl(raw)
     except Exception as exc:
@@ -179,9 +177,7 @@ def _validate_url(request: Request, raw: Any) -> str:
     return str(parsed)
 
 
-def _validate_event_types(
-    request: Request, value: Any
-) -> list[str]:
+def _validate_event_types(request: Request, value: Any) -> list[str]:
     """Validate `event_types`.
 
     Three rules, in order:
@@ -294,21 +290,11 @@ async def register_webhook(
         "is_active": row["is_active"],
         "failure_count": row["failure_count"],
         "last_delivery_at": (
-            row["last_delivery_at"].isoformat()
-            if row.get("last_delivery_at") else None
+            row["last_delivery_at"].isoformat() if row.get("last_delivery_at") else None
         ),
-        "disabled_at": (
-            row["disabled_at"].isoformat()
-            if row.get("disabled_at") else None
-        ),
-        "created_at": (
-            row["created_at"].isoformat()
-            if row.get("created_at") else None
-        ),
-        "updated_at": (
-            row["updated_at"].isoformat()
-            if row.get("updated_at") else None
-        ),
+        "disabled_at": (row["disabled_at"].isoformat() if row.get("disabled_at") else None),
+        "created_at": (row["created_at"].isoformat() if row.get("created_at") else None),
+        "updated_at": (row["updated_at"].isoformat() if row.get("updated_at") else None),
     }
 
 
@@ -316,8 +302,7 @@ async def register_webhook(
     "/",
     summary="List the caller's webhook subscriptions",
     description=(
-        "List every subscription owned by the caller. The "
-        "`secret` field is NEVER included."
+        "List every subscription owned by the caller. The `secret` field is NEVER included."
     ),
 )
 async def list_webhooks(
@@ -371,9 +356,7 @@ async def update_webhook(
 ) -> dict:
     """Partial update of a subscription."""
     if not isinstance(payload, dict):
-        raise _bad_request(
-            request, "WEBHOOK_BAD_REQUEST", "body must be a JSON object"
-        )
+        raise _bad_request(request, "WEBHOOK_BAD_REQUEST", "body must be a JSON object")
     target_url: str | None = None
     event_types: list[str] | None = None
     is_active: bool | None = None
@@ -487,9 +470,7 @@ async def list_deliveries(
     if limit > 100:
         limit = 100
     dispatcher = get_webhook_dispatcher()
-    rows = await dispatcher.get_deliveries(
-        subscription_id, parent.id, limit=limit
-    )
+    rows = await dispatcher.get_deliveries(subscription_id, parent.id, limit=limit)
     if rows is None:
         raise _not_found(request)
     return {

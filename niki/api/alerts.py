@@ -50,10 +50,7 @@ router = APIRouter(
     tags=[
         {
             "name": "alerts",
-            "description": (
-                "Realtime alert streaming endpoint "
-                "(BE-RT-002 / BE-RT-002-rollout)."
-            ),
+            "description": ("Realtime alert streaming endpoint (BE-RT-002 / BE-RT-002-rollout)."),
         },
     ],
 )
@@ -151,15 +148,11 @@ async def stream_alerts(
                 {
                     "parent_id": parent.id,
                     "child_id": child_id,
-                    "subscribed_at": datetime.now(
-                        UTC
-                    ).isoformat(),
+                    "subscribed_at": datetime.now(UTC).isoformat(),
                     "filters": {
                         "alert_type": alert_type,
                         "severity": severity,
-                        "since": since_dt.isoformat()
-                        if since_dt is not None
-                        else None,
+                        "since": since_dt.isoformat() if since_dt is not None else None,
                     },
                 },
             )

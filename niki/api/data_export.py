@@ -8,9 +8,10 @@ from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 from niki.services.data_export import build_export_zip
 
-router = APIRouter(prefix="/parents", tags=[
-    {"name": "data-portability", "description": "Data export API endpoint (BE-COMP-001)."}
-])
+router = APIRouter(
+    prefix="/parents",
+    tags=[{"name": "data-portability", "description": "Data export API endpoint (BE-COMP-001)."}],
+)
 
 
 @router.get(
@@ -47,9 +48,7 @@ async def export_data(
         )
 
     try:
-        zip_bytes, summary = await build_export_zip(
-            parent_id=parent_id, child_id=child_id
-        )
+        zip_bytes, summary = await build_export_zip(parent_id=parent_id, child_id=child_id)
     except Exception as exc:
         raise HTTPException(
             status_code=503,
@@ -59,15 +58,12 @@ async def export_data(
             },
         ) from exc
 
-    filename = (
-        "niki_data_export_" + parent_id
-        + "_" + summary.exported_at.split("T")[0] + ".zip"
-    )
+    filename = "niki_data_export_" + parent_id + "_" + summary.exported_at.split("T")[0] + ".zip"
     return Response(
         content=zip_bytes,
         media_type="application/zip",
         headers={
-            "Content-Disposition": "attachment; filename=\"" + filename + "\"",
+            "Content-Disposition": 'attachment; filename="' + filename + '"',
             "X-Export-Record-Count": str(summary.total_records),
             "X-Export-Size-Bytes": str(summary.zipped_size),
         },

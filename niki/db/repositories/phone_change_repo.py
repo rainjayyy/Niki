@@ -84,26 +84,10 @@ class PhoneChangeRequestData:
             "status": self.status,
             "requested_at": self.requested_at.isoformat(),
             "expires_at": self.expires_at.isoformat(),
-            "effective_at": (
-                self.effective_at.isoformat()
-                if self.effective_at
-                else None
-            ),
-            "confirmed_at": (
-                self.confirmed_at.isoformat()
-                if self.confirmed_at
-                else None
-            ),
-            "completed_at": (
-                self.completed_at.isoformat()
-                if self.completed_at
-                else None
-            ),
-            "cancelled_at": (
-                self.cancelled_at.isoformat()
-                if self.cancelled_at
-                else None
-            ),
+            "effective_at": (self.effective_at.isoformat() if self.effective_at else None),
+            "confirmed_at": (self.confirmed_at.isoformat() if self.confirmed_at else None),
+            "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
+            "cancelled_at": (self.cancelled_at.isoformat() if self.cancelled_at else None),
         }
 
 
@@ -139,16 +123,12 @@ class PhoneChangeRepository(ABC):
         """Look up by id, or None."""
 
     @abstractmethod
-    async def list_inflight(
-        self, parent_id: str
-    ) -> list[PhoneChangeRequestData]:
+    async def list_inflight(self, parent_id: str) -> list[PhoneChangeRequestData]:
         """Return this parent's non-finalised rows
         (pending_verification + pending_cooling)."""
 
     @abstractmethod
-    async def list_due_for_completion(
-        self, *, now: datetime
-    ) -> list[PhoneChangeRequestData]:
+    async def list_due_for_completion(self, *, now: datetime) -> list[PhoneChangeRequestData]:
         """Return `pending_cooling` rows whose `effective_at <= now`.
 
         Used by `PhoneChangeService.sweep_expired` (cron path).
@@ -211,25 +191,17 @@ class InMemoryPhoneChangeRepository(PhoneChangeRepository):
         row = self._rows.get(request_id)
         return copy.deepcopy(row) if row else None
 
-    async def list_inflight(
-        self, parent_id: str
-    ) -> list[PhoneChangeRequestData]:
+    async def list_inflight(self, parent_id: str) -> list[PhoneChangeRequestData]:
         result: list[PhoneChangeRequestData] = []
         for row in self._rows.values():
-            if (
-                row.parent_id == parent_id
-                and row.status
-                in (
-                    PhoneChangeStatus.PENDING_VERIFICATION.value,
-                    PhoneChangeStatus.PENDING_COOLING.value,
-                )
+            if row.parent_id == parent_id and row.status in (
+                PhoneChangeStatus.PENDING_VERIFICATION.value,
+                PhoneChangeStatus.PENDING_COOLING.value,
             ):
                 result.append(copy.deepcopy(row))
         return result
 
-    async def list_due_for_completion(
-        self, *, now: datetime
-    ) -> list[PhoneChangeRequestData]:
+    async def list_due_for_completion(self, *, now: datetime) -> list[PhoneChangeRequestData]:
         result: list[PhoneChangeRequestData] = []
         for row in self._rows.values():
             if (
@@ -301,16 +273,12 @@ class PostgresPhoneChangeRepository(PhoneChangeRepository):
 
     async def get(self, request_id: str) -> PhoneChangeRequestData | None:
         result = await self._session.execute(
-            select(PhoneChangeRequest).where(
-                PhoneChangeRequest.id == request_id
-            )
+            select(PhoneChangeRequest).where(PhoneChangeRequest.id == request_id)
         )
         row = result.scalar_one_or_none()
         return self._to_data(row) if row else None
 
-    async def list_inflight(
-        self, parent_id: str
-    ) -> list[PhoneChangeRequestData]:
+    async def list_inflight(self, parent_id: str) -> list[PhoneChangeRequestData]:
         result = await self._session.execute(
             select(PhoneChangeRequest).where(
                 PhoneChangeRequest.parent_id == parent_id,
@@ -325,13 +293,10 @@ class PostgresPhoneChangeRepository(PhoneChangeRepository):
         rows = result.scalars().all()
         return [self._to_data(r) for r in rows]
 
-    async def list_due_for_completion(
-        self, *, now: datetime
-    ) -> list[PhoneChangeRequestData]:
+    async def list_due_for_completion(self, *, now: datetime) -> list[PhoneChangeRequestData]:
         result = await self._session.execute(
             select(PhoneChangeRequest).where(
-                PhoneChangeRequest.status
-                == PhoneChangeStatus.PENDING_COOLING.value,
+                PhoneChangeRequest.status == PhoneChangeStatus.PENDING_COOLING.value,
                 PhoneChangeRequest.effective_at <= now,
             )
         )
@@ -351,9 +316,7 @@ class PostgresPhoneChangeRepository(PhoneChangeRepository):
         if status not in VALID_PHONE_CHANGE_STATUSES:
             raise ValueError(f"invalid status: {status!r}")
         result = await self._session.execute(
-            select(PhoneChangeRequest).where(
-                PhoneChangeRequest.id == request_id
-            )
+            select(PhoneChangeRequest).where(PhoneChangeRequest.id == request_id)
         )
         row = result.scalar_one_or_none()
         if row is None:

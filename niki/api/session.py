@@ -28,9 +28,15 @@ from niki.session import (
     SessionLimiter,
 )
 
-router = APIRouter(prefix="/session", tags=[
-    {"name": "session", "description": "Session control API endpoints — PRD #17, #23, #31, #33."}
-])
+router = APIRouter(
+    prefix="/session",
+    tags=[
+        {
+            "name": "session",
+            "description": "Session control API endpoints — PRD #17, #23, #31, #33.",
+        }
+    ],
+)
 
 # Module-level singletons
 _limiter = SessionLimiter()
@@ -42,8 +48,10 @@ _pause = RemotePauseController(_limiter)
     summary="Start a new session for a child",
     description="Start a new session for a child.",
 )
-async def start_session(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def start_session(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Start a new session for a child."""
     child_id = payload.get("child_id", "")
     _limiter.start_session(child_id)
@@ -55,8 +63,10 @@ async def start_session(payload: dict,
     summary="Record activity (resets idle timer)",
     description="Record activity (resets idle timer).",
 )
-async def record_activity(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def record_activity(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record activity (resets idle timer)."""
     child_id = payload.get("child_id", "")
     _limiter.record_activity(child_id)
@@ -68,8 +78,10 @@ async def record_activity(payload: dict,
     summary="Get current session stats",
     description="Get current session stats.",
 )
-async def get_stats(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_stats(
+    child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get current session stats."""
     return {
         "child_id": child_id,
@@ -93,8 +105,10 @@ async def get_stats(child_id: str,
             Check if the soft warning should be issued (5 min before hard limit).
             """,
 )
-async def should_warn(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def should_warn(
+    child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Check if the soft warning should be issued (5 min before hard limit)."""
     return {
         "should_warn": _limiter.should_warn(child_id),
@@ -107,8 +121,10 @@ async def should_warn(child_id: str,
     summary="Check if the hard daily limit is reached",
     description="Check if the hard daily limit is reached.",
 )
-async def is_exhausted(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def is_exhausted(
+    child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Check if the hard daily limit is reached."""
     return {
         "is_exhausted": _limiter.is_exhausted(child_id),
@@ -121,8 +137,10 @@ async def is_exhausted(child_id: str,
     summary="Check if the idle timeout is reached (PRD #17)",
     description="Check if the idle timeout is reached (PRD #17).",
 )
-async def is_idle(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def is_idle(
+    child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Check if the idle timeout is reached (PRD #17)."""
     return {
         "is_idle_timeout": _limiter.is_idle_timeout(child_id),
@@ -139,8 +157,10 @@ async def is_idle(child_id: str,
             End a session naturally (child says bye, or hard limit reached).
             """,
 )
-async def end_session(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def end_session(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """End a session naturally (child says bye, or hard limit reached)."""
     child_id = payload.get("child_id", "")
     reason_str = payload.get("reason", "child_bye")
@@ -169,8 +189,10 @@ async def end_session(payload: dict,
             know the parent intervened).
             """,
 )
-async def parent_pause(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def parent_pause(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record a pause request from the parent's mini-program.
 
     The next time the child sends a message, Niki will end the
@@ -188,8 +210,10 @@ async def parent_pause(payload: dict,
     summary="Check if a parent pause is pending for the child",
     description="Check if a parent pause is pending for the child.",
 )
-async def has_pause(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def has_pause(
+    child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Check if a parent pause is pending for the child."""
     return {"has_pending_pause": _pause.has_pending_pause(child_id)}
 
@@ -199,8 +223,10 @@ async def has_pause(child_id: str,
     summary="Consume a pending pause (returns natural exit message)",
     description="Consume a pending pause (returns natural exit message).",
 )
-async def consume_pause(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def consume_pause(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Consume a pending pause (returns natural exit message)."""
     child_id = payload.get("child_id", "")
     msg = _pause.consume_pause(child_id)
@@ -214,8 +240,10 @@ async def consume_pause(payload: dict,
     summary="End a session as a parent-pause (with natural exit message)",
     description="End a session as a parent-pause (with natural exit message).",
 )
-async def parent_end_session(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def parent_end_session(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """End a session as a parent-pause (with natural exit message)."""
     child_id = payload.get("child_id", "")
     topics = payload.get("topics_visited", [])
@@ -231,8 +259,10 @@ async def parent_end_session(payload: dict,
     summary="True if the child has been paused (any reason)",
     description="True if the child has been paused (any reason).",
 )
-async def is_paused(child_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def is_paused(
+    child_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """True if the child has been paused (any reason)."""
     return {"is_paused": _pause.is_paused(child_id)}
 
@@ -242,8 +272,10 @@ async def is_paused(child_id: str,
     summary="Clear the pause state (when parent resumes)",
     description="Clear the pause state (when parent resumes).",
 )
-async def clear_pause(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def clear_pause(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Clear the pause state (when parent resumes)."""
     child_id = payload.get("child_id", "")
     _pause.clear_pause(child_id)

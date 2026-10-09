@@ -23,9 +23,9 @@ from niki.infrastructure.redis import RedisClient
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="", tags=[
-    {"name": "status", "description": "Public status endpoint (BE-MISC-003)."}
-])
+router = APIRouter(
+    prefix="", tags=[{"name": "status", "description": "Public status endpoint (BE-MISC-003)."}]
+)
 
 
 @router.get(
@@ -60,14 +60,15 @@ async def public_status(
     )
     components = []
     all_healthy = True
-    for name, result in zip(
-        ["redis", "postgres", "chroma", "neo4j"], results
-    ):
+    for name, result in zip(["redis", "postgres", "chroma", "neo4j"], results):
         if isinstance(result, Exception):
-            components.append({
-                "name": name, "status": "unhealthy",
-                "error": str(result),
-            })
+            components.append(
+                {
+                    "name": name,
+                    "status": "unhealthy",
+                    "error": str(result),
+                }
+            )
             all_healthy = False
         else:
             components.append({"name": name, **result})
@@ -87,8 +88,7 @@ async def _check_redis() -> dict:
         r = await RedisClient.health_check()
         return r
     except Exception as exc:
-        return {"name": "redis", "status": "unhealthy",
-                "error": str(exc)}
+        return {"name": "redis", "status": "unhealthy", "error": str(exc)}
 
 
 async def _check_postgres() -> dict:
@@ -96,8 +96,7 @@ async def _check_postgres() -> dict:
         r = await PostgresClient.health_check()
         return r
     except Exception as exc:
-        return {"name": "postgres", "status": "unhealthy",
-                "error": str(exc)}
+        return {"name": "postgres", "status": "unhealthy", "error": str(exc)}
 
 
 async def _check_chroma() -> dict:
@@ -107,8 +106,7 @@ async def _check_chroma() -> dict:
         r = await ChromaClient.health_check()
         return r
     except Exception as exc:
-        return {"name": "chroma", "status": "unhealthy",
-                "error": str(exc)}
+        return {"name": "chroma", "status": "unhealthy", "error": str(exc)}
 
 
 async def _check_neo4j() -> dict:
@@ -116,5 +114,4 @@ async def _check_neo4j() -> dict:
         r = await Neo4jClient.health_check()
         return r
     except Exception as exc:
-        return {"name": "neo4j", "status": "unhealthy",
-                "error": str(exc)}
+        return {"name": "neo4j", "status": "unhealthy", "error": str(exc)}

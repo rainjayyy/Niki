@@ -51,9 +51,7 @@ class PhoneChangeStatus(str, enum.Enum):
     EXPIRED = "expired"
 
 
-VALID_PHONE_CHANGE_STATUSES: tuple[str, ...] = tuple(
-    s.value for s in PhoneChangeStatus
-)
+VALID_PHONE_CHANGE_STATUSES: tuple[str, ...] = tuple(s.value for s in PhoneChangeStatus)
 
 
 class PhoneChangeRequest(Base):
@@ -61,24 +59,14 @@ class PhoneChangeRequest(Base):
 
     __tablename__ = "phone_change_requests"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
-    parent_id: Mapped[str] = mapped_column(
-        String(16), nullable=False, index=True
-    )
-    old_phone_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )
-    new_phone_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    parent_id: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    old_phone_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    new_phone_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     # 6-digit SMS code, hashed in production (this is the mock
     # backend — see InMemoryEmailCodeService analog). Bounded by
     # expires_at; the SMS verify helper cleans it up.
-    verification_code: Mapped[str] = mapped_column(
-        String(8), nullable=False
-    )
+    verification_code: Mapped[str] = mapped_column(String(8), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -87,29 +75,19 @@ class PhoneChangeRequest(Base):
     # 10-minute SMS-code expiry window. Copied from settings at
     # request time so a config flip mid-flight doesn't snap-close
     # every open request.
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # 7 days after the SMS code was verified; sweep flips the
     # row to COMPLETED once `effective_at <= now()`.
-    effective_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    effective_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
         default=PhoneChangeStatus.PENDING_VERIFICATION.value,
         index=True,
     )
-    confirmed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         # "all open requests for this parent" — UI banner.
@@ -127,7 +105,4 @@ class PhoneChangeRequest(Base):
     )
 
     def __repr__(self) -> str:  # pragma: no cover — debug only
-        return (
-            f"<PhoneChangeRequest id={self.id} "
-            f"parent_id={self.parent_id} status={self.status}>"
-        )
+        return f"<PhoneChangeRequest id={self.id} parent_id={self.parent_id} status={self.status}>"

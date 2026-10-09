@@ -129,9 +129,7 @@ class DashboardRepository(ABC):
         """
 
     @abstractmethod
-    async def mark_alert_read(
-        self, alert_id: str, parent_id: str
-    ) -> bool:
+    async def mark_alert_read(self, alert_id: str, parent_id: str) -> bool:
         """Mark an alert as read, scoped to `parent_id` (lateral-auth).
 
         Returns True iff a row owned by `parent_id` was updated. If the
@@ -165,9 +163,7 @@ class DashboardRepository(ABC):
         """Persist a tutoring event; returns its id."""
 
     @abstractmethod
-    async def list_tutoring_events(
-        self, child_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_tutoring_events(self, child_id: str) -> list[dict[str, Any]]:
         """List all tutoring events for a child."""
 
     # ---------------- Knowledge queries ----------------
@@ -183,9 +179,7 @@ class DashboardRepository(ABC):
         """Persist a knowledge query; returns its id."""
 
     @abstractmethod
-    async def list_knowledge_queries(
-        self, child_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_knowledge_queries(self, child_id: str) -> list[dict[str, Any]]:
         """List all knowledge queries for a child."""
 
 
@@ -258,11 +252,7 @@ class InMemoryDashboardRepository(DashboardRepository):
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         # Normalise severity filter to lower-case set for O(1) match.
-        sev_set: set[str] | None = (
-            {s.lower() for s in severity_filter}
-            if severity_filter
-            else None
-        )
+        sev_set: set[str] | None = {s.lower() for s in severity_filter} if severity_filter else None
         # Step 1: filter by parent + severity + unread + cursor.
         matched: list[dict[str, Any]] = []
         for row in self._alerts.values():
@@ -296,9 +286,7 @@ class InMemoryDashboardRepository(DashboardRepository):
         # Step 3: limit.
         return [dict(r) for r in matched[:limit]]
 
-    async def mark_alert_read(
-        self, alert_id: str, parent_id: str
-    ) -> bool:
+    async def mark_alert_read(self, alert_id: str, parent_id: str) -> bool:
         row = self._alerts.get(alert_id)
         if row is None or row.get("parent_id") != parent_id:
             return False
@@ -309,10 +297,7 @@ class InMemoryDashboardRepository(DashboardRepository):
         now = datetime.now(timezone.utc)
         marked = 0
         for row in self._alerts.values():
-            if (
-                row.get("parent_id") == parent_id
-                and row.get("read_at") is None
-            ):
+            if row.get("parent_id") == parent_id and row.get("read_at") is None:
                 row["read_at"] = now
                 marked += 1
         return marked
@@ -341,14 +326,8 @@ class InMemoryDashboardRepository(DashboardRepository):
         }
         return row_id
 
-    async def list_tutoring_events(
-        self, child_id: str
-    ) -> list[dict[str, Any]]:
-        return [
-            dict(r)
-            for r in self._tutoring.values()
-            if r["child_id"] == child_id
-        ]
+    async def list_tutoring_events(self, child_id: str) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._tutoring.values() if r["child_id"] == child_id]
 
     async def add_knowledge_query(
         self,
@@ -367,14 +346,8 @@ class InMemoryDashboardRepository(DashboardRepository):
         }
         return row_id
 
-    async def list_knowledge_queries(
-        self, child_id: str
-    ) -> list[dict[str, Any]]:
-        return [
-            dict(r)
-            for r in self._knowledge.values()
-            if r["child_id"] == child_id
-        ]
+    async def list_knowledge_queries(self, child_id: str) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._knowledge.values() if r["child_id"] == child_id]
 
     def __len__(self) -> int:
         return len(self._alerts) + len(self._tutoring) + len(self._knowledge)
@@ -484,14 +457,11 @@ class PostgresDashboardRepository(DashboardRepository):
             rows = [
                 r
                 for r in rows
-                if str((r.get("payload") or {}).get("severity", "")).lower()
-                in sev_set
+                if str((r.get("payload") or {}).get("severity", "")).lower() in sev_set
             ]
         return rows
 
-    async def mark_alert_read(
-        self, alert_id: str, parent_id: str
-    ) -> bool:
+    async def mark_alert_read(self, alert_id: str, parent_id: str) -> bool:
         result = await self._session.execute(
             update(DashboardAlert)
             .where(DashboardAlert.id == alert_id)
@@ -537,9 +507,7 @@ class PostgresDashboardRepository(DashboardRepository):
         await self._session.flush()
         return row.id
 
-    async def list_tutoring_events(
-        self, child_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_tutoring_events(self, child_id: str) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(TutoringEvent)
             .where(TutoringEvent.child_id == child_id)
@@ -563,9 +531,7 @@ class PostgresDashboardRepository(DashboardRepository):
         await self._session.flush()
         return row.id
 
-    async def list_knowledge_queries(
-        self, child_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_knowledge_queries(self, child_id: str) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(KnowledgeQuery)
             .where(KnowledgeQuery.child_id == child_id)

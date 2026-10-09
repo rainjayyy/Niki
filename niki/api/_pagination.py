@@ -52,9 +52,7 @@ def parse_pagination(
     if page < 1:
         raise _bad_pagination("page must be >= 1")
     if page_size < 1 or page_size > MAX_PAGE_SIZE:
-        raise _bad_pagination(
-            f"page_size must be between 1 and {MAX_PAGE_SIZE}"
-        )
+        raise _bad_pagination(f"page_size must be between 1 and {MAX_PAGE_SIZE}")
     return page, page_size
 
 
@@ -152,15 +150,13 @@ def list_query_params(
     since: datetime | None = Query(
         None,
         description=(
-            "Lower bound (inclusive) on the timestamp field "
-            "(format: YYYY-MM-DD or ISO 8601)."
+            "Lower bound (inclusive) on the timestamp field (format: YYYY-MM-DD or ISO 8601)."
         ),
     ),
     until: datetime | None = Query(
         None,
         description=(
-            "Upper bound (exclusive) on the timestamp field "
-            "(format: YYYY-MM-DD or ISO 8601)."
+            "Upper bound (exclusive) on the timestamp field (format: YYYY-MM-DD or ISO 8601)."
         ),
     ),
     sort: str = Query(
@@ -188,11 +184,13 @@ def list_query_params(
     """
     if order not in ("asc", "desc"):
         raise _bad_query(
-            "order must be 'asc' or 'desc'", code="INVALID_ORDER",
+            "order must be 'asc' or 'desc'",
+            code="INVALID_ORDER",
         )
     if since is not None and until is not None and since > until:
         raise _bad_query(
-            "since must be <= until", code="INVALID_RANGE",
+            "since must be <= until",
+            code="INVALID_RANGE",
         )
     if keyword is not None and not keyword.strip():
         # Treat an all-whitespace keyword the same as None so the
@@ -233,7 +231,9 @@ def sort_rows(
         if value is None:
             # Last-resort fallback so missing fields don't bubble
             # up as a TypeError during sort.
-            return getattr(row, time_field, None) if not isinstance(row, dict) else row.get(time_field)
+            return (
+                getattr(row, time_field, None) if not isinstance(row, dict) else row.get(time_field)
+            )
         return value
 
     return sorted(rows, key=_key, reverse=reverse)

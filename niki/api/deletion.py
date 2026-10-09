@@ -26,9 +26,10 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/deletion", tags=[
-    {"name": "deletion", "description": "Deletion receipt download endpoint (BE-COMP-005)."}
-])
+router = APIRouter(
+    prefix="/deletion",
+    tags=[{"name": "deletion", "description": "Deletion receipt download endpoint (BE-COMP-005)."}],
+)
 
 
 @router.get(
@@ -58,6 +59,7 @@ async def download_receipt(
     # repository lands, this endpoint will look up the actual
     # row and use its requested_at / completed_at.
     from datetime import datetime, timezone
+
     # Demo: a deterministic timestamp based on the request_id
     # so the same id always returns the same receipt.
     seed = sum(ord(c) for c in request_id) % 24
@@ -73,9 +75,7 @@ async def download_receipt(
         content=pdf,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="niki-deletion-{request_id}.pdf"'
-            ),
+            "Content-Disposition": (f'attachment; filename="niki-deletion-{request_id}.pdf"'),
             "Content-Length": str(len(pdf)),
             "Cache-Control": "no-store",
         },

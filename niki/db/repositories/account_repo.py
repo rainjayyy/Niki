@@ -110,22 +110,16 @@ class AccountRepository(ABC):
     # ---- BE-AUTH-006 phone / email change plumbing ----
 
     @abstractmethod
-    async def update_phone_hash(
-        self, parent_id: str, new_phone: str
-    ) -> ParentAccount | None:
+    async def update_phone_hash(self, parent_id: str, new_phone: str) -> ParentAccount | None:
         """Swap the account's phone hash (called by PhoneChangeService
         once the cooling period elapses or after `confirm-now`)."""
 
     @abstractmethod
-    async def update_email(
-        self, parent_id: str, new_email: str
-    ) -> ParentAccount | None:
+    async def update_email(self, parent_id: str, new_email: str) -> ParentAccount | None:
         """Swap the account's email + email_hash + flip verified=True."""
 
     @abstractmethod
-    async def find_by_email_hash(
-        self, email_hash: str
-    ) -> ParentAccount | None:
+    async def find_by_email_hash(self, email_hash: str) -> ParentAccount | None:
         """Look up an account by email hash (email uniqueness check)."""
 
     # ---- helpers ----
@@ -154,9 +148,7 @@ class PostgresAccountRepository(AccountRepository):
         from sqlalchemy.orm import selectinload
 
         result = await self._session.execute(
-            select(Parent)
-            .where(Parent.id == parent_id)
-            .options(selectinload(Parent.children))
+            select(Parent).where(Parent.id == parent_id).options(selectinload(Parent.children))
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -171,38 +163,26 @@ class PostgresAccountRepository(AccountRepository):
         return self._to_business(row) if row else None
 
     async def get_by_phone_hash(self, phone_hash: str) -> ParentAccount | None:
-        result = await self._session.execute(
-            select(Parent).where(Parent.phone_hash == phone_hash)
-        )
+        result = await self._session.execute(select(Parent).where(Parent.phone_hash == phone_hash))
         row = result.scalar_one_or_none()
         return self._to_business(row) if row else None
 
     async def list_all(self) -> list[ParentAccount]:
         from sqlalchemy.orm import selectinload
 
-        result = await self._session.execute(
-            select(Parent).options(selectinload(Parent.children))
-        )
+        result = await self._session.execute(select(Parent).options(selectinload(Parent.children)))
         rows = result.scalars().all()
         return [self._to_business(r) for r in rows]
 
-    async def find_by_email_hash(
-        self, email_hash: str
-    ) -> ParentAccount | None:
+    async def find_by_email_hash(self, email_hash: str) -> ParentAccount | None:
         """BE-AUTH-006: lookup by email hash (uniqueness check)."""
-        result = await self._session.execute(
-            select(Parent).where(Parent.email_hash == email_hash)
-        )
+        result = await self._session.execute(select(Parent).where(Parent.email_hash == email_hash))
         row = result.scalar_one_or_none()
         return self._to_business(row) if row else None
 
-    async def update_phone_hash(
-        self, parent_id: str, new_phone: str
-    ) -> ParentAccount | None:
+    async def update_phone_hash(self, parent_id: str, new_phone: str) -> ParentAccount | None:
         """Swap the account's phone hash + masked view in place."""
-        result = await self._session.execute(
-            select(Parent).where(Parent.id == parent_id)
-        )
+        result = await self._session.execute(select(Parent).where(Parent.id == parent_id))
         row = result.scalar_one_or_none()
         if row is None:
             return None
@@ -210,12 +190,8 @@ class PostgresAccountRepository(AccountRepository):
         await self._session.flush()
         return self._to_business(row)
 
-    async def update_email(
-        self, parent_id: str, new_email: str
-    ) -> ParentAccount | None:
-        result = await self._session.execute(
-            select(Parent).where(Parent.id == parent_id)
-        )
+    async def update_email(self, parent_id: str, new_email: str) -> ParentAccount | None:
+        result = await self._session.execute(select(Parent).where(Parent.id == parent_id))
         row = result.scalar_one_or_none()
         if row is None:
             return None
@@ -244,9 +220,7 @@ class PostgresAccountRepository(AccountRepository):
             id_number_hash=self.hash_field(id_number),
             phone_hash=self.hash_field(phone),
             email=email,
-            email_hash=(
-                self.hash_field(email) if email else None
-            ),
+            email_hash=(self.hash_field(email) if email else None),
             email_verified=False,
             status=ParentStatus.PENDING,
         )
@@ -329,15 +303,11 @@ class PostgresAccountRepository(AccountRepository):
             )
             return
         row.completed = completed
-        row.completed_at = (
-            datetime.now(timezone.utc) if completed else None
-        )
+        row.completed_at = datetime.now(timezone.utc) if completed else None
         row.error = error
 
     async def set_verified(self, parent_id: str) -> None:
-        result = await self._session.execute(
-            select(Parent).where(Parent.id == parent_id)
-        )
+        result = await self._session.execute(select(Parent).where(Parent.id == parent_id))
         row = result.scalar_one_or_none()
         if row is None:
             return
@@ -345,9 +315,7 @@ class PostgresAccountRepository(AccountRepository):
         row.verified_at = datetime.now(timezone.utc)
 
     async def set_deletion_pending(self, parent_id: str) -> None:
-        result = await self._session.execute(
-            select(Parent).where(Parent.id == parent_id)
-        )
+        result = await self._session.execute(select(Parent).where(Parent.id == parent_id))
         row = result.scalar_one_or_none()
         if row is None:
             return
@@ -355,9 +323,7 @@ class PostgresAccountRepository(AccountRepository):
         row.deletion_requested_at = datetime.now(timezone.utc)
 
     async def set_deleted(self, parent_id: str) -> None:
-        result = await self._session.execute(
-            select(Parent).where(Parent.id == parent_id)
-        )
+        result = await self._session.execute(select(Parent).where(Parent.id == parent_id))
         row = result.scalar_one_or_none()
         if row is None:
             return
@@ -369,13 +335,9 @@ class PostgresAccountRepository(AccountRepository):
         # PostgreSQL deployment does via ON DELETE CASCADE.  We delete
         # verifications explicitly to keep both backends consistent.
         await self._session.execute(
-            delete(AccountVerification).where(
-                AccountVerification.parent_id == parent_id
-            )
+            delete(AccountVerification).where(AccountVerification.parent_id == parent_id)
         )
-        await self._session.execute(
-            delete(Parent).where(Parent.id == parent_id)
-        )
+        await self._session.execute(delete(Parent).where(Parent.id == parent_id))
 
     # ---- mapping ----
 
@@ -444,17 +406,13 @@ class InMemoryAccountRepository(AccountRepository):
             return None
         return self._parents.get(parent_id)
 
-    async def find_by_email_hash(
-        self, email_hash: str
-    ) -> ParentAccount | None:
+    async def find_by_email_hash(self, email_hash: str) -> ParentAccount | None:
         parent_id = self._email_to_id.get(email_hash)
         if parent_id is None:
             return None
         return self._parents.get(parent_id)
 
-    async def update_phone_hash(
-        self, parent_id: str, new_phone: str
-    ) -> ParentAccount | None:
+    async def update_phone_hash(self, parent_id: str, new_phone: str) -> ParentAccount | None:
         account = self._parents.get(parent_id)
         if account is None:
             return None
@@ -475,9 +433,7 @@ class InMemoryAccountRepository(AccountRepository):
         """BE-AUTH-006: test/dev helper to fetch the raw phone."""
         return self._raw_phones.get(parent_id)
 
-    async def update_email(
-        self, parent_id: str, new_email: str
-    ) -> ParentAccount | None:
+    async def update_email(self, parent_id: str, new_email: str) -> ParentAccount | None:
         account = self._parents.get(parent_id)
         if account is None:
             return None
@@ -582,3 +538,46 @@ class InMemoryAccountRepository(AccountRepository):
 
     async def list_all(self) -> list[ParentAccount]:
         return list(self._parents.values())
+
+
+async def persist_parent_account_to_postgres(
+    parent_id: str,
+    name: str,
+    id_number: str,
+    phone: str,
+    email: str | None = None,
+) -> None:
+    """Best-effort write-through for auto-created PENDING accounts."""
+    from sqlalchemy import select
+
+    from niki.infrastructure.postgres import PostgresClient
+
+    if PostgresClient._engine is None:
+        return
+    async for session in PostgresClient.get_session():
+        existing = (
+            await session.execute(select(Parent).where(Parent.id == parent_id))
+        ).scalar_one_or_none()
+        if existing is None:
+            parent = Parent(
+                id=parent_id,
+                name=name,
+                id_number_hash=PostgresAccountRepository.hash_field(id_number),
+                phone_hash=PostgresAccountRepository.hash_field(phone),
+                email=email,
+                email_hash=(PostgresAccountRepository.hash_field(email) if email else None),
+                email_verified=False,
+                status=ParentStatus.PENDING,
+            )
+            session.add(parent)
+            await session.flush()
+            for step_name in ALL_STEPS:
+                session.add(
+                    AccountVerification(
+                        parent_id=parent_id,
+                        step_name=step_name,
+                        completed=False,
+                        error=None,
+                    )
+                )
+        await session.commit()

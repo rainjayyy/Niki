@@ -80,8 +80,7 @@ class AuditEvent:
             raise ValueError("event_type must be a non-empty string")
         if self.severity not in _VALID_SEVERITIES:
             raise ValueError(
-                f"invalid severity {self.severity!r}; "
-                f"expected one of {sorted(_VALID_SEVERITIES)}"
+                f"invalid severity {self.severity!r}; expected one of {sorted(_VALID_SEVERITIES)}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -193,17 +192,18 @@ class InMemoryAuditLogRepository(AuditLogRepository):
             key=lambda r: r["_seq"],
             reverse=True,
         )
-        rows = [r for r in rows if self._matches(
-            r,
-            event_type=event_type,
-            actor_parent_id=actor_parent_id,
-            since=since,
-        )]
-        # Strip the internal `_seq` so callers can't depend on it.
-        return [
-            {k: v for k, v in r.items() if k != "_seq"}
-            for r in rows[:limit]
+        rows = [
+            r
+            for r in rows
+            if self._matches(
+                r,
+                event_type=event_type,
+                actor_parent_id=actor_parent_id,
+                since=since,
+            )
         ]
+        # Strip the internal `_seq` so callers can't depend on it.
+        return [{k: v for k, v in r.items() if k != "_seq"} for r in rows[:limit]]
 
     async def count(
         self,
@@ -233,10 +233,7 @@ class InMemoryAuditLogRepository(AuditLogRepository):
     ) -> bool:
         if event_type is not None and row["event_type"] != event_type:
             return False
-        if (
-            actor_parent_id is not None
-            and row.get("actor_parent_id") != actor_parent_id
-        ):
+        if actor_parent_id is not None and row.get("actor_parent_id") != actor_parent_id:
             return False
         if since is not None:
             created = row.get("created_at")

@@ -32,9 +32,9 @@ from typing import Annotated
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
-router = APIRouter(prefix="/audio", tags=[
-    {"name": "audio", "description": "Audio API endpoints (BE-MEDIA-002)."}
-])
+router = APIRouter(
+    prefix="/audio", tags=[{"name": "audio", "description": "Audio API endpoints (BE-MEDIA-002)."}]
+)
 
 # 5 MB hard cap — covers ~30s of wav@8kHz mono, ~1m of opus.
 MAX_AUDIO_BYTES = 5 * 1024 * 1024

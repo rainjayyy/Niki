@@ -56,45 +56,29 @@ class TreeholeAggregation(Base):
         primary_key=True,
     )
     window_kind: Mapped[str] = mapped_column(
-        String(16), primary_key=True, nullable=False,
+        String(16),
+        primary_key=True,
+        nullable=False,
         default=WINDOW_KIND_WEEKLY,
     )
-    window_start: Mapped[date] = mapped_column(
-        Date, primary_key=True, nullable=False
-    )
-    count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    window_start: Mapped[date] = mapped_column(Date, primary_key=True, nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Σ (valence_value × intensity / 5). valence_value is
     # +0.5 for positive, 0.0 for neutral, -0.5 for negative.
     # mean_valence = valence_sum / count (O(1) at read time).
-    valence_sum: Mapped[float] = mapped_column(
-        Float, nullable=False, default=0.0
-    )
-    negative_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    positive_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    neutral_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    intensity_sum: Mapped[float] = mapped_column(
-        Float, nullable=False, default=0.0
-    )
+    valence_sum: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    negative_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    positive_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    neutral_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    intensity_sum: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     category_counts: Mapped[dict[str, Any]] = mapped_column(
         "category_counts",
         JSON().with_variant(JSONB(), "postgresql"),
         nullable=False,
         default=dict,
     )
-    first_engagement_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    last_engagement_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    first_engagement_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_engagement_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -103,7 +87,9 @@ class TreeholeAggregation(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "child_id", "window_kind", "window_start",
+            "child_id",
+            "window_kind",
+            "window_start",
             name="uq_treehole_agg_scope",
         ),
     )
@@ -123,24 +109,17 @@ class TreeholeAggregation(Base):
             "window_start": self.window_start.isoformat(),
             "count": self.count,
             "valence_sum": self.valence_sum,
-            "mean_valence": (
-                self.valence_sum / self.count if self.count else 0.0
-            ),
+            "mean_valence": (self.valence_sum / self.count if self.count else 0.0),
             "negative_count": self.negative_count,
             "positive_count": self.positive_count,
             "neutral_count": self.neutral_count,
             "intensity_sum": self.intensity_sum,
             "category_counts": dict(self.category_counts or {}),
             "first_engagement_at": (
-                self.first_engagement_at.isoformat()
-                if self.first_engagement_at else None
+                self.first_engagement_at.isoformat() if self.first_engagement_at else None
             ),
             "last_engagement_at": (
-                self.last_engagement_at.isoformat()
-                if self.last_engagement_at else None
+                self.last_engagement_at.isoformat() if self.last_engagement_at else None
             ),
-            "updated_at": (
-                self.updated_at.isoformat()
-                if self.updated_at else None
-            ),
+            "updated_at": (self.updated_at.isoformat() if self.updated_at else None),
         }

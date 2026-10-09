@@ -33,8 +33,14 @@ from niki.db.models import PushDevice, PushPrefs
 # ---------------------------------------------------------------------------
 
 DEFAULT_ENABLED_CHANNELS: list[str] = [
-    "hms", "mipush", "oppo", "vivo", "flyme",
-    "apns", "fcm", "web",
+    "hms",
+    "mipush",
+    "oppo",
+    "vivo",
+    "flyme",
+    "apns",
+    "fcm",
+    "web",
 ]
 
 # BE-PUSH-004: defaults for the four new columns. `severities` is
@@ -75,35 +81,25 @@ class PushDeviceRepository(ABC):
         """
 
     @abstractmethod
-    async def delete_by_device_id(
-        self, parent_id: str, device_id: str
-    ) -> int:
+    async def delete_by_device_id(self, parent_id: str, device_id: str) -> int:
         """Delete by (parent_id, device_id). Returns rows removed."""
 
     @abstractmethod
-    async def delete_by_token(
-        self, push_token: str
-    ) -> int:
+    async def delete_by_token(self, push_token: str) -> int:
         """Delete by push_token (used when the vendor reports the
         token as invalid). Returns rows removed."""
 
     @abstractmethod
-    async def list_for_parent(
-        self, parent_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         """List every registered device for `parent_id`."""
 
     @abstractmethod
-    async def get_by_token(
-        self, push_token: str
-    ) -> dict[str, Any] | None:
+    async def get_by_token(self, push_token: str) -> dict[str, Any] | None:
         """Lookup by push_token (used by future BE-PUSH-002 to
         route a delivery)."""
 
     @abstractmethod
-    async def set_enabled(
-        self, parent_id: str, device_id: str, enabled: bool
-    ) -> bool:
+    async def set_enabled(self, parent_id: str, device_id: str, enabled: bool) -> bool:
         """Enable / disable a single device. Returns True if
         the row was updated, False if no such device.
 
@@ -113,9 +109,7 @@ class PushDeviceRepository(ABC):
         """
 
     @abstractmethod
-    async def list_active_for_parent(
-        self, parent_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_active_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         """List only the enabled devices for `parent_id`.
 
         Used by GET /devices/active (BE-DEV-003) and by
@@ -183,9 +177,7 @@ class InMemoryPushDeviceRepository(PushDeviceRepository):
             self._token_index[push_token] = f"{parent_id}|{device_id}"
             return deepcopy(row)
 
-    async def delete_by_device_id(
-        self, parent_id: str, device_id: str
-    ) -> int:
+    async def delete_by_device_id(self, parent_id: str, device_id: str) -> int:
         with self._lock:
             key = (parent_id, device_id)
             row = self._rows.pop(key, None)
@@ -203,19 +195,11 @@ class InMemoryPushDeviceRepository(PushDeviceRepository):
             self._rows.pop((parent_id, device_id), None)
             return 1
 
-    async def list_for_parent(
-        self, parent_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [
-                deepcopy(row)
-                for (pid, _did), row in self._rows.items()
-                if pid == parent_id
-            ]
+            return [deepcopy(row) for (pid, _did), row in self._rows.items() if pid == parent_id]
 
-    async def get_by_token(
-        self, push_token: str
-    ) -> dict[str, Any] | None:
+    async def get_by_token(self, push_token: str) -> dict[str, Any] | None:
         with self._lock:
             key_str = self._token_index.get(push_token)
             if not key_str:
@@ -224,9 +208,7 @@ class InMemoryPushDeviceRepository(PushDeviceRepository):
             row = self._rows.get((parent_id, device_id))
             return deepcopy(row) if row else None
 
-    async def set_enabled(
-        self, parent_id: str, device_id: str, enabled: bool
-    ) -> bool:
+    async def set_enabled(self, parent_id: str, device_id: str, enabled: bool) -> bool:
         with self._lock:
             row = self._rows.get((parent_id, device_id))
             if row is None:
@@ -234,9 +216,7 @@ class InMemoryPushDeviceRepository(PushDeviceRepository):
             row["enabled"] = enabled
             return True
 
-    async def list_active_for_parent(
-        self, parent_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_active_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         with self._lock:
             return [
                 deepcopy(row)
@@ -270,28 +250,33 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
         enabled: bool = True,
     ) -> dict[str, Any]:
         now = _now()
-        stmt = pg_insert(PushDevice).values(
-            parent_id=parent_id,
-            device_id=device_id,
-            channel=channel,
-            push_token=push_token,
-            platform=platform,
-            enabled=enabled,
-            last_active_at=now,
-            created_at=now,
-        ).on_conflict_do_update(
-            index_elements=[
-                PushDevice.parent_id,
-                PushDevice.device_id,
-            ],
-            set_={
-                "channel": channel,
-                "push_token": push_token,
-                "platform": platform,
-                "enabled": enabled,
-                "last_active_at": now,
-            },
-        ).returning(PushDevice)
+        stmt = (
+            pg_insert(PushDevice)
+            .values(
+                parent_id=parent_id,
+                device_id=device_id,
+                channel=channel,
+                push_token=push_token,
+                platform=platform,
+                enabled=enabled,
+                last_active_at=now,
+                created_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    PushDevice.parent_id,
+                    PushDevice.device_id,
+                ],
+                set_={
+                    "channel": channel,
+                    "push_token": push_token,
+                    "platform": platform,
+                    "enabled": enabled,
+                    "last_active_at": now,
+                },
+            )
+            .returning(PushDevice)
+        )
         # Defensive: if a different row already owns this token,
         # clear it before the unique constraint aborts the upsert.
         # In practice, the API layer should reject duplicates with
@@ -301,9 +286,7 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
         await self._session.flush()
         return row.to_dict()
 
-    async def delete_by_device_id(
-        self, parent_id: str, device_id: str
-    ) -> int:
+    async def delete_by_device_id(self, parent_id: str, device_id: str) -> int:
         result = await self._session.execute(
             delete(PushDevice).where(
                 PushDevice.parent_id == parent_id,
@@ -320,9 +303,7 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
         await self._session.flush()
         return result.rowcount or 0
 
-    async def list_for_parent(
-        self, parent_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(PushDevice)
             .where(PushDevice.parent_id == parent_id)
@@ -330,19 +311,16 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
         )
         return [r.to_dict() for r in result.scalars().all()]
 
-    async def get_by_token(
-        self, push_token: str
-    ) -> dict[str, Any] | None:
+    async def get_by_token(self, push_token: str) -> dict[str, Any] | None:
         result = await self._session.execute(
             select(PushDevice).where(PushDevice.push_token == push_token)
         )
         row = result.scalar_one_or_none()
         return row.to_dict() if row else None
 
-    async def set_enabled(
-        self, parent_id: str, device_id: str, enabled: bool
-    ) -> bool:
+    async def set_enabled(self, parent_id: str, device_id: str, enabled: bool) -> bool:
         from sqlalchemy import update
+
         result = await self._session.execute(
             update(PushDevice)
             .where(
@@ -354,9 +332,7 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
         await self._session.flush()
         return (result.rowcount or 0) > 0
 
-    async def list_active_for_parent(
-        self, parent_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_active_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         result = await self._session.execute(
             select(PushDevice)
             .where(
@@ -490,69 +466,52 @@ class PostgresPushPrefsRepository(PushPrefsRepository):
     ) -> dict[str, Any]:
         now = _now()
         current = await self.get(parent_id)
-        new_quiet_start = (
-            quiet_start if quiet_start is not None
-            else current["quiet_start"]
-        )
-        new_quiet_end = (
-            quiet_end if quiet_end is not None
-            else current["quiet_end"]
-        )
+        new_quiet_start = quiet_start if quiet_start is not None else current["quiet_start"]
+        new_quiet_end = quiet_end if quiet_end is not None else current["quiet_end"]
         new_enabled_channels = (
-            list(enabled_channels)
-            if enabled_channels is not None
-            else current["enabled_channels"]
+            list(enabled_channels) if enabled_channels is not None else current["enabled_channels"]
         )
         new_high_risk_only = (
-            high_risk_only
-            if high_risk_only is not None
-            else current["high_risk_only"]
+            high_risk_only if high_risk_only is not None else current["high_risk_only"]
         )
-        new_dnd_enabled = (
-            dnd_enabled
-            if dnd_enabled is not None
-            else current["dnd_enabled"]
-        )
-        new_dnd_until = (
-            dnd_until
-            if dnd_until is not None
-            else current["dnd_until"]
-        )
-        new_severities = (
-            list(severities)
-            if severities is not None
-            else current["severities"]
-        )
+        new_dnd_enabled = dnd_enabled if dnd_enabled is not None else current["dnd_enabled"]
+        new_dnd_until = dnd_until if dnd_until is not None else current["dnd_until"]
+        new_severities = list(severities) if severities is not None else current["severities"]
         new_muted_event_types = (
             list(muted_event_types)
             if muted_event_types is not None
             else current["muted_event_types"]
         )
-        stmt = pg_insert(PushPrefs).values(
-            parent_id=parent_id,
-            quiet_start=new_quiet_start,
-            quiet_end=new_quiet_end,
-            enabled_channels=new_enabled_channels,
-            high_risk_only=new_high_risk_only,
-            dnd_enabled=new_dnd_enabled,
-            dnd_until=new_dnd_until,
-            severities=new_severities,
-            muted_event_types=new_muted_event_types,
-            updated_at=now,
-        ).on_conflict_do_update(
-            index_elements=[PushPrefs.parent_id],
-            set_={
-                "quiet_start": new_quiet_start,
-                "quiet_end": new_quiet_end,
-                "enabled_channels": new_enabled_channels,
-                "high_risk_only": new_high_risk_only,
-                "dnd_enabled": new_dnd_enabled,
-                "dnd_until": new_dnd_until,
-                "severities": new_severities,
-                "muted_event_types": new_muted_event_types,
-                "updated_at": now,
-            },
-        ).returning(PushPrefs)
+        stmt = (
+            pg_insert(PushPrefs)
+            .values(
+                parent_id=parent_id,
+                quiet_start=new_quiet_start,
+                quiet_end=new_quiet_end,
+                enabled_channels=new_enabled_channels,
+                high_risk_only=new_high_risk_only,
+                dnd_enabled=new_dnd_enabled,
+                dnd_until=new_dnd_until,
+                severities=new_severities,
+                muted_event_types=new_muted_event_types,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[PushPrefs.parent_id],
+                set_={
+                    "quiet_start": new_quiet_start,
+                    "quiet_end": new_quiet_end,
+                    "enabled_channels": new_enabled_channels,
+                    "high_risk_only": new_high_risk_only,
+                    "dnd_enabled": new_dnd_enabled,
+                    "dnd_until": new_dnd_until,
+                    "severities": new_severities,
+                    "muted_event_types": new_muted_event_types,
+                    "updated_at": now,
+                },
+            )
+            .returning(PushPrefs)
+        )
         result = await self._session.execute(stmt)
         row = result.scalar_one()
         await self._session.flush()

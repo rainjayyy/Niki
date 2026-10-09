@@ -15,7 +15,14 @@ from fastapi import Depends
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
-from niki.agents.emotion import EmotionAgent, EmotionBaseline, EmotionRecord
+from niki.agents.emotion import (
+    EMPATHY_TEMPLATES,
+    EmotionAgent,
+    EmotionBaseline,
+    EmotionCategory,
+    EmotionRecord,
+    should_activate_treehole,
+)
 from niki.api._stub_llm import _StubLLM
 from niki.dashboard.service import DashboardService
 from niki.safety.input_gateway import InputSafetyGateway
@@ -26,10 +33,7 @@ router = APIRouter(
     tags=[
         {
             "name": "emotion",
-            "description": (
-                "Emotion Agent API endpoints — child-facing "
-                "emotional support."
-            ),
+            "description": ("Emotion Agent API endpoints — child-facing emotional support."),
         },
     ],
 )
@@ -37,8 +41,6 @@ router = APIRouter(
 # ISS-02: a shared input gateway so self-harm / blacklisted topics
 # trigger parent alert even when calling the agent directly (not via /chat).
 _input_gateway = InputSafetyGateway()
-
-
 
 
 # Module-level singletons
@@ -76,8 +78,10 @@ _orchestrator = EmotionAgent(
             as the orchestrator path.
             """,
 )
-async def express_emotion(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def express_emotion(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Child shares an emotional expression.
 
     Request body: {"text": "...", "child_age": 7}
@@ -109,22 +113,29 @@ async def express_emotion(payload: dict,
             },
         }
 
-    # ISS-08: use a per-call fresh agent so concurrent requests with
-    # different child_ages don't mutate the singleton state.
-    fresh_agent = EmotionAgent(
-        llm=_llm,
-        baseline=_baseline,
-        persona="gentle",
-        child_age=child_age,
-    )
-    child_input = ChildInput(text=text, session_id="emotion")
-    output = await fresh_agent.invoke(child_input)
+    # Fast rule-based classification keeps this endpoint lightweight:
+    # the chat orchestrator already produces the full empathetic reply.
+    emotion = EmotionAgent._detect_emotion(text)
+    intensity = EmotionAgent._compute_intensity(text, emotion)
+    valence = EmotionAgent._emotion_to_valence(emotion, intensity)
+    anomaly = _baseline.check_anomaly(valence) if emotion != EmotionCategory.NEUTRAL else None
 
     return {
-        "text": output.text,
-        "intent": output.intent,
-        "emotion": output.emotion,
-        "metadata": output.metadata,
+        "text": EMPATHY_TEMPLATES.get(emotion, "Niki?????~"),
+        "intent": "emotional",
+        "emotion": emotion.value,
+        "metadata": {
+            "intensity": intensity,
+            "rule_based": True,
+            "treehole_activated": should_activate_treehole(text),
+            "anomaly": {
+                "is_anomaly": anomaly.is_anomaly,
+                "z_score": anomaly.z_score,
+                "direction": anomaly.direction,
+            }
+            if anomaly
+            else None,
+        },
     }
 
 
@@ -133,7 +144,9 @@ async def express_emotion(payload: dict,
     summary="Get baseline statistics",
     description="Get baseline statistics.",
 )
-async def get_baseline(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_baseline(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get baseline statistics."""
     stats = _baseline.window_stats()
     return {
@@ -160,7 +173,9 @@ async def get_baseline(parent: ParentAccount = Depends(get_current_parent),) -> 
     summary="Run the 8pm proactive-care check (PRD #12)",
     description="Run the 8pm proactive-care check (PRD #12).",
 )
-async def proactive_care_check(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def proactive_care_check(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Run the 8pm proactive-care check (PRD #12)."""
     care = _orchestrator.run_proactive_care()
     if care is None:
@@ -187,7 +202,9 @@ async def proactive_care_check(parent: ParentAccount = Depends(get_current_paren
     summary="Short good-night greeting (PRD #16)",
     description="Short good-night greeting (PRD #16).",
 )
-async def good_night(parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def good_night(
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Short good-night greeting (PRD #16)."""
     output = _orchestrator.good_night()
     return {
@@ -201,8 +218,10 @@ async def good_night(parent: ParentAccount = Depends(get_current_parent),) -> di
     summary="Add a record to the baseline (for testing/demo)",
     description="Add a record to the baseline (for testing/demo).",
 )
-async def add_baseline_record(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_baseline_record(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add a record to the baseline (for testing/demo)."""
     record = EmotionRecord(
         date=payload["date"],
@@ -219,8 +238,10 @@ async def add_baseline_record(payload: dict,
     summary="Record a tutoring event (for whitepaper generation)",
     description="Record a tutoring event (for whitepaper generation).",
 )
-async def record_tutoring_event(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def record_tutoring_event(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
     _dashboard.record_tutoring_event(
         child_id=payload["child_id"],
@@ -236,8 +257,10 @@ async def record_tutoring_event(payload: dict,
     summary="Record a knowledge-base query",
     description="Record a knowledge-base query.",
 )
-async def record_knowledge_query(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def record_knowledge_query(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record a knowledge-base query."""
     _dashboard.record_knowledge_query(
         child_id=payload["child_id"],

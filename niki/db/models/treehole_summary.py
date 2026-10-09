@@ -30,9 +30,7 @@ class TreeholeSummary(Base):
 
     __tablename__ = "treehole_summaries"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     child_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("children.id", ondelete="CASCADE"),
@@ -74,9 +72,7 @@ class TreeholeSummary(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "child_id", "week_start", "phase", name="uq_treehole_summary_scope"
-        ),
+        UniqueConstraint("child_id", "week_start", "phase", name="uq_treehole_summary_scope"),
     )
 
     def is_expired(self, now: datetime | None = None) -> bool:

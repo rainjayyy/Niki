@@ -37,30 +37,16 @@ class AuthAuditLog(Base):
 
     __tablename__ = "auth_audit_logs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid_str
-    )
-    event_type: Mapped[str] = mapped_column(
-        String(64), nullable=False, index=True
-    )
-    severity: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="info"
-    )
-    actor_parent_id: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True, index=True
-    )
-    target_parent_id: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True
-    )
-    target_child_id: Mapped[Optional[str]] = mapped_column(
-        String(36), nullable=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="info")
+    actor_parent_id: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
+    target_parent_id: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    target_child_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     endpoint: Mapped[str] = mapped_column(String(256), nullable=False)
     method: Mapped[str] = mapped_column(String(8), nullable=False)
     reason: Mapped[str] = mapped_column(String(512), nullable=False)
-    client_ip: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True
-    )
+    client_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

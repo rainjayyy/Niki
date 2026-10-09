@@ -149,9 +149,7 @@ class PostgresEmotionBaselineRepository(EmotionBaselineRepository):
 
     async def list_all(self) -> list[dict[str, Any]]:
         result = await self._session.execute(
-            select(EmotionBaselineRecord).order_by(
-                EmotionBaselineRecord.created_at
-            )
+            select(EmotionBaselineRecord).order_by(EmotionBaselineRecord.created_at)
         )
         return [_row_to_dict(r) for r in result.scalars().all()]
 

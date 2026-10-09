@@ -25,9 +25,12 @@ from niki.content_policy import (
     FamilyBlacklist,
 )
 
-router = APIRouter(prefix="/policy", tags=[
-    {"name": "content-policy", "description": "Content policy API endpoints — PRD #32, #34."}
-])
+router = APIRouter(
+    prefix="/policy",
+    tags=[
+        {"name": "content-policy", "description": "Content policy API endpoints — PRD #32, #34."}
+    ],
+)
 
 # Module-level state (per-family)
 _blacklists: dict[str, FamilyBlacklist] = {}
@@ -64,8 +67,11 @@ def _get_downgrader(family_id: str, child_id: str, child_age: int) -> ContentDow
     summary="Add a topic to the family blacklist",
     description="Add a topic to the family blacklist.",
 )
-async def add_blacklist(family_id: str, payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_blacklist(
+    family_id: str,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add a topic to the family blacklist."""
     topic = payload.get("topic", "")
     action_str = payload.get("action", "downgrade")
@@ -86,8 +92,11 @@ async def add_blacklist(family_id: str, payload: dict,
     summary="Remove a topic from the family blacklist",
     description="Remove a topic from the family blacklist.",
 )
-async def remove_blacklist(family_id: str, payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def remove_blacklist(
+    family_id: str,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Remove a topic from the family blacklist."""
     topic = payload.get("topic", "")
     blacklist = _get_blacklist(family_id)
@@ -100,8 +109,10 @@ async def remove_blacklist(family_id: str, payload: dict,
     summary="List all blacklisted topics for the family",
     description="List all blacklisted topics for the family.",
 )
-async def get_blacklist(family_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_blacklist(
+    family_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """List all blacklisted topics for the family."""
     return _get_blacklist(family_id).to_dict()
 
@@ -111,8 +122,11 @@ async def get_blacklist(family_id: str,
     summary="Evaluate text for blacklist matches",
     description="Evaluate text for blacklist matches.",
 )
-async def evaluate_blacklist(family_id: str, payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def evaluate_blacklist(
+    family_id: str,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Evaluate text for blacklist matches."""
     text = payload.get("text", "")
     matches = _get_blacklist(family_id).match(text)
@@ -130,8 +144,11 @@ async def evaluate_blacklist(family_id: str, payload: dict,
     summary="Get the age band for a child",
     description="Get the age band for a child.",
 )
-async def get_age_band(child_id: str, child_age: int = 7,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def get_age_band(
+    child_id: str,
+    child_age: int = 7,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get the age band for a child."""
     grader = _get_age_grader(child_id, child_age)
     return {
@@ -145,8 +162,10 @@ async def get_age_band(child_id: str, child_age: int = 7,
     summary="Grade a concept for a child's age",
     description="Grade a concept for a child's age.",
 )
-async def grade_concept(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def grade_concept(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Grade a concept for a child's age."""
     child_age = int(payload.get("child_age", 7))
     concept = payload.get("concept", "")
@@ -160,8 +179,10 @@ async def grade_concept(payload: dict,
     summary="Grade all concepts mentioned in text",
     description="Grade all concepts mentioned in text.",
 )
-async def grade_text(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def grade_text(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Grade all concepts mentioned in text."""
     child_age = int(payload.get("child_age", 7))
     text = payload.get("text", "")
@@ -181,8 +202,10 @@ async def grade_text(payload: dict,
     summary="Apply all downgrade rules (blacklist + age) to text",
     description="Apply all downgrade rules (blacklist + age) to text.",
 )
-async def evaluate_downgrade(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def evaluate_downgrade(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Apply all downgrade rules (blacklist + age) to text."""
     family_id = payload.get("family_id", "")
     child_id = payload.get("child_id", "")

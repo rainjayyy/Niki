@@ -87,6 +87,12 @@ from niki.db.repositories.webhook_repo import (
     get_webhook_repository,
     set_webhook_repository,
 )
+from niki.db.repositories.letter_repo import (
+    InMemoryLetterRepository,
+    LetterRepository,
+    get_letter_repository,
+    set_letter_repository,
+)
 
 __all__ = [
     "AccountRepository",
@@ -155,6 +161,10 @@ __all__ = [
     "PostgresPhoneChangeRepository",
     "get_phone_change_repository",
     "set_phone_change_repository",
+    "LetterRepository",
+    "InMemoryLetterRepository",
+    "get_letter_repository",
+    "set_letter_repository",
 ]
 
 from niki.db.repositories.child_repo import (

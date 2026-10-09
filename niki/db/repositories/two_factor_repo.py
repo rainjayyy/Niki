@@ -60,19 +60,9 @@ class TwoFactorConfigData:
         return {
             "parent_id": self.parent_id,
             "is_enabled": self.is_enabled,
-            "enabled_at": (
-                self.enabled_at.isoformat()
-                if self.enabled_at
-                else None
-            ),
-            "last_used_at": (
-                self.last_used_at.isoformat()
-                if self.last_used_at
-                else None
-            ),
-            "backup_codes_remaining": max(
-                0, 10 - len(self.backup_codes_used or [])
-            ),
+            "enabled_at": (self.enabled_at.isoformat() if self.enabled_at else None),
+            "last_used_at": (self.last_used_at.isoformat() if self.last_used_at else None),
+            "backup_codes_remaining": max(0, 10 - len(self.backup_codes_used or [])),
         }
 
 
@@ -189,9 +179,7 @@ class PostgresTwoFactorRepository(TwoFactorRepository):
 
     async def get(self, parent_id: str) -> TwoFactorConfigData | None:
         result = await self._session.execute(
-            select(TwoFactorConfig).where(
-                TwoFactorConfig.parent_id == parent_id
-            )
+            select(TwoFactorConfig).where(TwoFactorConfig.parent_id == parent_id)
         )
         row = result.scalar_one_or_none()
         return self._to_data(row) if row else None
@@ -208,9 +196,7 @@ class PostgresTwoFactorRepository(TwoFactorRepository):
         backup_codes_used: list[int],
     ) -> TwoFactorConfigData:
         result = await self._session.execute(
-            select(TwoFactorConfig).where(
-                TwoFactorConfig.parent_id == parent_id
-            )
+            select(TwoFactorConfig).where(TwoFactorConfig.parent_id == parent_id)
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -238,9 +224,7 @@ class PostgresTwoFactorRepository(TwoFactorRepository):
         from sqlalchemy import delete as sa_delete
 
         await self._session.execute(
-            sa_delete(TwoFactorConfig).where(
-                TwoFactorConfig.parent_id == parent_id
-            )
+            sa_delete(TwoFactorConfig).where(TwoFactorConfig.parent_id == parent_id)
         )
 
     @staticmethod

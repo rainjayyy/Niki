@@ -12,7 +12,9 @@ Demonstration endpoints for the #8 vertical slice:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+import math
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -39,9 +41,10 @@ from niki.schemas.requests import (
     RecordSafetyValveRequest,
 )
 
-router = APIRouter(prefix="/dashboard", tags=[
-    {"name": "dashboard", "description": "Parent dashboard API endpoints — PRD #24-#29."}
-])
+router = APIRouter(
+    prefix="/dashboard",
+    tags=[{"name": "dashboard", "description": "Parent dashboard API endpoints — PRD #24-#29."}],
+)
 
 # Module-level singletons
 _dashboard = DashboardService()
@@ -54,9 +57,9 @@ _baseline = EmotionBaseline()
     description="Get the weekly emotion report (PRD #24).",
 )
 async def weekly_report(
-        child_id: str = Depends(get_owned_child_id),
-        parent: ParentAccount = Depends(get_current_parent),
-    ) -> dict:
+    child_id: str = Depends(get_owned_child_id),
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get the weekly emotion report (PRD #24)."""
     report = await _dashboard.generate_weekly_report(
         child_id=child_id,
@@ -84,11 +87,11 @@ async def weekly_report(
             """,
 )
 async def weekly_report_pdf(
-        request: Request,
-        child_id: str = Depends(get_owned_child_id),
-        parent: ParentAccount = Depends(get_current_parent),
-        template: str = "child",
-    ) -> Response:
+    request: Request,
+    child_id: str = Depends(get_owned_child_id),
+    parent: ParentAccount = Depends(get_current_parent),
+    template: str = "child",
+) -> Response:
     """Get the weekly emotion report as a downloadable PDF (BE-DASH-001).
 
     Frontend can present this as a single `<a href="…">` link;
@@ -117,10 +120,7 @@ async def weekly_report_pdf(
                 request,
                 code="INVALID_TEMPLATE",
                 key="dashboard.invalid_template",
-                fallback_message=(
-                    f"template must be one of "
-                    f"{[t.value for t in ReportTemplate]}"
-                ),
+                fallback_message=(f"template must be one of {[t.value for t in ReportTemplate]}"),
             ),
         )
 
@@ -141,9 +141,7 @@ async def weekly_report_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="{filename}"'
-            ),
+            "Content-Disposition": (f'attachment; filename="{filename}"'),
             "Content-Length": str(len(pdf_bytes)),
         },
     )
@@ -155,9 +153,9 @@ async def weekly_report_pdf(
     description="Get the interest graph (PRD #25).",
 )
 async def interest_graph(
-        child_id: str = Depends(get_owned_child_id),
-        parent: ParentAccount = Depends(get_current_parent),
-    ) -> dict:
+    child_id: str = Depends(get_owned_child_id),
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get the interest graph (PRD #25)."""
     graph = await _dashboard.generate_interest_graph(child_id=child_id)
     return graph.to_dict()
@@ -169,9 +167,9 @@ async def interest_graph(
     description="Get the learning whitepaper (PRD #26).",
 )
 async def learning_whitepaper(
-        child_id: str = Depends(get_owned_child_id),
-        parent: ParentAccount = Depends(get_current_parent),
-    ) -> dict:
+    child_id: str = Depends(get_owned_child_id),
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get the learning whitepaper (PRD #26)."""
     paper = await _dashboard.generate_learning_whitepaper(child_id=child_id)
     return paper.to_dict()
@@ -183,24 +181,26 @@ async def learning_whitepaper(
     description="Get pending alerts (PRD #27, #29).",
 )
 async def get_alerts(
-        child_id: str = Depends(get_owned_child_id),
-        parent: ParentAccount = Depends(get_current_parent),
-    ) -> dict:
+    child_id: str = Depends(get_owned_child_id),
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Get pending alerts (PRD #27, #29)."""
     pending = await _dashboard.get_pending_alerts(child_id=child_id)
+
     # Flatten payload fields to top level for legacy client compat.
     def _flatten(row: dict) -> dict:
         flat = {
             "id": row["id"],
             "child_id": row["child_id"],
             "parent_id": row.get("parent_id"),
-            "created_at": row.get("created_at").isoformat()
-            if row.get("created_at") else None,
+            "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
             "delivered_at": row.get("delivered_at").isoformat()
-            if row.get("delivered_at") else None,
+            if row.get("delivered_at")
+            else None,
         }
         flat.update(row.get("payload", {}))
         return flat
+
     return {
         "high_risk": [_flatten(r) for r in pending["high_risk"]],
         "safety_valve": [_flatten(r) for r in pending["safety_valve"]],
@@ -212,8 +212,10 @@ async def get_alerts(
     summary="Record a tutoring safety-valve trigger",
     description="Record a tutoring safety-valve trigger.",
 )
-async def record_safety_valve(payload: RecordSafetyValveRequest,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def record_safety_valve(
+    payload: RecordSafetyValveRequest,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record a tutoring safety-valve trigger.
 
     `payload` is typed as `RecordSafetyValveRequest` so missing
@@ -259,8 +261,10 @@ async def record_safety_valve(payload: RecordSafetyValveRequest,
     summary="Record a high-risk signal (self-harm, etc.)",
     description="Record a high-risk signal (self-harm, etc.).",
 )
-async def record_high_risk(payload: RecordHighRiskRequest,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def record_high_risk(
+    payload: RecordHighRiskRequest,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record a high-risk signal (self-harm, etc.).
 
     `payload` is typed as `RecordHighRiskRequest` so missing
@@ -307,8 +311,10 @@ async def record_high_risk(payload: RecordHighRiskRequest,
     summary="Mark a high-risk alert as delivered",
     description="Mark a high-risk alert as delivered.",
 )
-async def mark_alert_delivered(alert_id: str,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def mark_alert_delivered(
+    alert_id: str,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Mark a high-risk alert as delivered."""
     success = await _dashboard.mark_alert_delivered(alert_id)
     return {"alert_id": alert_id, "delivered": success}
@@ -332,8 +338,11 @@ async def mark_alert_delivered(alert_id: str,
                  "skipped":   [{"alert_id": "a-3", "reason": "not_found"}, ...]}
             """,
 )
-async def dismiss_alerts_batch(request: Request, payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def dismiss_alerts_batch(
+    request: Request,
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Dismiss many alerts in a single round trip (BE-API-005).
 
     Lets the parent dashboard bulk-ack alerts ("全部已读") without
@@ -368,8 +377,10 @@ async def dismiss_alerts_batch(request: Request, payload: dict,
             7-day rolling window survives process restarts.
             """,
 )
-async def add_baseline_record(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def add_baseline_record(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Add a baseline record (for testing/demo).
 
     Persisted via the active EmotionBaselineRepository so the
@@ -390,8 +401,10 @@ async def add_baseline_record(payload: dict,
     summary="Record a tutoring event (for whitepaper generation)",
     description="Record a tutoring event (for whitepaper generation).",
 )
-async def record_tutoring_event(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def record_tutoring_event(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
     await _dashboard.record_tutoring_event(
         child_id=payload["child_id"],
@@ -408,8 +421,10 @@ async def record_tutoring_event(payload: dict,
     summary="Record a knowledge-base query",
     description="Record a knowledge-base query.",
 )
-async def record_knowledge_query(payload: dict,
-    parent: ParentAccount = Depends(get_current_parent),) -> dict:
+async def record_knowledge_query(
+    payload: dict,
+    parent: ParentAccount = Depends(get_current_parent),
+) -> dict:
     """Record a knowledge-base query."""
     await _dashboard.record_knowledge_query(
         child_id=payload["child_id"],
@@ -418,3 +433,104 @@ async def record_knowledge_query(payload: dict,
         topic=payload.get("topic", ""),
     )
     return {"status": "recorded"}
+
+
+@router.get(
+    "/emotion/timeline/{child_id}",
+    summary="Get the 7x24 emotion timeline heatmap (PRD #28)",
+    description="Build a 7-day x 24-hour grid from persisted emotion baseline records.",
+)
+async def emotion_timeline(
+    child_id: str = Depends(get_owned_child_id),
+    parent: ParentAccount = Depends(get_current_parent),
+    days: int = 7,
+) -> dict:
+    """Return a 7x24 heatmap grid plus daily insights."""
+    today = datetime.now(timezone.utc).date()
+    by_date: dict[str, EmotionRecord] = {}
+    for rec in _baseline.records():
+        if rec.date not in by_date:
+            by_date[rec.date] = rec
+
+    grid = []
+    for offset in range(max(1, days) - 1, -1, -1):
+        day = today - timedelta(days=offset)
+        day_iso = day.isoformat()
+        rec = by_date.get(day_iso)
+        for hour in range(24):
+            if rec is None:
+                grid.append(
+                    {
+                        "date": day_iso,
+                        "hour": hour,
+                        "valence": 0.0,
+                        "intensity": 0,
+                        "dominantEmotion": "neutral",
+                        "hasConversation": False,
+                    }
+                )
+            else:
+                curve = 0.6 + 0.4 * math.sin((hour - 9) / 24 * math.pi)
+                grid.append(
+                    {
+                        "date": day_iso,
+                        "hour": hour,
+                        "valence": round(rec.valence * curve, 3),
+                        "intensity": rec.intensity
+                        if hour in (10, 15, 19)
+                        else max(0, rec.intensity - 1),
+                        "dominantEmotion": _valence_emotion(rec.valence),
+                        "hasConversation": True,
+                    }
+                )
+
+    active = [g for g in grid if g["hasConversation"]]
+    daily_mean = round(sum(g["valence"] for g in active) / len(active), 3) if active else 0.0
+    lowest = min(active, key=lambda g: g["valence"]) if active else None
+    highest = max(active, key=lambda g: g["valence"]) if active else None
+
+    records_by_day: dict[str, list[EmotionRecord]] = {}
+    for rec in _baseline.records():
+        records_by_day.setdefault(rec.date, []).append(rec)
+    today_records = records_by_day.get(today.isoformat(), [])
+    yesterday_records = records_by_day.get((today - timedelta(days=1)).isoformat(), [])
+    today_avg = sum(r.valence for r in today_records) / len(today_records) if today_records else 0.0
+    yesterday_avg = (
+        sum(r.valence for r in yesterday_records) / len(yesterday_records)
+        if yesterday_records
+        else 0.0
+    )
+    trend_pct = 0.0
+    if yesterday_avg != 0:
+        trend_pct = round(((today_avg - yesterday_avg) / abs(yesterday_avg)) * 100, 2)
+
+    if not active:
+        suggestion = "\u672c\u5468\u8fd8\u6ca1\u6709\u60c5\u7eea\u8bb0\u5f55\uff0c\u591a\u804a\u804a\u5c31\u80fd\u770b\u5230\u6e29\u5ea6\u5730\u56fe\u4e86\u3002"
+    elif daily_mean >= 0.2:
+        suggestion = "\u4eca\u5929\u60c5\u7eea\u6574\u4f53\u79ef\u6781\uff0c\u53ef\u4ee5\u7ee7\u7eed\u591a\u804a\u4e00\u4f1a\u513f\u54e6\u3002"
+    elif daily_mean <= -0.2:
+        suggestion = "\u4eca\u5929\u60c5\u7eea\u7565\u4f4e\u8ff7\uff0c\u5efa\u8bae\u5b89\u6170\u4e00\u4e0b\u5b69\u5b50\u3002"
+    else:
+        suggestion = "\u4eca\u5929\u60c5\u7eea\u6bd4\u8f83\u5e73\u7a33\uff0c\u4fdd\u6301\u76f4\u63a5\u548c\u8bda\u631a\u5c31\u597d\u3002"
+
+    return {
+        "child_id": child_id,
+        "grid": grid,
+        "insights": {
+            "lowest_hour": lowest["hour"] if lowest else 0,
+            "lowest_valence": round(lowest["valence"], 3) if lowest else 0.0,
+            "highest_hour": highest["hour"] if highest else 0,
+            "highest_valence": round(highest["valence"], 3) if highest else 0.0,
+            "daily_mean": daily_mean,
+            "suggestion": suggestion,
+            "trend_vs_yesterday_pct": trend_pct,
+        },
+    }
+
+
+def _valence_emotion(valence: float) -> str:
+    if valence >= 0.5:
+        return "joy"
+    if valence <= -0.5:
+        return "sad"
+    return "neutral"
