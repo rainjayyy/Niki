@@ -45,27 +45,37 @@ class _RecordingLLM:
         return {"content": "你好，我是Niki~"}
 
 
-@pytest.mark.skip(
-    reason=(
-        "Pre-existing: emotion agent no longer makes LLM calls in v1 "
-        "(curated template path; see niki/agents/emotion.py:_build_response "
-        "comment about golden-dataset keyword drift). This test asserts an "
-        "LLM call happens, which is no longer true. Rewrite to use a different "
-        "agent or mock the classifier to force the LLM path before re-enabling."
-    )
-)
 @pytest.mark.asyncio
 async def test_orchestrator_remembers_context() -> None:
-    """The second turn should include the first turn in LLM messages."""
+    """Turn 2's LLM call should include turn 1's child text + Niki's reply.
+
+    Background: the original version of this test routed both turns
+    through the emotion path, but the emotion agent in v1 uses a
+    curated template (no LLM call) — see niki/agents/emotion.py:
+    _build_response. We now use encyclopedia-keyword inputs that the
+    rule-based classifier routes to the encyclopedia agent, which
+    DOES call the LLM on every turn. This exercises the actual
+    short-term-memory → ChildInput.history → LLM.messages pipeline.
+
+    "为什么" is in the rule-based classifier's _ENCYCLOPEDIA_KEYWORDS
+    so both turns route to encyclopedia without invoking the LLM-based
+    classifier path.
+    """
     from niki.agents.orchestrator import ChatOrchestrator
 
     llm = _RecordingLLM()
     orchestrator = ChatOrchestrator(child_age=7, persona="gentle", llm=llm)
 
-    await orchestrator.chat("我叫小明，我最喜欢恐龙", session_id="ctx-1")
-    await orchestrator.chat("我叫什么名字？", session_id="ctx-1")
+    # Turn 1: routes to encyclopedia (why-keyword) → LLM called →
+    # returns "你好，我是Niki~" → orchestrator appends both turns to
+    # short-term memory.
+    await orchestrator.chat("为什么天空是蓝的？", session_id="ctx-1")
+    # Turn 2: also routes to encyclopedia. The orchestrator reads
+    # turn 1 from short-term memory and forwards it to the LLM as
+    # the message history of the encyclopedia agent's invoke() call.
+    await orchestrator.chat("刚才问的是什么？", session_id="ctx-1")
 
-    assert llm.calls, "expected at least one LLM call"
+    assert llm.calls, "expected at least one LLM call across the two turns"
     last_messages = llm.calls[-1]
     user_contents = " ".join(
         m["content"] for m in last_messages if m.get("role") == "user"
@@ -73,9 +83,14 @@ async def test_orchestrator_remembers_context() -> None:
     assistant_contents = " ".join(
         m["content"] for m in last_messages if m.get("role") == "assistant"
     )
-    assert "我叫小明" in user_contents
+    # Turn 1's child text was forwarded to the LLM as part of the
+    # history on turn 2.
+    assert "为什么天空是蓝的" in user_contents
+    # Turn 1's Niki reply was forwarded to the LLM as an assistant
+    # turn in the history.
     assert "你好，我是Niki~" in assistant_contents
-    assert "我叫什么名字" in user_contents
+    # Turn 2's own child text is the final user message.
+    assert "刚才问的是什么" in user_contents
 
 
 class _CtxLLM:

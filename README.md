@@ -310,7 +310,7 @@ Niki/
 
 | 编号 | 严重度 | 描述 | 位置 |
 |---|---|---|---|
-| ISS-02 | P0 | `/emotion/express` 等 3 个直接 agent 端点绕过输入安全网关 | `niki/api/{emotion,encyclopedia,tutoring}.py` |
+| ISS-02 | P0 ✅ | `/emotion/express` 等 3 个直接 agent 端点绕过输入安全网关 — **已修**（端点层加 `InputSafetyGateway` + 4 个回归测试） | `niki/api/{emotion,encyclopedia,tutoring}.py` |
 | ISS-03 | P0 | Treehole 7 天 purge 后 `encrypted_payloads` 仍残留 | `niki/treehole/purge.py` |
 | ISS-04 | P0 | 账户 30 天删除时 consent 记录未清除 | `niki/auth/lifecycle.py` |
 | ISS-05 | P1 | Pipeline `StepStatus.FAILED` 计数器永远为 0 | `niki/memory/pipeline.py` |
@@ -328,6 +328,8 @@ Niki/
 - ✅ `niki/knowledge/knowledge_base.py` 移除死代码（`DEFAULT_L1_ENTRIES` 重复定义）
 - ✅ `niki/agents/tutoring.py` 移除冗余 `text_lower` 重复赋值
 - ✅ `niki/memory/short_term.py` `clear_all()` 实现真 Redis `SCAN` + `DELETE`（之前是 TODO）
+- ✅ **ISS-02**：`niki/api/{emotion,encyclopedia,tutoring}.py` 三个直接端点加 `InputSafetyGateway` 前置过滤；新增 `tests/api/test_agent_endpoint_safety.py` 4 个端到端回归测试
+- ✅ 3 个 `pytest.mark.skip` 修复：`test_treehole_activated`（改 confidentiality marker 多选一断言）、`test_real_llm_reply_used`（改名为 `test_v1_uses_curated_template_not_llm`，断言 v1 模板路径）、`test_orchestrator_remembers_context`（改走 encyclopedia 路径验证 history 转发）
 
 ---
 

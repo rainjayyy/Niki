@@ -26,7 +26,7 @@
 - 测试盲点：tests/safety/test_input_gateway.py 类 docstring 写"Sexual / drugs / violence should block"，但只测了 sexual + drugs
 - 建议：把扫描循环改成 ("profanity", "violence", "sexual", "drugs")，并补对应测试
 
-### ISS-02 三个直接 Agent 端点绕过输入安全网关
+### ISS-02 三个直接 Agent 端点绕过输入安全网关 ✅ 已修（2026-10-09）
 
 - 位置：
   - niki/api/emotion.py:54-72（/emotion/express）
@@ -37,6 +37,12 @@
 - 影响：孩子 POST {"text": "我不想活了"} 到 /emotion/express → 不会触发 parent_alert。绕过编排器的安全链
 - 测试盲点：没有端到端测试给直接端点发恶意输入
 - 建议：把 InputSafetyGateway 调用下沉到端点层；或把这些端点标 internal、不暴露给儿童客户端
+- **修复**（2026-10-09）：
+  - 三个端点统一加 `_input_gateway = InputSafetyGateway()` 并在调 Agent 前 `await _input_gateway.check(text)`
+  - blocked / escalation / rewrite 三态都正确反映在响应 `metadata` 字段
+  - 新增 `tests/api/test_agent_endpoint_safety.py`（4 个端到端回归测试）覆盖：self-harm escalation（emotion + tutoring）、violence block（encyclopedia）、clean text 通过
+  - 已知安全盲点：`SELF_HARM_CN` 字典未覆盖"想死"等常见表达（如"我好想死啊"），需要补词表——与 ISS-02 修复独立，单独跟踪
+- 关联：ISS-01（已独立修复）
 
 ### ISS-03 Treehole 加密载荷在 7 天 purge 后仍残留
 
@@ -341,5 +347,5 @@
 
 - **ISS-20 建议补一个 mock-based 单元测试**（用 `fakeredis.aioredis` 或 monkeypatch）以防回归。当前烟囱测试只验证了"Redis 不可达时不抛"，没验证"Redis 可达时真删了"。这块在能接 docker 的 CI 环境里建议补上。
 - **ISS-18 建议补一个 import-level sanity 测试**（`assert len(DEFAULT_L1_ENTRIES) == 13`）防止以后又被无声重复定义。
-- **本次未涉及**：ISS-02 / ISS-03 / ISS-04 三个 P0 仍待修（涉及安全网关旁路、Treehole 加密残留、consent 记录残留），优先级高于 ISS-20。
+- **本次未涉及**：ISS-03 / ISS-04 两个 P0 仍待修（涉及 Treehole 加密残留、consent 记录残留），优先级高于 ISS-20。**ISS-02 已修**（见 ISS-02 标题 ✅ + 详情）。
 
