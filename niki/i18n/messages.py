@@ -45,25 +45,20 @@ MESSAGES_ZH: dict[str, str] = {
     "auth.consent_required": "请先签署知情同意书",
     "auth.parent_child_mismatch": "当前账户不能访问该孩子的数据",
     "auth.child_not_found": "未找到该孩子的注册信息",
-
     # ---- auth.phone_change.* (BE-AUTH-006 换绑手机) ----
     "auth.phone_change_invalid_password": "请先验证当前账户密码",
     "auth.phone_change_code_invalid": "短信验证码不正确",
     "auth.phone_change_code_expired": "短信验证码已过期，请重新获取",
     "auth.phone_change_not_found": "换绑请求不存在或不属于当前账户",
     "auth.phone_change_already_pending": "已存在进行中的换绑请求，请先取消",
-    "auth.phone_change_in_cooling_period": (
-        "换绑手机已进入 7 天冷静期，暂无法立即生效"
-    ),
+    "auth.phone_change_in_cooling_period": ("换绑手机已进入 7 天冷静期，暂无法立即生效"),
     "auth.phone_change_same_number": "新手机号不能与当前手机号相同",
     "auth.phone_change_cannot_cancel": "该换绑请求已处于终态，无法取消",
-
     # ---- auth.email_change.* (BE-AUTH-006 换绑邮箱) ----
     "auth.email_change_invalid_format": "邮箱地址格式不正确",
     "auth.email_change_code_invalid": "邮箱验证码不正确",
     "auth.email_change_not_found": "换绑请求不存在或不属于当前账户",
     "auth.email_already_in_use": "该邮箱已被另一账户使用",
-
     # ---- auth.2fa.* (BE-AUTH-007 家长端 2FA / TOTP) ----
     "auth.2fa_required": "此账户已开启两步验证，请提供两步验证码",
     "auth.2fa_invalid_code": "两步验证码不正确",
@@ -73,7 +68,6 @@ MESSAGES_ZH: dict[str, str] = {
     "auth.2fa_password_required": "此操作需要重新验证密码",
     "auth.2fa_password_invalid": "密码不正确",
     "auth.2fa_rate_limited": "两步验证尝试过于频繁，请稍后再试",
-
     # ---- media.* (BE-MEDIA-001 / BE-MEDIA-001-rollout) ----
     "media.empty_file": "上传的文件为空",
     "media.file_not_found": "文件不存在或已过期",
@@ -90,34 +84,27 @@ MESSAGES_ZH: dict[str, str] = {
     "media.invalid_high_risk_only": "high_risk_only 必须为布尔值",
     "media.invalid_severity": "severities 必须是 {info, warning, critical} 的子集",
     "media.invalid_event_type": "muted_event_types 必须是非空字符串列表",
-
     # ---- push.* (BE-PUSH-006 测试推送端点) ----
     "push.device_not_found": "未找到该设备，或该设备不属于当前账户",
     "push.test_rate_limited": "测试推送请求过于频繁，请稍后再试",
-
     # ---- push.web_* (BE-PUSH-003 Web Push / VAPID) ----
     "push.web_unsupported_browser": "当前浏览器不支持网页推送，请更换浏览器或使用手机端接收告警",
     "push.web_subscription_failed": "网页推送订阅失败，请检查通知权限后重试",
     "push.web_vapid_key_unavailable": "服务器推送密钥尚未就绪，请稍后重试",
     "push.web_unsubscribe_failed": "取消网页推送订阅失败，请重试",
-
     # ---- dashboard.* (BE-DASH-001) ----
     "dashboard.invalid_template": "模板名称不合法",
     "dashboard.missing_field": "缺少必填字段",
     "dashboard.invalid_sort": "排序字段不合法",
-
     # ---- auth-audit.* (BE-AUTH-001-rollout-audit) ----
     "auth_audit.bad_request": "请求参数不合法",
     "auth_audit.invalid_sort": "排序字段不合法",
-
     # ---- audit.* (BE-COMP-004 统一审计日志) ----
     "audit.cross_parent_forbidden": "只能查询自己的审计记录",
-
     # ---- notifications.* (BE-PUSH-005 通知中心) ----
     "notifications.not_found": "通知不存在或已被删除",
     "notifications.invalid_cursor": "分页游标无效或已过期",
     "notifications.invalid_severity": "severity 取值不在支持的范围内",
-
     # ---- webhook.* (BE-API-008 回调订阅) ----
     "webhook.invalid_url": "URL 格式不正确",
     "webhook.invalid_event_type": "事件类型不在支持范围内",
@@ -156,61 +143,37 @@ MESSAGES_EN: dict[str, str] = {
     "auth.consent_required": "Please sign the consent document first",
     "auth.parent_child_mismatch": "Token does not own this child_id",
     "auth.child_not_found": "No child registered with the given id",
-
     # ---- auth.phone_change.* (BE-AUTH-006) ----
-    "auth.phone_change_invalid_password": (
-        "Please re-authenticate with your account password"
-    ),
+    "auth.phone_change_invalid_password": ("Please re-authenticate with your account password"),
     "auth.phone_change_code_invalid": "SMS verification code is incorrect",
     "auth.phone_change_code_expired": (
         "SMS verification code has expired; please request a new one"
     ),
-    "auth.phone_change_not_found": (
-        "Phone-change request not found or not owned by this account"
-    ),
+    "auth.phone_change_not_found": ("Phone-change request not found or not owned by this account"),
     "auth.phone_change_already_pending": (
         "A phone-change request is already in flight; please cancel it first"
     ),
     "auth.phone_change_in_cooling_period": (
         "Phone change is in the 7-day cooling period and cannot take effect yet"
     ),
-    "auth.phone_change_same_number": (
-        "New phone number must differ from the current one"
-    ),
+    "auth.phone_change_same_number": ("New phone number must differ from the current one"),
     "auth.phone_change_cannot_cancel": (
         "This phone-change request is in a final state and cannot be cancelled"
     ),
-
     # ---- auth.email_change.* (BE-AUTH-006) ----
     "auth.email_change_invalid_format": "Invalid email address format",
     "auth.email_change_code_invalid": "Email verification code is incorrect",
-    "auth.email_change_not_found": (
-        "Email-change request not found or not owned by this account"
-    ),
+    "auth.email_change_not_found": ("Email-change request not found or not owned by this account"),
     "auth.email_already_in_use": "This email is already in use by another account",
-
     # ---- auth.2fa.* (BE-AUTH-007 parent 2FA / TOTP) ----
-    "auth.2fa_required": (
-        "Two-factor authentication is required for this account"
-    ),
+    "auth.2fa_required": ("Two-factor authentication is required for this account"),
     "auth.2fa_invalid_code": "Invalid two-factor code",
-    "auth.2fa_backup_code_invalid": (
-        "Backup code is invalid or has already been used"
-    ),
-    "auth.2fa_not_enrolled": (
-        "Two-factor authentication is not set up on this account"
-    ),
-    "auth.2fa_already_enrolled": (
-        "Two-factor authentication is already enabled"
-    ),
-    "auth.2fa_password_required": (
-        "Password re-authentication is required for this action"
-    ),
+    "auth.2fa_backup_code_invalid": ("Backup code is invalid or has already been used"),
+    "auth.2fa_not_enrolled": ("Two-factor authentication is not set up on this account"),
+    "auth.2fa_already_enrolled": ("Two-factor authentication is already enabled"),
+    "auth.2fa_password_required": ("Password re-authentication is required for this action"),
     "auth.2fa_password_invalid": "Password is incorrect",
-    "auth.2fa_rate_limited": (
-        "Too many 2FA attempts, please try again later"
-    ),
-
+    "auth.2fa_rate_limited": ("Too many 2FA attempts, please try again later"),
     # ---- media.* ----
     "media.empty_file": "Uploaded file is empty",
     "media.file_not_found": "File not found or expired",
@@ -227,67 +190,41 @@ MESSAGES_EN: dict[str, str] = {
     "media.invalid_high_risk_only": "high_risk_only must be a boolean",
     "media.invalid_severity": "severities must be a subset of {info, warning, critical}",
     "media.invalid_event_type": "muted_event_types must be a list of non-empty strings",
-
     # ---- push.* (BE-PUSH-006 test push endpoint) ----
-    "push.device_not_found": (
-        "Device not found or not owned by this account"
-    ),
-    "push.test_rate_limited": (
-        "Too many test push requests, please retry later"
-    ),
-
+    "push.device_not_found": ("Device not found or not owned by this account"),
+    "push.test_rate_limited": ("Too many test push requests, please retry later"),
     # ---- push.web_* (BE-PUSH-003 Web Push / VAPID) ----
     "push.web_unsupported_browser": (
         "This browser does not support web push; use another browser "
         "or receive alerts on your phone"
     ),
     "push.web_subscription_failed": (
-        "Web push subscription failed; check notification permissions "
-        "and try again"
+        "Web push subscription failed; check notification permissions and try again"
     ),
     "push.web_vapid_key_unavailable": (
         "Push keys are not ready on the server, please retry shortly"
     ),
-    "push.web_unsubscribe_failed": (
-        "Failed to cancel the web push subscription, please retry"
-    ),
-
+    "push.web_unsubscribe_failed": ("Failed to cancel the web push subscription, please retry"),
     # ---- dashboard.* ----
     "dashboard.invalid_template": "Invalid template name",
     "dashboard.missing_field": "Missing required field",
     "dashboard.invalid_sort": "Invalid sort field",
-
     # ---- auth-audit.* ----
     "auth_audit.bad_request": "Bad request",
     "auth_audit.invalid_sort": "Invalid sort field",
-
     # ---- audit.* (BE-COMP-004 unified audit log) ----
-    "audit.cross_parent_forbidden": (
-        "You may only query your own audit history"
-    ),
-
+    "audit.cross_parent_forbidden": ("You may only query your own audit history"),
     # ---- notifications.* (BE-PUSH-005 notification center) ----
-    "notifications.not_found": (
-        "Notification does not exist or has been deleted"
-    ),
-    "notifications.invalid_cursor": (
-        "Pagination cursor is invalid or expired"
-    ),
-    "notifications.invalid_severity": (
-        "severity value is not in the supported set"
-    ),
-
+    "notifications.not_found": ("Notification does not exist or has been deleted"),
+    "notifications.invalid_cursor": ("Pagination cursor is invalid or expired"),
+    "notifications.invalid_severity": ("severity value is not in the supported set"),
     # ---- webhook.* (BE-API-008 callback subscriptions) ----
     "webhook.invalid_url": "Invalid webhook URL",
     "webhook.invalid_event_type": "Event type is not supported",
-    "webhook.not_found": (
-        "Subscription not found or not owned by this account"
-    ),
+    "webhook.not_found": ("Subscription not found or not owned by this account"),
     "webhook.too_many_event_types": "Too many event types (max 10)",
     "webhook.url_not_https": "HTTPS is required in production",
-    "webhook.rate_limited": (
-        "Too many subscription attempts, please retry later"
-    ),
+    "webhook.rate_limited": ("Too many subscription attempts, please retry later"),
 }
 
 

@@ -47,8 +47,8 @@ class CircuitBreakerAwareClient:
         result = await client.chat(messages=...)
     """
 
-    primary: Any                       # DeepSeek-V4 (or stub)
-    fallback: Any                      # doubao (or stub)
+    primary: Any  # DeepSeek-V4 (or stub)
+    fallback: Any  # doubao (or stub)
     breaker: CircuitBreaker
     notifier: DegradationNotifier | None = None
     primary_name: str = "deepseek-v4"
@@ -84,9 +84,7 @@ class CircuitBreakerAwareClient:
         if decision.is_probe:
             # Half-open probe: try primary, treat result with care
             try:
-                result = await self._call_primary(
-                    messages, temperature, max_tokens, **kwargs
-                )
+                result = await self._call_primary(messages, temperature, max_tokens, **kwargs)
                 await self.breaker.record_success()
                 logger.info("client.probe_succeeded")
                 return result
@@ -94,15 +92,11 @@ class CircuitBreakerAwareClient:
                 await self.breaker.record_failure(str(exc))
                 logger.warning("client.probe_failed", error=str(exc))
                 await self._notify_degradation(f"probe failed: {exc}")
-                return await self._call_fallback(
-                    messages, temperature, max_tokens, **kwargs
-                )
+                return await self._call_fallback(messages, temperature, max_tokens, **kwargs)
 
         # CLOSED: try primary
         try:
-            result = await self._call_primary(
-                messages, temperature, max_tokens, **kwargs
-            )
+            result = await self._call_primary(messages, temperature, max_tokens, **kwargs)
             await self.breaker.record_success()
             return result
         except Exception as exc:
@@ -112,9 +106,7 @@ class CircuitBreakerAwareClient:
                 error=str(exc),
             )
             await self._notify_degradation(f"primary failed: {exc}")
-            return await self._call_fallback(
-                messages, temperature, max_tokens, **kwargs
-            )
+            return await self._call_fallback(messages, temperature, max_tokens, **kwargs)
 
     async def _call_primary(
         self,

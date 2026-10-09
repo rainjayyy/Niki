@@ -126,15 +126,91 @@ class MockASRProvider(ASRProvider):
 
 
 # ---------------------------------------------------------------------------
+# Configurable HTTP provider
+# ---------------------------------------------------------------------------
+
+
+class HttpASRProvider(ASRProvider):
+    """ASR provider that forwards audio to an HTTP endpoint.
+
+    Enable by setting ASR_BASE_URL (optionally ASR_API_KEY / ASR_MODEL).
+    The endpoint contract mirrors POST /api/v1/audio/transcribe:
+    multipart field `file`, optional form fields `language` and
+    `child_age`; response JSON `{text, duration_ms, confidence}`.
+    """
+
+    def __init__(self, base_url: str, api_key: str = "", model: str = "whisper-1") -> None:
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._model = model
+
+    async def transcribe(
+        self,
+        audio: bytes,
+        *,
+        language: str = "zh-CN",
+        child_age: int | None = None,
+    ) -> ASRResult:
+        import httpx
+
+        files = {"file": ("audio.bin", audio)}
+        data: dict[str, object] = {"language": language, "model": self._model}
+        if child_age is not None:
+            data["child_age"] = child_age
+        headers = {}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{self._base_url}/transcribe",
+                    files=files,
+                    data=data,
+                    headers=headers,
+                )
+        except Exception as exc:
+            raise ASRError("ASR_BACKEND_UNAVAILABLE", str(exc)) from exc
+        if resp.status_code != 200:
+            raise ASRError(
+                "ASR_HTTP_ERROR",
+                f"ASR backend returned HTTP {resp.status_code}",
+            )
+        body = resp.json()
+        return ASRResult(
+            text=str(body.get("text", "")),
+            duration_ms=int(body.get("duration_ms", 0)),
+            confidence=float(body.get("confidence", 0.9)),
+            language=language,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Process-wide singleton (production swap-in point)
 # ---------------------------------------------------------------------------
 
 
-_provider: ASRProvider = MockASRProvider()
+_provider: ASRProvider | None = None
 
 
 def get_asr_provider() -> ASRProvider:
-    """Return the process-wide ASR provider (default: mock)."""
+    """Return the process-wide ASR provider.
+
+    Uses HttpASRProvider when ASR_BASE_URL is configured, otherwise
+    falls back to the deterministic mock.
+    """
+    import os
+
+    global _provider
+    if _provider is None:
+        base_url = os.environ.get("ASR_BASE_URL", "").strip()
+        if base_url:
+            _provider = HttpASRProvider(
+                base_url,
+                api_key=os.environ.get("ASR_API_KEY", ""),
+                model=os.environ.get("ASR_MODEL", "whisper-1"),
+            )
+        else:
+            _provider = MockASRProvider()
     return _provider
 
 

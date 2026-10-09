@@ -72,9 +72,7 @@ async def _attempt_header_2fa(
             return None
     if backup_header:
         try:
-            await service.verify_backup_code(
-                parent_id, backup_header
-            )
+            await service.verify_backup_code(parent_id, backup_header)
             return "backup"
         except (TwoFactorBackupCodeInvalid, TwoFactorNotEnrolled):
             return None
@@ -84,12 +82,8 @@ async def _attempt_header_2fa(
 async def require_2fa_for_sensitive_ops(
     request: Request,
     parent: Annotated[ParentAccount, Depends(get_current_parent)],
-    x_2fa_code: Annotated[
-        Optional[str], Header(alias=HEADER_TOTP_CODE)
-    ] = None,
-    x_2fa_backup_code: Annotated[
-        Optional[str], Header(alias=HEADER_BACKUP_CODE)
-    ] = None,
+    x_2fa_code: Annotated[Optional[str], Header(alias=HEADER_TOTP_CODE)] = None,
+    x_2fa_backup_code: Annotated[Optional[str], Header(alias=HEADER_BACKUP_CODE)] = None,
 ) -> bool:
     """Dependency that admits the caller iff 2FA gate passes.
 
@@ -122,9 +116,7 @@ async def require_2fa_for_sensitive_ops(
             return parent
 
     # Path 2 / 3: header-supplied proof.
-    via = await _attempt_header_2fa(
-        parent.id, x_2fa_code, x_2fa_backup_code
-    )
+    via = await _attempt_header_2fa(parent.id, x_2fa_code, x_2fa_backup_code)
     if via is not None:
         request.state.two_factor_verified_via = via
         return parent

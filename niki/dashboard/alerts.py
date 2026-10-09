@@ -22,8 +22,8 @@ logger = structlog.get_logger(__name__)
 class AlertSeverity(StrEnum):
     """How urgent is this alert."""
 
-    INFO = "info"                # Routine event (safety-valve)
-    URGENT = "urgent"            # Requires attention (high-risk signal)
+    INFO = "info"  # Routine event (safety-valve)
+    URGENT = "urgent"  # Requires attention (high-risk signal)
 
 
 @dataclass
@@ -39,7 +39,7 @@ class SafetyValveAlert:
     id: str
     child_id: str
     severity: AlertSeverity = AlertSeverity.INFO
-    problem_summary: str = ""         # e.g. "数学应用题"
+    problem_summary: str = ""  # e.g. "数学应用题"
     round_reached: int = 4
     triggered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     action_suggestion: str = ""
@@ -66,7 +66,7 @@ class HighRiskAlert:
 
     id: str
     child_id: str
-    original_text: str            # PRD #29: 看到原文
+    original_text: str  # PRD #29: 看到原文
     niki_response_summary: str
     severity: AlertSeverity = AlertSeverity.URGENT
     triggered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

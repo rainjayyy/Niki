@@ -194,9 +194,7 @@ class WeeklyReportPDF:
         self.branding = branding or ReportBranding()
 
     def render(self) -> bytes:
-        styles = _build_styles(
-            _safe_color(self.branding.brand_color)
-        )
+        styles = _build_styles(_safe_color(self.branding.brand_color))
         buf = io.BytesIO()
         doc = SimpleDocTemplate(
             buf,
@@ -205,18 +203,13 @@ class WeeklyReportPDF:
             rightMargin=18 * mm,
             topMargin=18 * mm,
             bottomMargin=18 * mm,
-            title=(
-                f"Niki 周报 - {self.branding.brand_name or 'Niki'} "
-                f"- {self.child_id}"
-            ),
+            title=(f"Niki 周报 - {self.branding.brand_name or 'Niki'} - {self.child_id}"),
         )
         story = self._build_story(styles)
         doc.build(story)
         return buf.getvalue()
 
-    def _build_story(
-        self, styles: dict[str, ParagraphStyle]
-    ) -> list:
+    def _build_story(self, styles: dict[str, ParagraphStyle]) -> list:
         story: list = []
         report = self.report
         trend = report.trend
@@ -229,9 +222,7 @@ class WeeklyReportPDF:
 
         # ---- Title block ----
         title_emoji = copy["title_emoji"]
-        story.append(
-            Paragraph(f"{title_emoji}Niki 周报", styles["title"])
-        )
+        story.append(Paragraph(f"{title_emoji}Niki 周报", styles["title"]))
         story.append(
             Paragraph(
                 f"孩子 ID: {self.child_id} &nbsp;|&nbsp; "
@@ -241,21 +232,13 @@ class WeeklyReportPDF:
         )
 
         # ---- Headline ----
-        story.append(
-            Paragraph("本周亮点", styles["section"])
-        )
-        story.append(
-            Paragraph(report.headline or "—", styles["body"])
-        )
+        story.append(Paragraph("本周亮点", styles["section"]))
+        story.append(Paragraph(report.headline or "—", styles["body"]))
         story.append(Spacer(1, 6))
 
         # ---- Trend ----
-        story.append(
-            Paragraph("情绪趋势", styles["section"])
-        )
-        trend_label = _TREND_LABEL.get(
-            trend.overall_trend, "—"
-        ) + copy["trend_label_extra"]
+        story.append(Paragraph("情绪趋势", styles["section"]))
+        trend_label = _TREND_LABEL.get(trend.overall_trend, "—") + copy["trend_label_extra"]
         trend_table = Table(
             [
                 ["整体趋势", "正向天数", "情绪低谷", "数据窗口"],
@@ -273,12 +256,9 @@ class WeeklyReportPDF:
                 [
                     ("FONTNAME", (0, 0), (-1, -1), _CJK_FONT),
                     ("FONTSIZE", (0, 0), (-1, -1), 10),
-                    ("BACKGROUND", (0, 0), (-1, 0),
-                     colors.HexColor("#E5E5E5")),
-                    ("TEXTCOLOR", (1, 1), (1, 1),
-                     _trend_color(trend.overall_trend)),
-                    ("TEXTCOLOR", (0, 1), (0, 1),
-                     _trend_color(trend.overall_trend)),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E5E5E5")),
+                    ("TEXTCOLOR", (1, 1), (1, 1), _trend_color(trend.overall_trend)),
+                    ("TEXTCOLOR", (0, 1), (0, 1), _trend_color(trend.overall_trend)),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                     ("TOPPADDING", (0, 0), (-1, -1), 6),
                     ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -291,51 +271,31 @@ class WeeklyReportPDF:
 
         # ---- Discoveries ----
         if report.discoveries:
-            story.append(
-                Paragraph(
-                    copy["discoveries_intro"], styles["section"]
-                )
-            )
+            story.append(Paragraph(copy["discoveries_intro"], styles["section"]))
             for d in report.discoveries:
-                story.append(
-                    Paragraph(f"• {d}", styles["bullet"])
-                )
+                story.append(Paragraph(f"• {d}", styles["bullet"]))
             story.append(Spacer(1, 6))
 
         # ---- Fuzzy negatives ----
         if report.fuzzy_negatives:
-            story.append(
-                Paragraph("温馨提示", styles["section"])
-            )
+            story.append(Paragraph("温馨提示", styles["section"]))
             for n in report.fuzzy_negatives:
-                story.append(
-                    Paragraph(f"• {n}", styles["bullet"])
-                )
+                story.append(Paragraph(f"• {n}", styles["bullet"]))
             story.append(Spacer(1, 6))
 
         # ---- Anomalies ----
         if report.anomaly_annotations:
-            story.append(
-                Paragraph("关注点", styles["section"])
-            )
+            story.append(Paragraph("关注点", styles["section"]))
             for a in report.anomaly_annotations:
-                story.append(
-                    Paragraph(f"⚠ {a}", styles["bullet"])
-                )
+                story.append(Paragraph(f"⚠ {a}", styles["bullet"]))
             story.append(Spacer(1, 6))
 
         # ---- Action suggestions (template-aware) ----
         actions = get_default_actions(self.template, report)
         if actions:
-            story.append(
-                Paragraph(
-                    copy["tips_intro"], styles["section"]
-                )
-            )
+            story.append(Paragraph(copy["tips_intro"], styles["section"]))
             for s in actions:
-                story.append(
-                    Paragraph(f"• {s}", styles["bullet"])
-                )
+                story.append(Paragraph(f"• {s}", styles["bullet"]))
             story.append(Spacer(1, 6))
 
         # ---- Footer ----
@@ -351,9 +311,7 @@ class WeeklyReportPDF:
         story.append(Paragraph(footer, styles["meta"]))
         return story
 
-    def _build_header(
-        self, styles: dict[str, ParagraphStyle]
-    ) -> list:
+    def _build_header(self, styles: dict[str, ParagraphStyle]) -> list:
         """Logo (left) + brand name (right) header row."""
         logo_bytes = self.branding.logo_bytes()
         if logo_bytes:
@@ -363,15 +321,14 @@ class WeeklyReportPDF:
                 # sensible aspect ratio.
                 try:
                     from PIL import Image as PILImage
+
                     with PILImage.open(logo_buf) as im:
                         w_px, h_px = im.size
                 except Exception:
                     w_px, h_px = 100, 50
                 logo_buf.seek(0)
                 # Scale to fit LOGO_MAX_WIDTH_MM, preserve ratio
-                aspect = (
-                    h_px / w_px if w_px else 0.5
-                )
+                aspect = h_px / w_px if w_px else 0.5
                 w_mm = self.LOGO_MAX_WIDTH_MM
                 h_mm = min(
                     self.LOGO_MAX_HEIGHT_MM,
@@ -389,10 +346,15 @@ class WeeklyReportPDF:
 
         if logo_img and self.branding.brand_name:
             row = Table(
-                [[logo_img, Paragraph(
-                    self.branding.brand_name,
-                    styles["brand_name"],
-                )]],
+                [
+                    [
+                        logo_img,
+                        Paragraph(
+                            self.branding.brand_name,
+                            styles["brand_name"],
+                        ),
+                    ]
+                ],
                 colWidths=[
                     self.LOGO_MAX_WIDTH_MM + 4,
                     A4[0] - 18 * 2 - 4 - self.LOGO_MAX_WIDTH_MM,
@@ -411,9 +373,7 @@ class WeeklyReportPDF:
         if logo_img:
             return [logo_img]
         if self.branding.brand_name:
-            return [Paragraph(
-                self.branding.brand_name, styles["brand_name"]
-            )]
+            return [Paragraph(self.branding.brand_name, styles["brand_name"])]
         return []
 
     def _window_days(self) -> int:

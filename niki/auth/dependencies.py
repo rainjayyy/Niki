@@ -62,9 +62,7 @@ def _unauthorized(code: str, message: str) -> HTTPException:
 
 async def get_current_parent(
     request: Request,
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
-    ],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
 ) -> ParentAccount:
     """Authenticate the caller via a Bearer JWT and return the account.
 
@@ -138,9 +136,7 @@ async def get_owned_child_id(
         return child_id
 
     endpoint = f"{request.method} {request.url.path}"
-    client_ip: Optional[str] = (
-        request.client.host if request.client else None
-    )
+    client_ip: Optional[str] = request.client.host if request.client else None
 
     if registered_parent is None:
         await get_auth_audit_logger().log_violation(

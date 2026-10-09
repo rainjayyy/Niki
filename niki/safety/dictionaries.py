@@ -29,7 +29,7 @@ PROFANITY = _PROFANITY_EN | _PROFANITY_CN
 
 # Violence
 _VIOLENCE_EN = {"kill", "murder", "shoot", "stab", "strangle", "behead", "torture"}
-_VIOLENCE_CN = {"杀死", "谋杀", "枪杀", "砍死", "掐死", "砍头", "折磨"}
+_VIOLENCE_CN = {"杀", "杀死", "谋杀", "枪杀", "砍死", "掐死", "砍头", "折磨", "打死", "弄死"}
 VIOLENCE = _VIOLENCE_EN | _VIOLENCE_CN
 
 # Self-harm — triggers immediate escalation (PRD #29, #61-64)
@@ -95,9 +95,14 @@ FEAR_WORDS: dict[str, str] = {
 # Detect the model asking the child for private information.
 # PRD #42: never ask the child for address, phone, family details.
 PRIVACY_QUESTION_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(你|你家里|你家|请问|告诉|什么).{0,8}(住址|住哪|地址|家里在哪|住哪里)", re.IGNORECASE),
+    re.compile(
+        r"(你|你家里|你家|请问|告诉|什么).{0,8}(住址|住哪|地址|家里在哪|住哪里)", re.IGNORECASE
+    ),
     re.compile(r"(你|请问|告诉).{0,8}(电话|手机号|电话号码)", re.IGNORECASE),
-    re.compile(r"(what is|where is|what's|where's)\s+(your\s+)?(address|phone|home\s+address)", re.IGNORECASE),
+    re.compile(
+        r"(what is|where is|what's|where's)\s+(your\s+)?(address|phone|home\s+address)",
+        re.IGNORECASE,
+    ),
     re.compile(r"(你|你的).{0,8}(妈妈|爸爸|家人|家长).{0,8}(电话|号码|联系方式)", re.IGNORECASE),
     re.compile(r"can\s+(i|you)\s+have\s+your\s+(address|phone|number)", re.IGNORECASE),
     re.compile(r"(tell|give)\s+me\s+your\s+(address|phone|home)", re.IGNORECASE),
@@ -115,6 +120,13 @@ DIRECT_ANSWER_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(答案\s*[是为就是]|等于\s*[\d]+|就是\s*[\d]+|答案是\s*[\d]+)"),
     re.compile(r"(正确\s*答案\s*[是为就是]|结果\s*[是为就是]|得数\s*[是为就是])"),
     re.compile(r"所以[，,]?\s*[a-zA-Z一-龥\d]+\s*(等于|是|=)\s*[\d]+"),
+    # Extra patterns added 2026-10-09 to catch the 'N 个' / '= N' leak
+    # shapes surfaced by the eval run (e.g. 小明现在有 5 个苹果).
+    re.compile(r"现在有\s*[\d]+\s*个"),  # 现在有 N 个
+    re.compile(r"一共[\s\S]{0,5}?[\d]+\s*个"),  # 一共 ... N 个
+    re.compile(r"等于\s*[\d]+\s*[个只条]?"),  # 等于 5 / 等于 5 个
+    re.compile(r"是\s*[\d]+\s*个"),  # 是 5 个
+    re.compile(r"= ?[\d]+\s*[个只条]?"),  # = 5 / = 5 个
 ]
 
 

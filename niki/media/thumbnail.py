@@ -115,13 +115,8 @@ def set_thumbnail_cache(cache: LRU | None) -> None:
 
 
 def _validate_dims(w: int, h: int) -> tuple[int, int]:
-    if not (MIN_DIM <= w <= MAX_DIM) or not (
-        MIN_DIM <= h <= MAX_DIM
-    ):
-        raise ValueError(
-            f"w and h must be in [{MIN_DIM}, {MAX_DIM}]; "
-            f"got w={w} h={h}"
-        )
+    if not (MIN_DIM <= w <= MAX_DIM) or not (MIN_DIM <= h <= MAX_DIM):
+        raise ValueError(f"w and h must be in [{MIN_DIM}, {MAX_DIM}]; got w={w} h={h}")
     return w, h
 
 
@@ -165,9 +160,7 @@ def build_thumbnail(
     return None
 
 
-def _render_thumbnail(
-    content: bytes, mime_type: str, w: int, h: int
-) -> tuple[bytes, str] | None:
+def _render_thumbnail(content: bytes, mime_type: str, w: int, h: int) -> tuple[bytes, str] | None:
     """Run Pillow to resize. Returns (bytes, mime) or None."""
     try:
         from PIL import Image

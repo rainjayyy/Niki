@@ -28,7 +28,7 @@ from typing import Any
 import structlog
 
 from niki.memory.graph import CognitiveGraph
-from niki.memory.long_term import LongTermMemory
+from niki.memory.long_term import LongTermMemory, MemoryRecord, MemorySource
 
 logger = structlog.get_logger(__name__)
 
@@ -86,8 +86,8 @@ class PipelineStatus(StrEnum):
     """Overall pipeline status."""
 
     SUCCESS = "success"
-    PARTIAL = "partial"          # some steps failed
-    FAILED = "failed"            # all steps failed
+    PARTIAL = "partial"  # some steps failed
+    FAILED = "failed"  # all steps failed
     RUNNING = "running"
     IDLE = "idle"
 
@@ -177,25 +177,81 @@ class NightlyPipeline:
 
     # ---- Step implementations ----
 
-    async def _step_read_logs(self, _context: dict[str, Any]) -> int:
-        """Step 1: read the day's conversation log."""
-        # In production: read from Postgres
-        return 0
+    async def _step_read_logs(self, context: dict[str, Any]) -> int:
+        """Step 1: read recent conversation logs from PostgreSQL."""
+        from sqlalchemy import text
+
+        from niki.infrastructure.postgres import PostgresClient
+
+        logs: list[dict[str, Any]] = []
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        try:
+            async for session in PostgresClient.get_session():
+                rows = (
+                    (
+                        await session.execute(
+                            text(
+                                "SELECT child_id, messages FROM chat_sessions "
+                                "WHERE updated_at >= :cutoff"
+                            ),
+                            {"cutoff": cutoff},
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+                for row in rows:
+                    for msg in row["messages"] or []:
+                        if isinstance(msg, dict) and msg.get("text"):
+                            logs.append(
+                                {
+                                    "child_id": row["child_id"],
+                                    "role": msg.get("role", "user"),
+                                    "text": msg["text"],
+                                    "ts": msg.get("ts") or 0,
+                                }
+                            )
+        except Exception as exc:
+            logger.warning("pipeline.read_logs_failed", error=str(exc))
+        context["logs"] = logs
+        return len(logs)
 
     async def _step_deep_extraction(self, _context: dict[str, Any]) -> int:
         """Step 2: LLM-based deep entity/fact extraction."""
         # In production: call DeepSeek-V4 with the day's logs
         return 0
 
-    async def _step_update_long_term(self, _context: dict[str, Any]) -> int:
-        """Step 3: write new records to Chroma."""
-        # In production: bulk insert to Chroma
-        return 0
+    async def _step_update_long_term(self, context: dict[str, Any]) -> int:
+        """Step 3: write conversation records to Chroma long-term memory."""
+        count = 0
+        for entry in context.get("logs", []):
+            if entry["role"] != "user" or not entry["text"]:
+                continue
+            ts_value = entry.get("ts") or 0
+            ts = (
+                datetime.fromtimestamp(int(ts_value) / 1000, tz=timezone.utc)
+                if ts_value
+                else datetime.now(timezone.utc)
+            )
+            record = MemoryRecord(
+                id=LongTermMemory.make_id(entry["child_id"], entry["text"], "nightly_pipeline"),
+                content=entry["text"],
+                source=MemorySource.NIGHTLY_PIPELINE,
+                child_id=entry["child_id"],
+                timestamp=ts,
+            )
+            await self._long_term.add(record)
+            count += 1
+        return count
 
-    async def _step_update_graph(self, _context: dict[str, Any]) -> int:
-        """Step 4: write new entities/relations to Neo4j."""
-        # In production: write to Neo4j
-        return 0
+    async def _step_update_graph(self, context: dict[str, Any]) -> int:
+        """Step 4: write child entities to the Neo4j cognitive graph."""
+        child_ids = {entry["child_id"] for entry in context.get("logs", [])}
+        count = 0
+        for cid in child_ids:
+            self._graph.add_entity(f"child:{cid}", entity_type="child")
+            count += 1
+        return count
 
     async def _step_update_emotion(self, _context: dict[str, Any]) -> int:
         """Step 5: aggregate today's emotions into the daily record."""
@@ -339,9 +395,7 @@ class NightlyPipeline:
         return {
             "lookback_days": lookback_days,
             "total_runs": len(recent_runs),
-            "dead_letter_count": len(
-                [r for r in self._dead_letter if r.started_at >= cutoff]
-            ),
+            "dead_letter_count": len([r for r in self._dead_letter if r.started_at >= cutoff]),
             "steps": step_status,
             "last_run": recent_runs[-1].to_dict() if recent_runs else None,
         }

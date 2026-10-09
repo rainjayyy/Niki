@@ -72,6 +72,7 @@ class AuthAuditLogger:
     def rate_tracker(self) -> ViolationRateTracker:
         if self._rate_tracker is None:
             from niki.config.settings import get_settings
+
             s = get_settings()
             self._rate_tracker = ViolationRateTracker(
                 window_seconds=s.auth_alert_window_seconds,
@@ -207,9 +208,7 @@ class AuthAuditLogger:
 
         return row_id
 
-    async def _mirror_to_unified_audit(
-        self, event: AuthAuditEvent
-    ) -> None:
+    async def _mirror_to_unified_audit(self, event: AuthAuditEvent) -> None:
         """Copy an auth event into the BE-COMP-004 `audit_logs` table.
 
         Best-effort and silent: the auth trail is already durable at
@@ -248,9 +247,7 @@ class AuthAuditLogger:
                 return
             # Re-check should_alert in case two violations land on
             # the same threshold tick — only fire once per crossing.
-            if not self.rate_tracker.should_alert(
-                event.actor_parent_id or ""
-            ):
+            if not self.rate_tracker.should_alert(event.actor_parent_id or ""):
                 return
             # BE-MISC-002: ops can flip `silence_alerts` to suppress
             # outbound alert dispatch during incident response or
@@ -258,7 +255,8 @@ class AuthAuditLogger:
             # intentionally NOT skipped — when the flag flips back
             # off we resume from accurate counts.
             if get_feature_flag_service().is_enabled(
-                event.actor_parent_id, "silence_alerts",
+                event.actor_parent_id,
+                "silence_alerts",
             ):
                 logger.info(
                     "auth.audit.alert_silenced_by_flag",
@@ -276,10 +274,7 @@ class AuthAuditLogger:
                 event_count=count,
                 window_seconds=self.rate_tracker.window_seconds,
                 detected_at=datetime.now(timezone.utc),
-                title=(
-                    f"Lateral-auth burst: "
-                    f"{event.actor_parent_id} x{count}"
-                ),
+                title=(f"Lateral-auth burst: {event.actor_parent_id} x{count}"),
                 detail=(
                     f"Actor {event.actor_parent_id!r} accumulated "
                     f"{count} lateral-auth violations within "
@@ -300,6 +295,7 @@ class AuthAuditLogger:
                 from niki.realtime.alert_broker import (
                     get_alert_broker,
                 )
+
                 get_alert_broker().publish(alert)
             except Exception as broker_exc:  # pragma: no cover
                 logger.warning(

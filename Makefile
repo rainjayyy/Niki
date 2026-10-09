@@ -1,7 +1,7 @@
 # Niki — Makefile
 # Quick reference for common development commands.
 
-.PHONY: help install dev test lint format typecheck clean docker-up docker-down ts-sdk ts-sdk-check
+.PHONY: help install dev test lint format typecheck migration-check clean docker-up docker-down ts-sdk ts-sdk-check
 
 # Default target
 help:
@@ -55,6 +55,9 @@ test:
 test-all:
 	pytest tests/ -v --tb=short
 
+migration-check:
+	python -m scripts.check_schema_drift
+
 test-cov:
 	pytest tests/ -v --tb=short --cov=niki --cov-report=html --cov-report=term -m "not integration"
 
@@ -82,7 +85,7 @@ ts-sdk-check:
 
 # ---- Full check ----
 
-check: lint typecheck test
+check: lint typecheck migration-check test
 	@echo ""
 	@echo "✅ All checks passed!"
 

@@ -34,10 +34,10 @@ logger = structlog.get_logger(__name__)
 class InputAction(StrEnum):
     """Action to take based on input safety verdict."""
 
-    ALLOW = "allow"                          # proceed normally
-    DOWNGRADE_TO_EMOTION = "downgrade"       # route to emotion agent
-    ESCALATE = "escalate"                    # self-harm: parent alert
-    BLOCK = "block"                          # hard reject
+    ALLOW = "allow"  # proceed normally
+    DOWNGRADE_TO_EMOTION = "downgrade"  # route to emotion agent
+    ESCALATE = "escalate"  # self-harm: parent alert
+    BLOCK = "block"  # hard reject
 
 
 @dataclass(frozen=True)
@@ -45,11 +45,11 @@ class InputVerdict:
     """Result of running the input safety gateway."""
 
     action: InputAction
-    matched_category: str | None = None      # e.g. "self_harm", "topic_blacklist"
+    matched_category: str | None = None  # e.g. "self_harm", "topic_blacklist"
     matched_words: list[str] = field(default_factory=list)
     topic_matches: list[TopicMatch] = field(default_factory=list)
     reason: str = ""
-    sanitized_text: str = ""                 # cleaned text after rewrites
+    sanitized_text: str = ""  # cleaned text after rewrites
 
     @property
     def is_blocked(self) -> bool:

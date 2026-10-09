@@ -33,6 +33,10 @@ EXPECTED_TABLES = {
     "webhook_subscriptions",  # BE-API-008
     "webhook_deliveries",     # BE-API-008
     "phone_change_requests",  # BE-AUTH-006 (phone / email change with cooling)
+    "child_achievements",     # persistent achievements
+    "chat_sessions",          # persistent chat history
+    "weekly_report_history",  # persistent weekly report history
+    "letters",                # persistent parent-to-child letters
 }
 
 

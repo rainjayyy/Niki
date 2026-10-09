@@ -56,7 +56,7 @@ class TreeholeSummary:
     """
 
     timestamp: str
-    source: str = "treehole"          # always "treehole" for isolation
+    source: str = "treehole"  # always "treehole" for isolation
     emotion_valence: str = "neutral"
     emotion_intensity: int = 3
     emotion_category: str = "other"
@@ -123,13 +123,8 @@ class TreeholeManager:
         # NOTE: `or` would treat an empty `InMemoryTreeholeRepository`
         # as falsy (it defines `__len__`), silently dropping an
         # explicit repo argument. Use `is not None` instead.
-        self._repo = (
-            repo if repo is not None else get_treehole_repository()
-        )
-        self._agg_repo = (
-            agg_repo if agg_repo is not None
-            else get_treehole_aggregation_repository()
-        )
+        self._repo = repo if repo is not None else get_treehole_repository()
+        self._agg_repo = agg_repo if agg_repo is not None else get_treehole_aggregation_repository()
 
     @property
     def store(self) -> TreeholeStore:
@@ -189,9 +184,7 @@ class TreeholeManager:
 
         plaintext = json.dumps(summary.to_dict(), ensure_ascii=False)
         associated_data = child_id.encode("utf-8")
-        encrypted_b64 = self._encryption.encrypt(
-            plaintext, associated_data=associated_data
-        )
+        encrypted_b64 = self._encryption.encrypt(plaintext, associated_data=associated_data)
 
         expires_at = datetime.now(timezone.utc) + timedelta(days=self._retention_days)
         encrypted_bytes = base64.b64decode(encrypted_b64)
@@ -288,9 +281,7 @@ class TreeholeManager:
                 aad = row["associated_data"] or row["child_id"].encode("utf-8")
                 ct = base64.b64encode(row["encrypted_payload"]).decode("ascii")
                 plaintext = self._encryption.decrypt(ct, associated_data=aad)
-                out.append(
-                    TreeholeSummary.from_dict(json.loads(plaintext))
-                )
+                out.append(TreeholeSummary.from_dict(json.loads(plaintext)))
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "treehole.decrypt_failed",
@@ -299,20 +290,15 @@ class TreeholeManager:
                 )
         # ---- BE-API-004: time-window + keyword + sort ----
         if since is not None or until is not None:
-            out = [
-                s for s in out
-                if _summary_in_window(s, since, until)
-            ]
+            out = [s for s in out if _summary_in_window(s, since, until)]
         normalised_keyword = (
-            keyword.strip().lower()
-            if isinstance(keyword, str) and keyword.strip()
-            else None
+            keyword.strip().lower() if isinstance(keyword, str) and keyword.strip() else None
         )
         if normalised_keyword is not None:
             out = [
-                s for s in out
-                if normalised_keyword in json.dumps(s.to_dict(),
-                                                     ensure_ascii=False).lower()
+                s
+                for s in out
+                if normalised_keyword in json.dumps(s.to_dict(), ensure_ascii=False).lower()
             ]
         # Whitelist sort field; fall back to timestamp so the
         # response is still deterministic on bad input.
@@ -348,9 +334,7 @@ class TreeholeManager:
         mean, individual summaries cannot be re-derived.
         """
         if child_id is not None:
-            agg = await self._agg_repo.get(
-                child_id, window_kind=window_kind
-            )
+            agg = await self._agg_repo.get(child_id, window_kind=window_kind)
             if not agg or agg.get("count", 0) == 0:
                 return {"mean_valence": 0.0, "count": 0}
             return {

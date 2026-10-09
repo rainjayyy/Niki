@@ -198,9 +198,7 @@ class MockOcrBackend(OcrBackend):
 
         # English dictionary for en-* / default unknown zh-* only when
         # caller explicitly asked for English — otherwise stick with zh.
-        words = (
-            _MOCK_WORDS_EN if language.lower().startswith("en") else _MOCK_WORDS_ZH
-        )
+        words = _MOCK_WORDS_EN if language.lower().startswith("en") else _MOCK_WORDS_ZH
         picked = _pick_words(digest, n, words)
         text = " ".join(picked) if picked else ""
 
@@ -215,11 +213,7 @@ class MockOcrBackend(OcrBackend):
             )
             for i, w in enumerate(picked)
         )
-        avg_conf = (
-            round(sum(r.confidence for r in regions) / len(regions), 3)
-            if regions
-            else 0.0
-        )
+        avg_conf = round(sum(r.confidence for r in regions) / len(regions), 3) if regions else 0.0
 
         return OcrResult(
             text=text,

@@ -87,8 +87,7 @@ class S3CompatibleStorage(MediaStorage):
             from botocore.client import Config
         except ImportError as exc:
             raise RuntimeError(
-                "S3CompatibleStorage requires boto3. "
-                "Install with: pip install boto3"
+                "S3CompatibleStorage requires boto3. Install with: pip install boto3"
             ) from exc
 
         self._bucket = bucket
@@ -159,6 +158,7 @@ class S3CompatibleStorage(MediaStorage):
         url = self._presign(key)
         sha1 = hashlib.sha1(content).hexdigest()
         from datetime import datetime, timezone
+
         return StoredFile(
             file_id=file_id,
             mime_type=mime,
@@ -168,9 +168,7 @@ class S3CompatibleStorage(MediaStorage):
             uploaded_at=datetime.now(timezone.utc),
         )
 
-    def _multipart_upload(
-        self, *, key: str, content: bytes, mime: str
-    ) -> None:
+    def _multipart_upload(self, *, key: str, content: bytes, mime: str) -> None:
         """Multipart upload for content > multipart_threshold.
 
         boto3's high-level `upload_fileobj` handles chunking +
@@ -192,25 +190,19 @@ class S3CompatibleStorage(MediaStorage):
         if key is None:
             return None
         try:
-            resp = self._client.get_object(
-                Bucket=self._bucket, Key=key
-            )
+            resp = self._client.get_object(Bucket=self._bucket, Key=key)
         except Exception as exc:  # pragma: no cover — network path
             # boto3 raises ClientError with Error.Code == "NoSuchKey"
-            code = getattr(
-                getattr(exc, "response", {}), "get", lambda *_: {}
-            )("Error", {}).get("Code", "")
+            code = getattr(getattr(exc, "response", {}), "get", lambda *_: {})("Error", {}).get(
+                "Code", ""
+            )
             if code in ("NoSuchKey", "404", "NotFound"):
                 return None
-            logger.error(
-                "s3_storage.get_failed", key=key, error=str(exc)
-            )
+            logger.error("s3_storage.get_failed", key=key, error=str(exc))
             return None
         return resp["Body"].read()
 
-    def get_with_meta(
-        self, file_id: str
-    ) -> StoredContent | None:
+    def get_with_meta(self, file_id: str) -> StoredContent | None:
         """Read body + authoritative MIME from object metadata.
 
         Unlike LocalDiskStorage (which guesses MIME from the file
@@ -222,18 +214,14 @@ class S3CompatibleStorage(MediaStorage):
         if key is None:
             return None
         try:
-            head = self._client.head_object(
-                Bucket=self._bucket, Key=key
-            )
+            head = self._client.head_object(Bucket=self._bucket, Key=key)
         except Exception as exc:  # pragma: no cover
-            code = getattr(
-                getattr(exc, "response", {}), "get", lambda *_: {}
-            )("Error", {}).get("Code", "")
+            code = getattr(getattr(exc, "response", {}), "get", lambda *_: {})("Error", {}).get(
+                "Code", ""
+            )
             if code in ("NoSuchKey", "404", "NotFound"):
                 return None
-            logger.error(
-                "s3_storage.head_failed", key=key, error=str(exc)
-            )
+            logger.error("s3_storage.head_failed", key=key, error=str(exc))
             return None
         body = self.get(file_id)
         if body is None:
@@ -265,14 +253,9 @@ class S3CompatibleStorage(MediaStorage):
         """
         prefix = file_id + "."
         try:
-            resp = self._client.list_objects_v2(
-                Bucket=self._bucket, Prefix=prefix, MaxKeys=5
-            )
+            resp = self._client.list_objects_v2(Bucket=self._bucket, Prefix=prefix, MaxKeys=5)
         except Exception as exc:  # pragma: no cover
-            logger.error(
-                "s3_storage.list_failed",
-                prefix=prefix, error=str(exc)
-            )
+            logger.error("s3_storage.list_failed", prefix=prefix, error=str(exc))
             return None
         for obj in resp.get("Contents", []):
             return obj["Key"]
@@ -348,6 +331,7 @@ class InMemoryS3Storage(MediaStorage):
             self._objects[key] = (content, mime, sha1)
 
         from datetime import datetime, timezone
+
         return StoredFile(
             file_id=file_id,
             mime_type=mime,
@@ -365,9 +349,7 @@ class InMemoryS3Storage(MediaStorage):
             entry = self._objects.get(key)
         return entry[0] if entry else None
 
-    def get_with_meta(
-        self, file_id: str
-    ) -> StoredContent | None:
+    def get_with_meta(self, file_id: str) -> StoredContent | None:
         key = self._key_for_id(file_id)
         if key is None:
             return None
@@ -393,9 +375,7 @@ class InMemoryS3Storage(MediaStorage):
             cls._INMEM_SEQ += 1
             return cls._INMEM_SEQ
 
-    def _access_url(
-        self, file_id: str, ext: str, mime: str
-    ) -> str:
+    def _access_url(self, file_id: str, ext: str, mime: str) -> str:
         # Synthetic URL: looks like a CDN link, parses cleanly
         # by the existing media:// route. The test endpoint
         # (/api/v1/media/{file_id:path}) accepts both.

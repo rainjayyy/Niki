@@ -35,11 +35,11 @@ MAX_IDLE_MINUTES: int = 10
 class ExitReason(StrEnum):
     """Why a session ended (for the parent dashboard)."""
 
-    HARD_LIMIT = "hard_limit"        # Hit daily time cap
-    PARENT_PAUSE = "parent_pause"    # Parent tapped "pause" in mini-program
+    HARD_LIMIT = "hard_limit"  # Hit daily time cap
+    PARENT_PAUSE = "parent_pause"  # Parent tapped "pause" in mini-program
     PARENT_DELETE = "parent_delete"  # Parent triggered account deletion
-    CHILD_BYE = "child_bye"        # Child said "bye" (natural exit)
-    IDLE_TIMEOUT = "idle_timeout"   # No activity for too long
+    CHILD_BYE = "child_bye"  # Child said "bye" (natural exit)
+    IDLE_TIMEOUT = "idle_timeout"  # No activity for too long
 
 
 @dataclass
@@ -99,6 +99,7 @@ class SessionLimiter:
             self._store = store
         else:
             from niki.session.store import get_session_store
+
             self._store = get_session_store()
 
     def start_session(self, child_id: str, now: datetime | None = None) -> None:

@@ -51,8 +51,12 @@ async def _collect_account(parent_id):
         "exported_at": _now_iso(),
         "parent_id": parent_id,
         "fields": [
-            "id", "name", "email (masked)",
-            "phone (masked)", "status", "created_at",
+            "id",
+            "name",
+            "email (masked)",
+            "phone (masked)",
+            "status",
+            "created_at",
         ],
         "note": "Schema spec only.",
     }
@@ -64,8 +68,11 @@ async def _collect_children(parent_id, child_id):
         "record_count": 0,
         "items": [],
         "schema": [
-            "id (uuid)", "name", "birth_date",
-            "avatar_url", "created_at",
+            "id (uuid)",
+            "name",
+            "birth_date",
+            "avatar_url",
+            "created_at",
         ],
         "filter": {"parent_id": parent_id, "child_id": child_id},
     }
@@ -79,8 +86,13 @@ async def _collect_alerts(repo, parent_id, child_id):
         "record_count": len(owned),
         "items": owned,
         "schema": [
-            "id", "alert_type", "child_id", "parent_id",
-            "payload", "created_at", "delivered_at",
+            "id",
+            "alert_type",
+            "child_id",
+            "parent_id",
+            "payload",
+            "created_at",
+            "delivered_at",
         ],
     }
 
@@ -93,8 +105,11 @@ async def _collect_tutoring_events(repo, parent_id, child_id):
         "record_count": len(owned),
         "items": owned,
         "schema": [
-            "id", "child_id", "parent_id",
-            "payload", "created_at",
+            "id",
+            "child_id",
+            "parent_id",
+            "payload",
+            "created_at",
         ],
     }
 
@@ -107,8 +122,11 @@ async def _collect_knowledge_queries(repo, parent_id, child_id):
         "record_count": len(owned),
         "items": owned,
         "schema": [
-            "id", "child_id", "parent_id",
-            "payload", "created_at",
+            "id",
+            "child_id",
+            "parent_id",
+            "payload",
+            "created_at",
         ],
     }
 
@@ -120,23 +138,29 @@ async def _collect_treehole(repo, parent_id, child_id):
     owned = [r for r in rows if r.get("parent_id") == parent_id]
     items = []
     for r in owned:
-        items.append({
-            "id": r.get("id"),
-            "child_id": r.get("child_id"),
-            "parent_id": r.get("parent_id"),
-            "encrypted_payload_b64": _bytes_to_b64(r.get("encrypted_payload")),
-            "associated_data_b64": _bytes_to_b64(r.get("associated_data")),
-            "expires_at": r["expires_at"].isoformat() if r.get("expires_at") else None,
-            "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
-        })
+        items.append(
+            {
+                "id": r.get("id"),
+                "child_id": r.get("child_id"),
+                "parent_id": r.get("parent_id"),
+                "encrypted_payload_b64": _bytes_to_b64(r.get("encrypted_payload")),
+                "associated_data_b64": _bytes_to_b64(r.get("associated_data")),
+                "expires_at": r["expires_at"].isoformat() if r.get("expires_at") else None,
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            }
+        )
     return {
         "exported_at": _now_iso(),
         "record_count": len(items),
         "items": items,
         "schema": [
-            "id", "child_id", "parent_id",
-            "encrypted_payload_b64", "associated_data_b64",
-            "expires_at", "created_at",
+            "id",
+            "child_id",
+            "parent_id",
+            "encrypted_payload_b64",
+            "associated_data_b64",
+            "expires_at",
+            "created_at",
         ],
         "note": "Ciphertext per PIPL Art. 44.",
     }
@@ -149,8 +173,12 @@ async def _collect_emotion_baseline(repo, parent_id):
         "record_count": len(rows),
         "items": rows,
         "schema": [
-            "id", "date", "valence", "intensity",
-            "source", "created_at",
+            "id",
+            "date",
+            "valence",
+            "intensity",
+            "source",
+            "created_at",
         ],
     }
 
@@ -208,31 +236,17 @@ async def build_export_zip(parent_id, child_id=None):
     sections = {}
     sections["account"] = await _collect_account(parent_id)
     sections["children"] = await _collect_children(parent_id, child_id)
-    sections["alerts"] = await _collect_alerts(
-        dashboard_repo, parent_id, child_id
-    )
-    sections["tutoring"] = await _collect_tutoring_events(
-        dashboard_repo, parent_id, child_id
-    )
-    sections["knowledge"] = await _collect_knowledge_queries(
-        dashboard_repo, parent_id, child_id
-    )
-    sections["treehole"] = await _collect_treehole(
-        treehole_repo, parent_id, child_id
-    )
-    sections["emotion_baseline"] = await _collect_emotion_baseline(
-        baseline_repo, parent_id
-    )
+    sections["alerts"] = await _collect_alerts(dashboard_repo, parent_id, child_id)
+    sections["tutoring"] = await _collect_tutoring_events(dashboard_repo, parent_id, child_id)
+    sections["knowledge"] = await _collect_knowledge_queries(dashboard_repo, parent_id, child_id)
+    sections["treehole"] = await _collect_treehole(treehole_repo, parent_id, child_id)
+    sections["emotion_baseline"] = await _collect_emotion_baseline(baseline_repo, parent_id)
 
     manifest = _build_manifest(parent_id, child_id, sections)
-    total_records = sum(
-        s.get("record_count", 0) for s in sections.values()
-    )
+    total_records = sum(s.get("record_count", 0) for s in sections.values())
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(
-        buf, mode="w", compression=zipfile.ZIP_DEFLATED
-    ) as zf:
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("README.txt", _readme_text(parent_id, child_id))
         for name, payload in sections.items():
             zf.writestr(

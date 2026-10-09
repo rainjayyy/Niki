@@ -28,9 +28,9 @@ logger = structlog.get_logger(__name__)
 class RelationType(StrEnum):
     """Types of relations in the cognitive graph."""
 
-    LIKES = "likes"                # child likes entity
+    LIKES = "likes"  # child likes entity
     DISLIKES = "dislikes"
-    REMEMBERS = "remembers"        # child mentioned before
+    REMEMBERS = "remembers"  # child mentioned before
     RELATED_TO = "related_to"
     KNOWS_ABOUT = "knows_about"
 
@@ -40,7 +40,7 @@ class EntityNode:
     """A single entity in the cognitive graph."""
 
     name: str
-    entity_type: str = "concept"   # person, place, topic, thing
+    entity_type: str = "concept"  # person, place, topic, thing
     aliases: list[str] = field(default_factory=list)
     first_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -160,11 +160,10 @@ class CognitiveGraph:
         if entity_type:
             entities = [e for e in entities if e.entity_type == entity_type]
         normalised = (
-            keyword.strip().lower()
-            if isinstance(keyword, str) and keyword.strip()
-            else None
+            keyword.strip().lower() if isinstance(keyword, str) and keyword.strip() else None
         )
         if normalised is not None:
+
             def _matches(node: EntityNode) -> bool:
                 if normalised in node.name.lower():
                     return True
@@ -172,6 +171,7 @@ class CognitiveGraph:
                     if normalised in alias.lower():
                         return True
                 return False
+
             entities = [e for e in entities if _matches(e)]
         allowed_sorts = {"first_seen", "last_seen", "name"}
         sort_field = sort if sort in allowed_sorts else "first_seen"
@@ -197,11 +197,7 @@ class CognitiveGraph:
         self.add_entity(target)
 
         for edge in self._edges:
-            if (
-                edge.source == source
-                and edge.target == target
-                and edge.relation == relation
-            ):
+            if edge.source == source and edge.target == target and edge.relation == relation:
                 edge.weight = min(1.0, edge.weight + weight_delta)
                 edge.last_updated = datetime.now(timezone.utc)
                 return edge
@@ -283,23 +279,32 @@ class CognitiveGraph:
             source = item.get("source")
             target = item.get("target")
             relation = item.get("relation")
-            if not (isinstance(source, str) and source
-                    and isinstance(target, str) and target
-                    and isinstance(relation, str) and relation):
-                skipped.append({
-                    "source": source,
-                    "target": target,
-                    "reason": "invalid",
-                })
+            if not (
+                isinstance(source, str)
+                and source
+                and isinstance(target, str)
+                and target
+                and isinstance(relation, str)
+                and relation
+            ):
+                skipped.append(
+                    {
+                        "source": source,
+                        "target": target,
+                        "reason": "invalid",
+                    }
+                )
                 continue
             try:
                 relation_enum = RelationType(relation)
             except ValueError:
-                skipped.append({
-                    "source": source,
-                    "target": target,
-                    "reason": "invalid_relation",
-                })
+                skipped.append(
+                    {
+                        "source": source,
+                        "target": target,
+                        "reason": "invalid_relation",
+                    }
+                )
                 continue
             edge = self.add_relation(
                 source=source,
@@ -347,9 +352,7 @@ class EntityAligner:
     def align(self, new_entity: EntityNode) -> EntityNode:
         """If new_entity is similar to an existing one, merge. Otherwise add."""
         for existing in self._graph.list_entities():
-            similarity = self._compute_similarity(
-                new_entity.name, existing.name, existing.aliases
-            )
+            similarity = self._compute_similarity(new_entity.name, existing.name, existing.aliases)
             if similarity >= self.SIMILARITY_THRESHOLD:
                 # Merge into existing
                 if new_entity.name not in existing.aliases and new_entity.name != existing.name:

@@ -55,9 +55,7 @@ class TokenType(StrEnum):
 SCOPE_FULL: str = "full"
 SCOPE_2FA_PENDING: str = "2fa_pending"
 SCOPE_FULL_REAUTH: str = "full_reauth"
-VALID_SCOPES: frozenset[str] = frozenset(
-    {SCOPE_FULL, SCOPE_2FA_PENDING, SCOPE_FULL_REAUTH}
-)
+VALID_SCOPES: frozenset[str] = frozenset({SCOPE_FULL, SCOPE_2FA_PENDING, SCOPE_FULL_REAUTH})
 
 
 class JWTError(Exception):

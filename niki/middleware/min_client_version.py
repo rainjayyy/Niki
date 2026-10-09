@@ -46,14 +46,9 @@ class MinClientVersionMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._min = _parse_semver(min_supported_version)
         if self._min is None:
-            raise ValueError(
-                f"invalid min_supported_version: "
-                f"{min_supported_version!r}"
-            )
+            raise ValueError(f"invalid min_supported_version: {min_supported_version!r}")
 
-    async def dispatch(
-        self, request: Request, call_next
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next) -> Response:
         ver = request.headers.get(self.HEADER)
         if ver:
             parsed = _parse_semver(ver)
@@ -67,18 +62,11 @@ class MinClientVersionMiddleware(BaseHTTPMiddleware):
                     status_code=426,
                     content={
                         "error": "UPGRADE_REQUIRED",
-                        "message": (
-                            f"client version {ver} is below the "
-                            f"minimum supported version"
-                        ),
-                        "min_supported_version": ".".join(
-                            str(x) for x in self._min
-                        ),
+                        "message": (f"client version {ver} is below the minimum supported version"),
+                        "min_supported_version": ".".join(str(x) for x in self._min),
                     },
                     headers={
-                        "Upgrade": ".".join(
-                            str(x) for x in self._min
-                        ),
+                        "Upgrade": ".".join(str(x) for x in self._min),
                         "Retry-After": "86400",
                     },
                 )

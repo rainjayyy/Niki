@@ -33,13 +33,15 @@ from niki.metrics import get_registry
 
 # Paths we never want to observe in the latency histogram — they're
 # either scrape traffic or docs fetches that would dominate samples.
-_SKIP_PATHS: frozenset[str] = frozenset({
-    "/api/v1/metrics",
-    "/openapi.json",
-    "/docs",
-    "/docs/oauth2-redirect",
-    "/redoc",
-})
+_SKIP_PATHS: frozenset[str] = frozenset(
+    {
+        "/api/v1/metrics",
+        "/openapi.json",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/redoc",
+    }
+)
 
 
 def _resolve_endpoint_template(request: Request) -> str:

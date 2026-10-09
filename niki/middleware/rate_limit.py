@@ -121,9 +121,7 @@ def setup_rate_limit(app: FastAPI) -> None:
     app.state.limiter = limiter
 
     @app.exception_handler(RateLimitExceeded)
-    async def _on_rate_limit(
-        request: Request, exc: RateLimitExceeded
-    ) -> JSONResponse:
+    async def _on_rate_limit(request: Request, exc: RateLimitExceeded) -> JSONResponse:
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         limit_str = str(exc.detail) if hasattr(exc, "detail") else "unknown"
         retry_after = 60

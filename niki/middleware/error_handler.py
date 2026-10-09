@@ -155,9 +155,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(ValidationError)
-    async def validation_error_handler(
-        request: Request, exc: ValidationError
-    ) -> JSONResponse:
+    async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
         request_id = _get_request_id(request)
         return _structured(
             status_code=422,
@@ -167,13 +165,9 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(SafetyViolationError)
-    async def safety_violation_handler(
-        request: Request, exc: SafetyViolationError
-    ) -> JSONResponse:
+    async def safety_violation_handler(request: Request, exc: SafetyViolationError) -> JSONResponse:
         request_id = _get_request_id(request)
-        logger.warning(
-            "safety_violation", code="SAFETY_VIOLATION", message=exc.message
-        )
+        logger.warning("safety_violation", code="SAFETY_VIOLATION", message=exc.message)
         return _structured(
             status_code=400,
             code="SAFETY_VIOLATION",
@@ -182,9 +176,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(LLMRateLimitError)
-    async def rate_limit_handler(
-        request: Request, exc: LLMRateLimitError
-    ) -> JSONResponse:
+    async def rate_limit_handler(request: Request, exc: LLMRateLimitError) -> JSONResponse:
         request_id = _get_request_id(request)
         return _structured(
             status_code=429,
@@ -194,9 +186,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(LLMTimeoutError)
-    async def timeout_handler(
-        request: Request, exc: LLMTimeoutError
-    ) -> JSONResponse:
+    async def timeout_handler(request: Request, exc: LLMTimeoutError) -> JSONResponse:
         request_id = _get_request_id(request)
         return _structured(
             status_code=504,
@@ -206,9 +196,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(LLMAuthenticationError)
-    async def llm_auth_error_handler(
-        request: Request, exc: LLMAuthenticationError
-    ) -> JSONResponse:
+    async def llm_auth_error_handler(request: Request, exc: LLMAuthenticationError) -> JSONResponse:
         request_id = _get_request_id(request)
         logger.error("llm_auth_failed", model=exc.model)
         return _structured(
@@ -219,9 +207,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(InfrastructureError)
-    async def infra_error_handler(
-        request: Request, exc: InfrastructureError
-    ) -> JSONResponse:
+    async def infra_error_handler(request: Request, exc: InfrastructureError) -> JSONResponse:
         request_id = _get_request_id(request)
         logger.error(
             "infrastructure_error",
@@ -236,9 +222,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(ConfigurationError)
-    async def config_error_handler(
-        request: Request, exc: ConfigurationError
-    ) -> JSONResponse:
+    async def config_error_handler(request: Request, exc: ConfigurationError) -> JSONResponse:
         request_id = _get_request_id(request)
         logger.error(
             "configuration_error",
@@ -257,9 +241,7 @@ def setup_error_handlers(app: FastAPI) -> None:
     # --------------------------------------------------------------------
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(
-        request: Request, exc: HTTPException
-    ) -> JSONResponse:
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
         """Handle `HTTPException` with §6.3 consistency.
 
         FastAPI's default HTTPException handler wraps `detail` under
@@ -284,9 +266,7 @@ def setup_error_handlers(app: FastAPI) -> None:
                 content=detail,
                 headers=exc.headers,
             )
-        if isinstance(detail, dict) and isinstance(
-            detail.get("error"), str
-        ):
+        if isinstance(detail, dict) and isinstance(detail.get("error"), str):
             # Legacy `{"error": code, "message": ..., ...extra}` → wrap
             # into the §6.3 envelope. Preserve any extra fields (e.g.
             # `max_bytes`, `limit`, `received`) under the inner
@@ -294,11 +274,7 @@ def setup_error_handlers(app: FastAPI) -> None:
             # keep working.
             from niki.api._i18n import error_response
 
-            extra = {
-                k: v
-                for k, v in detail.items()
-                if k not in ("error", "message")
-            }
+            extra = {k: v for k, v in detail.items() if k not in ("error", "message")}
             body = error_response(
                 request,
                 code=detail["error"],
@@ -350,10 +326,7 @@ def setup_error_handlers(app: FastAPI) -> None:
                 # is a Python `ValueError` object. Both are not JSON-
                 # serialisable. Drop them and keep the structured
                 # loc/msg/type which is what callers actually need.
-                safe_errors.append({
-                    k: v for k, v in err.items()
-                    if k not in ("input", "ctx")
-                })
+                safe_errors.append({k: v for k, v in err.items() if k not in ("input", "ctx")})
         # Frontend expects 400 (not 422) for body validation errors so it
         # can treat them like every other 4xx in its interceptor. The
         # detail body still carries the structured `errors` list so
@@ -370,9 +343,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Catch-all for unexpected exceptions."""
         request_id = _get_request_id(request)
 

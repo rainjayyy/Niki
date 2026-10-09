@@ -27,9 +27,9 @@ logger = structlog.get_logger(__name__)
 class FusionStrategy(StrEnum):
     """How multiple agent outputs should be combined."""
 
-    CONCATENATE = "concatenate"   # Sequential: A then B (empathy-first for emotional+tutoring)
-    INTERLEAVE = "interleave"     # Alternate sentences (advanced; not used in #2 slice)
-    PICK_PRIMARY = "pick_primary" # Use only the primary agent's output
+    CONCATENATE = "concatenate"  # Sequential: A then B (empathy-first for emotional+tutoring)
+    INTERLEAVE = "interleave"  # Alternate sentences (advanced; not used in #2 slice)
+    PICK_PRIMARY = "pick_primary"  # Use only the primary agent's output
 
 
 @dataclass

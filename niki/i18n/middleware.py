@@ -64,9 +64,7 @@ def pick_lang(
     Returns:
         A language tag (always non-empty).
     """
-    supported_set = (
-        tuple(supported) if supported is not None else tuple(CATALOGS.keys())
-    )
+    supported_set = tuple(supported) if supported is not None else tuple(CATALOGS.keys())
 
     # 1) explicit override wins
     if query_lang:

@@ -149,9 +149,7 @@ class InMemorySMSCodeService(SMSCodeService):
                 # No active code: gate new dispatch on cooldown.
                 last = self._last_sent_at.get(phone, 0.0)
                 if now - last < self._cooldown:
-                    raise SMSRateLimited(
-                        retry_after_seconds=self._cooldown - (now - last)
-                    )
+                    raise SMSRateLimited(retry_after_seconds=self._cooldown - (now - last))
                 record = _SMSRecord(
                     code=f"{secrets.randbelow(1_000_000):06d}",
                     expires_at=now + self._ttl,

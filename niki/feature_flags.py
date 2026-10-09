@@ -53,22 +53,16 @@ class FeatureFlagService:
         one source.
         """
         if defaults is not None and defaults_json is not None:
-            raise ValueError(
-                "pass either `defaults` or `defaults_json`, not both"
-            )
+            raise ValueError("pass either `defaults` or `defaults_json`, not both")
         if defaults is not None:
             initial: dict[str, bool] = {k: bool(v) for k, v in dict(defaults).items()}
         elif defaults_json is not None:
             try:
                 parsed = json.loads(defaults_json)
             except json.JSONDecodeError as exc:
-                raise ValueError(
-                    f"feature_flags_default is not valid JSON: {exc}"
-                ) from exc
+                raise ValueError(f"feature_flags_default is not valid JSON: {exc}") from exc
             if not isinstance(parsed, dict):
-                raise ValueError(
-                    "feature_flags_default must decode to a JSON object"
-                )
+                raise ValueError("feature_flags_default must decode to a JSON object")
             initial = {k: bool(v) for k, v in parsed.items()}
         else:
             initial = {}

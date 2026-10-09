@@ -71,11 +71,7 @@ BACKUP_CODE_COUNT: int = 10
 # Each backup code is BACKUP_CODE_LENGTH chars from BACKUP_CODE_ALPHABET.
 BACKUP_CODE_LENGTH: int = 8
 # Excludes the 5 visually ambiguous characters (0, O, 1, l, I).
-BACKUP_CODE_ALPHABET: str = (
-    "23456789"
-    "ABCDEFGHJKMNPQRSTUVWXYZ"
-    "abcdefghjkmnpqrstuvwxyz"
-)
+BACKUP_CODE_ALPHABET: str = "23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz"
 
 
 # ---------------------------------------------------------------------------
@@ -108,9 +104,7 @@ class TwoFactorError(Exception):
 
 class TwoFactorNotEnrolled(TwoFactorError):
     def __init__(self) -> None:
-        super().__init__(
-            "TWO_FA_NOT_ENROLLED", "2FA has not been set up for this account"
-        )
+        super().__init__("TWO_FA_NOT_ENROLLED", "2FA has not been set up for this account")
 
 
 class TwoFactorAlreadyEnrolled(TwoFactorError):
@@ -123,9 +117,7 @@ class TwoFactorAlreadyEnrolled(TwoFactorError):
 
 class TwoFactorInvalidCode(TwoFactorError):
     def __init__(self) -> None:
-        super().__init__(
-            "TWO_FA_INVALID_CODE", "The provided 2FA code is invalid"
-        )
+        super().__init__("TWO_FA_INVALID_CODE", "The provided 2FA code is invalid")
 
 
 class TwoFactorBackupCodeInvalid(TwoFactorError):
@@ -157,29 +149,19 @@ class TwoFactorService(ABC):
     async def begin_enrollment(self, parent_id: str) -> EnrollmentPayload: ...
 
     @abstractmethod
-    async def verify_enrollment(
-        self, parent_id: str, totp_code: str
-    ) -> list[str]: ...
+    async def verify_enrollment(self, parent_id: str, totp_code: str) -> list[str]: ...
 
     @abstractmethod
-    async def verify_code(
-        self, parent_id: str, totp_code: str
-    ) -> bool: ...
+    async def verify_code(self, parent_id: str, totp_code: str) -> bool: ...
 
     @abstractmethod
-    async def verify_backup_code(
-        self, parent_id: str, backup_code: str
-    ) -> bool: ...
+    async def verify_backup_code(self, parent_id: str, backup_code: str) -> bool: ...
 
     @abstractmethod
-    async def disable(
-        self, parent_id: str, reauth_token: str
-    ) -> bool: ...
+    async def disable(self, parent_id: str, reauth_token: str) -> bool: ...
 
     @abstractmethod
-    async def regenerate_backup_codes(
-        self, parent_id: str, reauth_token: str
-    ) -> list[str]: ...
+    async def regenerate_backup_codes(self, parent_id: str, reauth_token: str) -> list[str]: ...
 
     @abstractmethod
     async def is_enabled(self, parent_id: str) -> bool: ...
@@ -231,9 +213,7 @@ class InMemoryTwoFactorService(TwoFactorService):
         else:
             settings = get_settings()
             if settings.totp_encryption_key:
-                self._fernet_key = settings.totp_encryption_key.encode(
-                    "ascii"
-                )
+                self._fernet_key = settings.totp_encryption_key.encode("ascii")
             else:
                 self._fernet_key = Fernet.generate_key()
 
@@ -254,15 +234,11 @@ class InMemoryTwoFactorService(TwoFactorService):
     # ---- helpers ----
 
     def _encrypt(self, plaintext: str) -> str:
-        return self._fernet().encrypt(
-            plaintext.encode("ascii")
-        ).decode("ascii")
+        return self._fernet().encrypt(plaintext.encode("ascii")).decode("ascii")
 
     def _decrypt(self, ciphertext: str) -> str:
         try:
-            return self._fernet().decrypt(
-                ciphertext.encode("ascii")
-            ).decode("ascii")
+            return self._fernet().decrypt(ciphertext.encode("ascii")).decode("ascii")
         except InvalidToken as exc:
             raise TwoFactorError(
                 "TWO_FA_DECRYPT_FAILED",
@@ -274,10 +250,7 @@ class InMemoryTwoFactorService(TwoFactorService):
     def _generate_backup_codes() -> list[str]:
         """Return BACKUP_CODE_COUNT random codes from BACKUP_CODE_ALPHABET."""
         return [
-            "".join(
-                secrets.choice(BACKUP_CODE_ALPHABET)
-                for _ in range(BACKUP_CODE_LENGTH)
-            )
+            "".join(secrets.choice(BACKUP_CODE_ALPHABET) for _ in range(BACKUP_CODE_LENGTH))
             for _ in range(BACKUP_CODE_COUNT)
         ]
 
@@ -295,16 +268,11 @@ class InMemoryTwoFactorService(TwoFactorService):
         plaintext.
         """
         return "\n".join(
-            bcrypt.hashpw(c.encode("utf-8"), bcrypt.gensalt()).decode(
-                "ascii"
-            )
-            for c in codes
+            bcrypt.hashpw(c.encode("utf-8"), bcrypt.gensalt()).decode("ascii") for c in codes
         )
 
     @staticmethod
-    def _check_backup_code_hash(
-        hash_str: str, codes: list[str], submitted: str
-    ) -> int | None:
+    def _check_backup_code_hash(hash_str: str, codes: list[str], submitted: str) -> int | None:
         """Return the index of the matching code, or None.
 
         Tries every code through bcrypt and returns the index of
@@ -335,19 +303,16 @@ class InMemoryTwoFactorService(TwoFactorService):
         # O(BACKUP_CODE_COUNT) but each iteration is a constant-
         # time bcrypt comparison.
         raise NotImplementedError(
-            "_check_backup_code_hash is test-only; "
-            "use verify_backup_code at runtime."
+            "_check_backup_code_hash is test-only; use verify_backup_code at runtime."
         )
 
-    def _match_backup_code(
-        self, submitted: str, codes: list[str]
-    ) -> int | None:
+    def _match_backup_code(self, submitted: str, codes: list[str]) -> int | None:
         """Brute-force-friendly bcrypt match against the in-memory
         plaintext copy. Returns index or None."""
         for idx, candidate in enumerate(codes):
-            joined = "\n".join(
-                [submitted if i == idx else c for i, c in enumerate(codes)]
-            ).encode("utf-8")
+            joined = "\n".join([submitted if i == idx else c for i, c in enumerate(codes)]).encode(
+                "utf-8"
+            )
             try:
                 if bcrypt.checkpw(joined, self._pending_codes_hash.encode("ascii")):
                     return idx
@@ -371,9 +336,7 @@ class InMemoryTwoFactorService(TwoFactorService):
 
             secret = pyotp.random_base32(length=32)
             totp = pyotp.TOTP(secret)
-            otpauth_url = totp.provisioning_uri(
-                name=parent_id, issuer_name=self._issuer
-            )
+            otpauth_url = totp.provisioning_uri(name=parent_id, issuer_name=self._issuer)
             qr_svg = _qr_code_svg(otpauth_url)
 
             await self.repo.upsert(
@@ -391,9 +354,7 @@ class InMemoryTwoFactorService(TwoFactorService):
             qr_code=qr_svg,
         )
 
-    async def verify_enrollment(
-        self, parent_id: str, totp_code: str
-    ) -> list[str]:
+    async def verify_enrollment(self, parent_id: str, totp_code: str) -> list[str]:
         """Verify the first TOTP code from a freshly enrolled secret.
 
         On success: enables 2FA, generates 10 backup codes, returns
@@ -438,14 +399,10 @@ class InMemoryTwoFactorService(TwoFactorService):
             )
             # Cache the accepted step so the same code can't be
             # replayed within the same window.
-            self._last_accepted_step[parent_id] = (
-                now_ts // totp.interval
-            )
+            self._last_accepted_step[parent_id] = now_ts // totp.interval
             return list(codes)
 
-    async def verify_code(
-        self, parent_id: str, totp_code: str
-    ) -> bool:
+    async def verify_code(self, parent_id: str, totp_code: str) -> bool:
         """Verify a current TOTP code.
 
         Implements replay prevention: same code within the same
@@ -478,14 +435,10 @@ class InMemoryTwoFactorService(TwoFactorService):
             # admissible step) — pyotp accepted the code, so it
             # MUST match one of these candidates.
             candidates: list[int] = []
-            for offset in range(
-                -self._valid_window, self._valid_window + 1
-            ):
+            for offset in range(-self._valid_window, self._valid_window + 1):
                 candidates.append(current_step + offset)
             if last_step is not None:
-                for offset in range(
-                    -self._valid_window, self._valid_window + 1
-                ):
+                for offset in range(-self._valid_window, self._valid_window + 1):
                     candidates.append(last_step + 1 + offset)
 
             matched_step: int | None = None
@@ -501,10 +454,7 @@ class InMemoryTwoFactorService(TwoFactorService):
                 # default.
                 matched_step = current_step
 
-            if (
-                last_step is not None
-                and matched_step <= last_step
-            ):
+            if last_step is not None and matched_step <= last_step:
                 # Same step (or older) was already accepted —
                 # the caller is replaying within the window.
                 raise TwoFactorInvalidCode()
@@ -521,9 +471,7 @@ class InMemoryTwoFactorService(TwoFactorService):
             )
             return True
 
-    async def verify_backup_code(
-        self, parent_id: str, backup_code: str
-    ) -> bool:
+    async def verify_backup_code(self, parent_id: str, backup_code: str) -> bool:
         """Verify and consume a one-time backup code.
 
         Each code has its own bcrypt hash; verification is
@@ -545,11 +493,7 @@ class InMemoryTwoFactorService(TwoFactorService):
             if row.backup_codes_hash is None:
                 raise TwoFactorBackupCodeInvalid()
 
-            hash_list = (
-                row.backup_codes_hash.split("\n")
-                if row.backup_codes_hash
-                else []
-            )
+            hash_list = row.backup_codes_hash.split("\n") if row.backup_codes_hash else []
             used = set(row.backup_codes_used or [])
             submitted_bytes = submitted.encode("utf-8")
 
@@ -558,9 +502,7 @@ class InMemoryTwoFactorService(TwoFactorService):
                 if idx in used:
                     continue
                 try:
-                    if bcrypt.checkpw(
-                        submitted_bytes, hash_str.encode("ascii")
-                    ):
+                    if bcrypt.checkpw(submitted_bytes, hash_str.encode("ascii")):
                         matched_idx = idx
                         break
                 except (ValueError, TypeError):
@@ -581,9 +523,7 @@ class InMemoryTwoFactorService(TwoFactorService):
             )
             return True
 
-    async def disable(
-        self, parent_id: str, reauth_token: str
-    ) -> bool:
+    async def disable(self, parent_id: str, reauth_token: str) -> bool:
         """Disable 2FA — requires a non-empty `reauth_token`.
 
         The spec calls for password re-auth. The codebase does
@@ -604,9 +544,7 @@ class InMemoryTwoFactorService(TwoFactorService):
             self._last_accepted_step.pop(parent_id, None)
             return True
 
-    async def regenerate_backup_codes(
-        self, parent_id: str, reauth_token: str
-    ) -> list[str]:
+    async def regenerate_backup_codes(self, parent_id: str, reauth_token: str) -> list[str]:
         """Issue 10 new backup codes (old ones become useless)."""
         if not reauth_token or not reauth_token.strip():
             raise TwoFactorReauthRequired()
@@ -644,17 +582,9 @@ class InMemoryTwoFactorService(TwoFactorService):
         return {
             "parent_id": row.parent_id,
             "is_enabled": row.is_enabled,
-            "enrolled_at": (
-                row.enabled_at.isoformat() if row.enabled_at else None
-            ),
-            "last_used_at": (
-                row.last_used_at.isoformat()
-                if row.last_used_at
-                else None
-            ),
-            "backup_codes_remaining": max(
-                0, BACKUP_CODE_COUNT - len(row.backup_codes_used or [])
-            ),
+            "enrolled_at": (row.enabled_at.isoformat() if row.enabled_at else None),
+            "last_used_at": (row.last_used_at.isoformat() if row.last_used_at else None),
+            "backup_codes_remaining": max(0, BACKUP_CODE_COUNT - len(row.backup_codes_used or [])),
         }
 
 

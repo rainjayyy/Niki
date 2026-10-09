@@ -40,10 +40,7 @@ def collect_rows() -> list[tuple[str, str, str, str]]:
                 continue
             summary = info.get("summary", "").replace("|", "\\|").replace("\n", " ")
             raw_tags = info.get("tags", []) or []
-            tag_names = [
-                (t if isinstance(t, str) else t.get("name", ""))
-                for t in raw_tags
-            ]
+            tag_names = [(t if isinstance(t, str) else t.get("name", "")) for t in raw_tags]
             tags = ", ".join(t for t in tag_names if t)
             rows.append((method_upper, path, tags, summary))
 
@@ -96,9 +93,7 @@ def render_markdown(rows: list[tuple[str, str, str, str]]) -> str:
     if total_missing == 0:
         lines.append("✅ 100% coverage.")
     else:
-        lines.append(
-            f"⚠️  {total_missing} endpoint(s) still missing summary."
-        )
+        lines.append(f"⚠️  {total_missing} endpoint(s) still missing summary.")
     lines.append("")
     lines.append("## 完整清单")
     lines.append("")

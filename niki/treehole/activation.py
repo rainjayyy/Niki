@@ -10,8 +10,17 @@ import re
 
 # Triggers for treehole mode (PRD #13 + general secret-keeping phrases)
 TREEHOLE_TRIGGERS: set[str] = {
-    "秘密", "小秘密", "不要告诉", "别告诉", "只想跟你说", "只告诉你",
-    "不想让", "保密", "treehole", "secret", "private",
+    "秘密",
+    "小秘密",
+    "不要告诉",
+    "别告诉",
+    "只想跟你说",
+    "只告诉你",
+    "不想让",
+    "保密",
+    "treehole",
+    "secret",
+    "private",
 }
 
 # Regex patterns for more flexible matching

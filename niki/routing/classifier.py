@@ -88,7 +88,7 @@ class CompositeIntent:
 class IntentResult:
     """Final classification result."""
 
-    intents: list[Intent]                         # sorted desc by confidence
+    intents: list[Intent]  # sorted desc by confidence
     threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     raw_text: str = ""
 
@@ -116,16 +116,47 @@ class IntentClassifier:
 
     # Heuristic keywords for the rule-based fallback
     _TUTORING_KEYWORDS = {
-        "数学题", "算", "题", "怎么做", "解答", "不会做", "卡住",
+        "数学题",
+        "算",
+        "题",
+        "怎么做",
+        "解答",
+        "不会做",
+        "卡住",
+        # Added 2026-10-09 to catch math-only inputs without Chinese keywords
+        "等于", "等于多少", "多少", "几",
+        "加", "减", "乘", "除",
+        "+", "-", "×", "÷",
         "equation", "math", "solve", "calculate", "how to",
     }
     _EMOTIONAL_KEYWORDS = {
-        "不开心", "难过", "伤心", "生气", "委屈", "哭", "害怕",
-        "sad", "happy", "angry", "scared", "upset", "lonely",
+        "不开心",
+        "难过",
+        "伤心",
+        "生气",
+        "委屈",
+        "哭",
+        "害怕",
+        "sad",
+        "happy",
+        "angry",
+        "scared",
+        "upset",
+        "lonely",
     }
     _ENCYCLOPEDIA_KEYWORDS = {
-        "为什么", "是什么", "怎么", "哪个", "什么时候", "哪里",
-        "what", "why", "when", "where", "which", "how",
+        "为什么",
+        "是什么",
+        "怎么",
+        "哪个",
+        "什么时候",
+        "哪里",
+        "what",
+        "why",
+        "when",
+        "where",
+        "which",
+        "how",
     }
 
     def __init__(
@@ -245,7 +276,9 @@ class IntentClassifier:
         if any(kw in text for kw in ("应用题", "故事", "小明", "小华", "problem", "story")):
             return TutoringSubtype.WORD_PROBLEM
         # Pure calculation: digits and basic operators
-        if re.search(r"[\d+\-*/×÷=]", text) or any(kw in text for kw in ("算", "加", "减", "乘", "除")):
+        if re.search(r"[\d+\-*/×÷=]", text) or any(
+            kw in text for kw in ("算", "加", "减", "乘", "除")
+        ):
             return TutoringSubtype.PURE_CALCULATION
         return TutoringSubtype.OPEN_ENDED
 
@@ -274,7 +307,9 @@ class IntentClassifier:
                 confidence = float(entry.get("confidence", 0.0))
                 subtype_str = entry.get("tutoring_subtype")
                 subtype = TutoringSubtype(subtype_str) if subtype_str else None
-                intents.append(Intent(category=category, confidence=confidence, tutoring_subtype=subtype))
+                intents.append(
+                    Intent(category=category, confidence=confidence, tutoring_subtype=subtype)
+                )
             except (ValueError, KeyError) as exc:
                 logger.warning("intent_classifier.parse_skip", entry=entry, error=str(exc))
 

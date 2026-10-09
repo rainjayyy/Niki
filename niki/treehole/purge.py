@@ -46,10 +46,7 @@ class TreeholePurger:
         # is falsy (via __len__) so `or` would silently drop an
         # injected repo.
         self._repo = repo if repo is not None else get_treehole_repository()
-        self._agg_repo = (
-            agg_repo if agg_repo is not None
-            else get_treehole_aggregation_repository()
-        )
+        self._agg_repo = agg_repo if agg_repo is not None else get_treehole_aggregation_repository()
 
     async def purge_expired(self, now: datetime | None = None) -> int:
         """Purge all records whose `expires_at` is in the past.

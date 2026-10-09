@@ -41,16 +41,12 @@ class EmailCodeError(Exception):
 
 class EmailCodeInvalid(EmailCodeError):
     def __init__(self) -> None:
-        super().__init__(
-            "EMAIL_CODE_INVALID", "Verification code is incorrect"
-        )
+        super().__init__("EMAIL_CODE_INVALID", "Verification code is incorrect")
 
 
 class EmailCodeExpired(EmailCodeError):
     def __init__(self) -> None:
-        super().__init__(
-            "EMAIL_CODE_EXPIRED", "Verification code has expired"
-        )
+        super().__init__("EMAIL_CODE_EXPIRED", "Verification code has expired")
 
 
 class EmailTooManyAttempts(EmailCodeError):

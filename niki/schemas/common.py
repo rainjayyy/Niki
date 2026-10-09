@@ -30,9 +30,7 @@ class HealthResponse(BaseModel):
     # BE-API-002-redis: surface the active rate-limit backend so
     # ops can confirm the multi-worker deployment is using the
     # shared counter (not per-process memory).
-    rate_limit_backend: str = Field(
-        "memory", description="'memory' | 'redis'"
-    )
+    rate_limit_backend: str = Field("memory", description="'memory' | 'redis'")
     rate_limit_in_fallback: bool = Field(
         False, description="True if slowapi has degraded to in-memory after a Redis outage"
     )
@@ -115,6 +113,10 @@ class ChildInput(BaseModel):
     image_url: str | None = Field(None, description="URL of an image the child shared")
     audio_duration_ms: int | None = Field(None, description="Duration of the audio input")
     session_id: str = Field(..., description="Current session identifier")
+    history: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Prior user/assistant turns in this session",
+    )
 
 
 class AgentOutput(BaseModel):

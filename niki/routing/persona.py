@@ -35,10 +35,10 @@ class Persona(StrEnum):
 class TTSParameters:
     """TTS parameter overrides tied to a persona."""
 
-    speech_rate: float         # multiplier: 0.5 - 2.0
-    pitch: float               # -1.0 to 1.0 (negative=low, positive=high)
-    volume: float = 1.0        # 0.0 - 1.0
-    emotion: str = "neutral"   # TTS-specific emotion tag
+    speech_rate: float  # multiplier: 0.5 - 2.0
+    pitch: float  # -1.0 to 1.0 (negative=low, positive=high)
+    volume: float = 1.0  # 0.0 - 1.0
+    emotion: str = "neutral"  # TTS-specific emotion tag
 
 
 @dataclass(frozen=True)

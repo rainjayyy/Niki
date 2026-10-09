@@ -1,14 +1,16 @@
 """枚举后端所有 REST 端点（路径 + 方法）"""
+
 import re
-import os
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent / "niki" / "api"
+
 
 # 提取 prefix
 def get_prefix(content: str) -> str:
     m = re.search(r'APIRouter\(prefix="([^"]+)"', content)
     return m.group(1) if m else ""
+
 
 # 提取每个 @router.METHOD("/path")
 EP_RE = re.compile(r'@router\.(get|post|put|delete|patch)\("([^"]+)"')
@@ -35,7 +37,8 @@ for method, path, src in all_eps:
 
 # 按 method 统计
 from collections import Counter
+
 counts = Counter(m for m, _, _ in all_eps)
-print(f"\n=== 分布 ===")
+print("\n=== 分布 ===")
 for m, c in counts.most_common():
     print(f"  {m:7s}: {c}")

@@ -27,11 +27,11 @@ logger = structlog.get_logger(__name__)
 class ExtractionKind(StrEnum):
     """Type of extracted information."""
 
-    NEW_ENTITY = "new_entity"        # "我的小狗叫旺财"
+    NEW_ENTITY = "new_entity"  # "我的小狗叫旺财"
     NEW_PREFERENCE = "new_preference"  # "我喜欢恐龙"
-    NEW_EMOTION = "new_emotion"       # "我今天很难过"
-    NEW_VOCAB = "new_vocab"          # "暴龙是..."
-    NEW_FACT = "new_fact"            # "我的生日是X月X日"
+    NEW_EMOTION = "new_emotion"  # "我今天很难过"
+    NEW_VOCAB = "new_vocab"  # "暴龙是..."
+    NEW_FACT = "new_fact"  # "我的生日是X月X日"
 
 
 @dataclass
@@ -42,7 +42,7 @@ class ExtractionCandidate:
     text: str
     child_id: str
     confidence: float
-    context: str = ""            # surrounding text
+    context: str = ""  # surrounding text
     metadata: dict[str, Any] = field(default_factory=dict)
     extracted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -56,8 +56,8 @@ class DaytimeMemoryHook:
 
     # Patterns for extraction
     ENTITY_PATTERNS = [
-        re.compile(r"我(?:的|有一个?)?(\w{2,8})叫(\w{2,8})"),     # "我的小狗叫旺财"
-        re.compile(r"我(?:喜欢|讨厌|害怕|想念)(\w{2,8})"),         # "我喜欢恐龙"
+        re.compile(r"我(?:的|有一个?)?(\w{2,8})叫(\w{2,8})"),  # "我的小狗叫旺财"
+        re.compile(r"我(?:喜欢|讨厌|害怕|想念)(\w{2,8})"),  # "我喜欢恐龙"
         re.compile(r"(\w{2,8})是(?:我的|我们家的)", re.IGNORECASE),  # "旺财是我的狗"
     ]
 

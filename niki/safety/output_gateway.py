@@ -34,10 +34,10 @@ logger = structlog.get_logger(__name__)
 class OutputAction(StrEnum):
     """Action to take based on output safety verdict."""
 
-    PASS = "pass"                        # output is safe to send
-    REWRITE = "rewrite"                  # rewrites applied; safe to send
-    REGENERATE = "regenerate"            # direct answer in tutoring; ask LLM again
-    BLOCK = "block"                      # severe safety violation
+    PASS = "pass"  # output is safe to send
+    REWRITE = "rewrite"  # rewrites applied; safe to send
+    REGENERATE = "regenerate"  # direct answer in tutoring; ask LLM again
+    BLOCK = "block"  # severe safety violation
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class OutputVerdict:
     """Result of running the output safety gateway."""
 
     action: OutputAction
-    sanitized_text: str                  # text after rewrites
+    sanitized_text: str  # text after rewrites
     rewrites_applied: list[tuple[str, str]] = field(default_factory=list)
     privacy_violations: list[str] = field(default_factory=list)
     direct_answer_detected: bool = False
@@ -209,12 +209,18 @@ class OutputSafetyGateway:
             action=OutputAction.PASS,
             sanitized_text=current,
             sentences_over_limit=over_limit_count,
-            reason="no rewrites needed" if over_limit_count == 0 else "sentences too long — log only",
+            reason="no rewrites needed"
+            if over_limit_count == 0
+            else "sentences too long — log only",
         )
 
     def _count_long_sentences(self, text: str) -> int:
         """Count sentences exceeding the age-adaptive max length."""
-        sentences = [s.strip() for s in self._SENT_DELIM.split(text) if s and not re.match(self._SENT_DELIM, s)]
+        sentences = [
+            s.strip()
+            for s in self._SENT_DELIM.split(text)
+            if s and not re.match(self._SENT_DELIM, s)
+        ]
         if not sentences:
             return 0
         over = 0
@@ -236,3 +242,29 @@ class OutputSafetyGateway:
         # For non-CJK portion, split by whitespace and count words
         word_count = len(non_cjk.split()) if non_cjk else 0
         return cjk_count + word_count
+
+
+def strip_think_blocks(text) -> str:
+    """Strip <think>...</think> reasoning blocks from LLM output.
+
+    Some reasoning models (Minimax-M3, DeepSeek-R1, etc.) emit
+    their chain-of-thought inside <think>...</think> tags before
+    the final answer. Those internal monologues must NEVER reach
+    the child — they leak system prompts, the model's biases, and
+    potentially sensitive reasoning (e.g. "this user said a
+    violence word, let me paraphrase it as benign").
+
+    This helper removes the blocks (and any surrounding whitespace)
+    from the text. It's defense-in-depth: even if the LLM emits
+    them, the child never sees them.
+
+    Also handles unclosed <think> (truncated mid-reasoning) — in
+    that case everything from <think> to end is dropped.
+    """
+    if text is None or text == "":
+        return ""
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    if "<think>" in cleaned.lower() and "</think>" not in cleaned.lower():
+        idx = cleaned.lower().index("<think>")
+        cleaned = cleaned[:idx]
+    return cleaned.strip()

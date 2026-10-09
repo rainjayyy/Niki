@@ -55,8 +55,7 @@ class SecurityAlert:
     def __post_init__(self) -> None:
         if self.severity not in _VALID_SEVERITIES:
             raise ValueError(
-                f"invalid severity {self.severity!r}; "
-                f"expected one of {sorted(_VALID_SEVERITIES)}"
+                f"invalid severity {self.severity!r}; expected one of {sorted(_VALID_SEVERITIES)}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -101,11 +100,7 @@ class ConsoleAlertDispatcher(AlertDispatcher):
     """
 
     async def dispatch(self, alert: SecurityAlert) -> None:
-        log_fn = (
-            logger.critical
-            if alert.severity == SEVERITY_CRITICAL
-            else logger.warning
-        )
+        log_fn = logger.critical if alert.severity == SEVERITY_CRITICAL else logger.warning
         log_fn(
             f"security.alert.{alert.alert_type}",
             **alert.to_dict(),
@@ -127,9 +122,7 @@ class WebhookAlertDispatcher(AlertDispatcher):
         client: httpx.AsyncClient | None = None,
     ) -> None:
         if not url:
-            raise ValueError(
-                "WebhookAlertDispatcher requires a non-empty url"
-            )
+            raise ValueError("WebhookAlertDispatcher requires a non-empty url")
         self._url = url
         self._timeout = timeout_seconds
         self._client = client  # injectable for tests
@@ -141,9 +134,7 @@ class WebhookAlertDispatcher(AlertDispatcher):
                 timeout=self._timeout,
             )
             try:
-                resp = await client.post(
-                    self._url, json=payload
-                )
+                resp = await client.post(self._url, json=payload)
                 if resp.status_code >= 400:
                     logger.error(
                         "security.alert.webhook_non_2xx",
@@ -235,9 +226,8 @@ class EmailAlertDispatcher(AlertDispatcher):
     def _send(self, msg) -> None:
         """Run in a worker thread (smtplib is sync)."""
         import smtplib
-        with smtplib.SMTP(
-            self._host, self._port, timeout=self._timeout
-        ) as smtp:
+
+        with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as smtp:
             smtp.starttls()
             if self._username:
                 smtp.login(self._username, self._password)
@@ -245,10 +235,7 @@ class EmailAlertDispatcher(AlertDispatcher):
 
     @staticmethod
     def _render(alert: SecurityAlert) -> tuple[str, str]:
-        subject = (
-            f"[Niki 安全告警] {alert.alert_type} - "
-            f"{alert.actor_parent_id or 'unknown'}"
-        )
+        subject = f"[Niki 安全告警] {alert.alert_type} - {alert.actor_parent_id or 'unknown'}"
         body_lines = [
             alert.title,
             "",
@@ -275,13 +262,12 @@ class CompositeAlertDispatcher(AlertDispatcher):
 
     def __init__(self, dispatchers: list[AlertDispatcher]) -> None:
         if not dispatchers:
-            raise ValueError(
-                "CompositeAlertDispatcher needs at least one sink"
-            )
+            raise ValueError("CompositeAlertDispatcher needs at least one sink")
         self._dispatchers = list(dispatchers)
 
     async def dispatch(self, alert: SecurityAlert) -> None:
         import asyncio
+
         # True fan-out: every sink receives the alert in
         # parallel. A failure in one sink does not block the
         # others; we just log and move on.
@@ -320,6 +306,7 @@ def get_alert_dispatcher() -> AlertDispatcher:
     if _dispatcher is None:
         sinks: list[AlertDispatcher] = [ConsoleAlertDispatcher()]
         from niki.config.settings import get_settings
+
         settings = get_settings()
         if settings.auth_alert_webhook_url:
             sinks.append(
@@ -329,11 +316,7 @@ def get_alert_dispatcher() -> AlertDispatcher:
                 )
             )
         if settings.auth_alert_smtp_host and settings.auth_alert_email_to:
-            to_addrs = [
-                a.strip()
-                for a in settings.auth_alert_email_to.split(",")
-                if a.strip()
-            ]
+            to_addrs = [a.strip() for a in settings.auth_alert_email_to.split(",") if a.strip()]
             sinks.append(
                 EmailAlertDispatcher(
                     smtp_host=settings.auth_alert_smtp_host,

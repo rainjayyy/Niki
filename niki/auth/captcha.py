@@ -70,9 +70,9 @@ class CaptchaInvalid(CaptchaError):
 class CaptchaChallenge:
     """Public representation of a freshly-minted captcha challenge."""
 
-    id: str            # hex uuid4 — opaque to clients
-    question: str      # e.g. "3 + 4 = ?"
-    answer_hash: str   # sha256(answer) — never the plaintext
+    id: str  # hex uuid4 — opaque to clients
+    question: str  # e.g. "3 + 4 = ?"
+    answer_hash: str  # sha256(answer) — never the plaintext
     expires_at: float  # time.time() seconds
 
 
@@ -162,7 +162,7 @@ class InMemoryCaptchaService(CaptchaService):
     def __init__(
         self,
         *,
-        ttl_seconds: int = 300,   # 5 min — matches SMS code TTL
+        ttl_seconds: int = 300,  # 5 min — matches SMS code TTL
         cap: int = 1000,
     ) -> None:
         self._records: dict[str, _StoredCaptcha] = {}

@@ -26,7 +26,7 @@ class RealNameVerificationResult:
     verified: bool
     name: str
     id_number_masked: str
-    confidence: float          # 0.0 - 1.0
+    confidence: float  # 0.0 - 1.0
     provider: str
     error: str | None = None
     verified_at: datetime | None = None

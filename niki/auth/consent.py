@@ -27,8 +27,8 @@ logger = structlog.get_logger(__name__)
 class ConsentType(StrEnum):
     """Types of consent documents."""
 
-    PARENT = "parent"      # Full legal text
-    CHILD = "child"        # Picture-based, age-appropriate
+    PARENT = "parent"  # Full legal text
+    CHILD = "child"  # Picture-based, age-appropriate
 
 
 @dataclass(frozen=True)
@@ -47,8 +47,8 @@ class ConsentRecord:
     parent_id: str
     consent_type: ConsentType
     document_version: str
-    document_hash: str                # SHA-256 of the signed document
-    typed_signature: str             # Parent's typed name (e-signature)
+    document_hash: str  # SHA-256 of the signed document
+    typed_signature: str  # Parent's typed name (e-signature)
     ip_address: str
     device_fingerprint: str
     signed_at: datetime
@@ -190,6 +190,7 @@ class ConsentManager:
             return None
         # Mutate via dataclass replace (frozen)
         import dataclasses
+
         revoked = dataclasses.replace(
             record,
             revoked=True,
@@ -210,9 +211,7 @@ class ConsentManager:
         """
         before = len(self._records)
         self._records = {
-            rid: rec
-            for rid, rec in self._records.items()
-            if rec.parent_id != parent_id
+            rid: rec for rid, rec in self._records.items() if rec.parent_id != parent_id
         }
         return before - len(self._records)
 

@@ -1,10 +1,13 @@
 """前端 API client 实际调用 vs 后端端点 vs mock 覆盖"""
+
 import re
 from pathlib import Path
 
 API_DIR = Path(__file__).resolve().parent.parent / "niki" / "api"
 FRONT_API = Path(__file__).resolve().parent.parent.parent / "Niki_frontend" / "src" / "api"
-MOCK_FILE = Path(__file__).resolve().parent.parent.parent / "Niki_frontend" / "src" / "mock" / "adapter.ts"
+MOCK_FILE = (
+    Path(__file__).resolve().parent.parent.parent / "Niki_frontend" / "src" / "mock" / "adapter.ts"
+)
 
 # 后端端点
 EP_RE = re.compile(r'@router\.(get|post|put|delete|patch)\("([^"]+)"')
@@ -46,15 +49,20 @@ for m in re.finditer(r"url\.match\((/[^)]+/)\)", mock_text):
     if rx_body.startswith("/"):
         rx_body = rx_body[1:]
     mock_kws.add("/" + rx_body)
-mock_kws.update([
-    "parents/{parent_id}/letters",
-    "children/{child_id}/letters",
-    "children/letters/{letter_id}/read",
-    "dashboard/events/risk",
-    "metrics/vitals",
-    "metrics/vitals/recent",
-    "push/vapid-key", "push/subscribe", "push/unsubscribe",
-])
+mock_kws.update(
+    [
+        "parents/{parent_id}/letters",
+        "children/{child_id}/letters",
+        "children/letters/{letter_id}/read",
+        "dashboard/events/risk",
+        "metrics/vitals",
+        "metrics/vitals/recent",
+        "push/vapid-key",
+        "push/subscribe",
+        "push/unsubscribe",
+    ]
+)
+
 
 def endswith_any(s: str, kws) -> bool:
     # 第一遍：占位符 regex 关键词
@@ -77,9 +85,11 @@ def endswith_any(s: str, kws) -> bool:
             return True
     return False
 
+
 # 后端端点对应前端调用（含模板）→ 计算覆盖
 def normalize_path(p: str) -> str:
     return re.sub(r"/\{[^}]+\}", "/${id}", p)
+
 
 # 前端调用的归一化路径
 frontend_norm = set(normalize_path(p) for p in frontend_paths)
@@ -99,10 +109,14 @@ for fp in frontend_paths:
     if not endswith_any(fp, mock_kws):
         mock_misses.append(fp)
 
-print(f"\n=== 真相 ===")
+print("\n=== 真相 ===")
 print(f"  后端实际端点:        {len(backend_eps)}")
-print(f"  前端业务调用:        {len(frontend_paths)}  ({len(frontend_paths)/len(backend_eps)*100:.0f}% of backend)")
-print(f"  前端调用 → mock 覆盖: {len(frontend_paths) - len(mock_misses)} / {len(frontend_paths)}  ({(len(frontend_paths) - len(mock_misses))/len(frontend_paths)*100:.0f}%)")
+print(
+    f"  前端业务调用:        {len(frontend_paths)}  ({len(frontend_paths) / len(backend_eps) * 100:.0f}% of backend)"
+)
+print(
+    f"  前端调用 → mock 覆盖: {len(frontend_paths) - len(mock_misses)} / {len(frontend_paths)}  ({(len(frontend_paths) - len(mock_misses)) / len(frontend_paths) * 100:.0f}%)"
+)
 print(f"  后端端点未被前端调用: {len(backend_unused)}  (内部/编排用)")
 print(f"\n=== 前端 mock 漏掉的端点（{len(mock_misses)}）===")
 for fp in sorted(mock_misses):
@@ -110,6 +124,7 @@ for fp in sorted(mock_misses):
 
 print(f"\n=== 后端有但前端不需要的端点（{len(backend_unused)}）===")
 from collections import defaultdict
+
 by_src = defaultdict(list)
 for m, p, s in backend_unused:
     by_src[s].append(f"{m} {p}")

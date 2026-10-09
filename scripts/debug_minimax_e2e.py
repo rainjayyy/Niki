@@ -18,12 +18,12 @@ Requirements:
 Quick check from a separate shell:
     MINIMAX_API_KEY=sk-... python scripts/debug_minimax_e2e.py
 """
+
 from __future__ import annotations
 
 import json
 import os
 import sys
-import tempfile
 import urllib.error
 import urllib.request
 
@@ -53,9 +53,7 @@ def main() -> int:
     print(f"[1/3] SMS code: {code}")
 
     # 2. Login → access token.
-    login = _post_json(
-        "/api/v1/auth/sms/login", {"phone": phone, "code": code}
-    )
+    login = _post_json("/api/v1/auth/sms/login", {"phone": phone, "code": code})
     token = login["access_token"]
     print(f"[2/3] Login OK (parent={login['parent_id']})")
 

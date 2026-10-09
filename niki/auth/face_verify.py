@@ -24,7 +24,7 @@ class FaceVerificationResult:
 
     verified: bool
     confidence: float
-    liveness_score: float          # 0.0 - 1.0 (liveness detection)
+    liveness_score: float  # 0.0 - 1.0 (liveness detection)
     provider: str
     error: str | None = None
     verified_at: datetime | None = None
@@ -77,7 +77,9 @@ class FaceVerifier:
                 code="INVALID_IMAGE_URL",
                 message="live_image_url must be an http(s) URL",
             )
-        if reference_image_url is not None and not reference_image_url.startswith(("http://", "https://")):
+        if reference_image_url is not None and not reference_image_url.startswith(
+            ("http://", "https://")
+        ):
             raise AuthError(
                 code="INVALID_IMAGE_URL",
                 message="reference_image_url must be an http(s) URL",
@@ -87,10 +89,7 @@ class FaceVerifier:
 
         # Stub: accept any URL ending in common image extensions
         confidence, liveness = self._compute_stub_scores(live_image_url)
-        verified = (
-            confidence >= self.min_confidence
-            and liveness >= self.min_liveness
-        )
+        verified = confidence >= self.min_confidence and liveness >= self.min_liveness
 
         result = FaceVerificationResult(
             verified=verified,

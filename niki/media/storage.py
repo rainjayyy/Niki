@@ -81,9 +81,7 @@ class FileTooLargeError(MediaStorageError):
 # ---------------------------------------------------------------------------
 
 
-ALLOWED_IMAGE_MIMES: Final = frozenset(
-    {"image/jpeg", "image/png", "image/webp", "image/gif"}
-)
+ALLOWED_IMAGE_MIMES: Final = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 ALLOWED_AUDIO_MIMES: Final = frozenset(
     {"audio/wav", "audio/x-wav", "audio/m4a", "audio/mp4", "audio/ogg", "audio/mpeg"}
 )
@@ -291,10 +289,12 @@ def get_media_storage() -> MediaStorage:
     global _storage
     if _storage is None:
         from niki.config.settings import get_settings
+
         settings = get_settings()
         if settings.media_storage_backend == "s3":
             # Lazy import — keeps boto3 optional for local dev.
             from niki.media.s3_storage import S3CompatibleStorage
+
             _storage = S3CompatibleStorage(
                 endpoint_url=settings.s3_endpoint_url,
                 region=settings.s3_region,
@@ -303,9 +303,7 @@ def get_media_storage() -> MediaStorage:
                 secret_key=settings.s3_secret_key,
                 presign_ttl_seconds=settings.s3_presign_ttl_seconds,
                 addressing_style=settings.s3_addressing_style,
-                multipart_threshold_bytes=(
-                    settings.s3_multipart_threshold_bytes
-                ),
+                multipart_threshold_bytes=(settings.s3_multipart_threshold_bytes),
             )
         else:
             base = os.environ.get(

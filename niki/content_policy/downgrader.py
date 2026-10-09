@@ -31,11 +31,11 @@ logger = structlog.get_logger(__name__)
 class DowngradeAction(StrEnum):
     """How the response should be modified."""
 
-    PASS = "pass"                # No change needed
-    SOFTEN = "soften"            # Replace complex words with simpler ones
-    REDIRECT = "redirect"        # Pivot to related safe content
-    DEFLECT = "deflect"          # Politely decline + offer alternative
-    SIMPLIFY = "simplify"        # Replace advanced concept with simpler one
+    PASS = "pass"  # No change needed
+    SOFTEN = "soften"  # Replace complex words with simpler ones
+    REDIRECT = "redirect"  # Pivot to related safe content
+    DEFLECT = "deflect"  # Politely decline + offer alternative
+    SIMPLIFY = "simplify"  # Replace advanced concept with simpler one
 
 
 @dataclass
@@ -148,9 +148,7 @@ class ContentDowngrader:
         PRD #32: 降级处理而非生硬拒绝.
         """
         match = matches[0]  # First match wins
-        notes.append(
-            f"blacklist match: '{match.topic}' (action: {match.action.value})"
-        )
+        notes.append(f"blacklist match: '{match.topic}' (action: {match.action.value})")
         blocked = match.topic
 
         if match.action == BlacklistAction.DOWNGRADE:
@@ -184,8 +182,7 @@ class ContentDowngrader:
         Otherwise SOFTEN the response.
         """
         notes.append(
-            f"{len(too_hard)} concept(s) too advanced: "
-            + ", ".join(g.concept for g in too_hard)
+            f"{len(too_hard)} concept(s) too advanced: " + ", ".join(g.concept for g in too_hard)
         )
 
         # Try to find a simplification for the first too-hard concept
@@ -197,17 +194,13 @@ class ContentDowngrader:
                     action=DowngradeAction.SIMPLIFY,
                     original_text=text,
                     rewritten_text=rewritten,
-                    notes=notes + [
-                        f"simplified '{grade.concept}' → '{simpler}'"
-                    ],
+                    notes=notes + [f"simplified '{grade.concept}' → '{simpler}'"],
                     content_grades=too_hard,
                 )
 
             # Fall back to SIMPLIFICATIONS table
             if grade.concept in SIMPLIFICATIONS:
-                rewritten = text.replace(
-                    grade.concept, SIMPLIFICATIONS[grade.concept]
-                )
+                rewritten = text.replace(grade.concept, SIMPLIFICATIONS[grade.concept])
                 return DowngradeDecision(
                     action=DowngradeAction.SIMPLIFY,
                     original_text=text,
@@ -238,7 +231,4 @@ class ContentDowngrader:
         The topic is NOT mentioned in the message (would reveal the
         blacklist to the child). The message just pivots to something else.
         """
-        return (
-            "嗯~ Niki对这方面了解不多呢~ "
-            "我们聊点别的好不好？比如你今天想做什么？"
-        )
+        return "嗯~ Niki对这方面了解不多呢~ 我们聊点别的好不好？比如你今天想做什么？"

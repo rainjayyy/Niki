@@ -122,9 +122,7 @@ class AlertBroker:
     def subscriber_count(self, parent_id: str | None = None) -> int:
         if parent_id is None:
             with self._lock:
-                return sum(
-                    len(s) for s in self._subscribers.values()
-                )
+                return sum(len(s) for s in self._subscribers.values())
         with self._lock:
             return len(self._subscribers.get(parent_id, ()))
 
@@ -132,9 +130,7 @@ class AlertBroker:
     # Replay buffer (BE-RT-002-rollout)
     # ------------------------------------------------------------------
 
-    def _push_to_buffer(
-        self, parent_id: str, alert: SecurityAlert
-    ) -> None:
+    def _push_to_buffer(self, parent_id: str, alert: SecurityAlert) -> None:
         """Append `alert` to the per-parent ring buffer, dropping
         the oldest entry when full."""
         with self._lock:

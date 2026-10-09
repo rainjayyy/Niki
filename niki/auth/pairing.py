@@ -136,11 +136,7 @@ class PairingCode:
             "child_id": self.child_id,
             "created_at": self.created_at.isoformat(),
             "expires_at": self.expires_at.isoformat(),
-            "consumed_at": (
-                self.consumed_at.isoformat()
-                if self.consumed_at is not None
-                else None
-            ),
+            "consumed_at": (self.consumed_at.isoformat() if self.consumed_at is not None else None),
         }
 
 
@@ -156,9 +152,7 @@ def _validate_code(code: str) -> str:
     if not isinstance(code, str):
         raise ValueError("code must be a string")
     if len(code) != _CODE_DIGITS or not code.isdigit():
-        raise ValueError(
-            f"code must be {_CODE_DIGITS} digits (got {code!r})"
-        )
+        raise ValueError(f"code must be {_CODE_DIGITS} digits (got {code!r})")
     return code
 
 
@@ -226,9 +220,7 @@ class InMemoryPairingCodeStore(PairingCodeStore):
         """
         with self._lock:
             for _ in range(_MAX_GENERATION_ATTEMPTS):
-                candidate = _format_code(
-                    self._rng.randint(_CODE_MIN, _CODE_MAX)
-                )
+                candidate = _format_code(self._rng.randint(_CODE_MIN, _CODE_MAX))
                 if candidate not in self._codes:
                     record = PairingCode.mint(
                         parent_id=parent_id,
@@ -280,9 +272,7 @@ class InMemoryPairingCodeStore(PairingCodeStore):
         now = _utcnow()
         with self._lock:
             before = len(self._codes)
-            self._codes = {
-                k: v for k, v in self._codes.items() if v.expires_at > now
-            }
+            self._codes = {k: v for k, v in self._codes.items() if v.expires_at > now}
             return before - len(self._codes)
 
     # ----- introspection (tests / debugging) -----

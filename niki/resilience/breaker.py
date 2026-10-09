@@ -40,16 +40,16 @@ logger = structlog.get_logger(__name__)
 class CircuitState(StrEnum):
     """The three states of the circuit breaker."""
 
-    CLOSED = "closed"              # normal
-    OPEN = "open"                  # tripped, fail-fast to fallback
-    HALF_OPEN = "half_open"        # testing recovery
+    CLOSED = "closed"  # normal
+    OPEN = "open"  # tripped, fail-fast to fallback
+    HALF_OPEN = "half_open"  # testing recovery
 
 
 @dataclass(frozen=True)
 class CircuitEvent:
     """A single observed event in the sliding window."""
 
-    timestamp: float               # monotonic time
+    timestamp: float  # monotonic time
     success: bool
     error: str | None = None
 
@@ -62,7 +62,7 @@ class BreakerStats:
     window_size_s: float
     window_total: int
     window_failures: int
-    error_rate: float              # 0.0 to 1.0
+    error_rate: float  # 0.0 to 1.0
     consecutive_failures: int
     last_change: datetime
     cooldown_s: float
@@ -107,7 +107,7 @@ class CircuitBreaker:
         error_rate_threshold: float = 0.5,
         consecutive_threshold: int = 5,
         initial_cooldown_s: float = 60.0,
-        max_cooldown_s: float = 600.0,    # 10 minutes cap
+        max_cooldown_s: float = 600.0,  # 10 minutes cap
     ) -> None:
         self.window_size_s = window_size_s
         self.error_rate_threshold = error_rate_threshold
@@ -241,17 +241,13 @@ class CircuitBreaker:
         """Record a failed call (may trip the breaker)."""
         async with self._lock:
             now = time.monotonic()
-            self._events.append(
-                CircuitEvent(timestamp=now, success=False, error=error)
-            )
+            self._events.append(CircuitEvent(timestamp=now, success=False, error=error))
             self._consecutive_failures += 1
 
             if self._state == CircuitState.HALF_OPEN:
                 # Probe failed → reopen with doubled cooldown (cap 10min)
                 self._half_open_in_flight = False
-                self._current_cooldown = min(
-                    self._current_cooldown * 2, self.max_cooldown_s
-                )
+                self._current_cooldown = min(self._current_cooldown * 2, self.max_cooldown_s)
                 self._opened_at = now
                 self._transition(CircuitState.OPEN)
                 logger.warning(

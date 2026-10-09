@@ -33,6 +33,9 @@ export PRIMARY_LLM_PROVIDER="${PRIMARY_LLM_PROVIDER:-minimax}"
 # SMS（mock 模式，dev 会回显验证码）
 export SMS_PROVIDER="${SMS_PROVIDER:-mock}"
 export ECHO_SMS_CODE_IN_RESPONSE="${ECHO_SMS_CODE_IN_RESPONSE:-true}"
+# 调试模式放宽全局短信限流，避免 E2E / 联调连续发码时撞 429；
+# 生产部署请保留 3/minute 或显式覆盖。
+export SMS_SEND_RATE_LIMIT="${SMS_SEND_RATE_LIMIT:-20/minute}"
 
 UVICORN="/c/Users/22265/.conda/envs/Nikienv/Scripts/uvicorn.exe"
 ALEMBIC="/c/Users/22265/.conda/envs/Nikienv/Scripts/alembic.exe"

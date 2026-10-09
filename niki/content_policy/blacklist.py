@@ -21,9 +21,9 @@ logger = structlog.get_logger(__name__)
 class BlacklistAction(StrEnum):
     """What to do when a blacklisted topic is detected."""
 
-    DOWNGRADE = "downgrade"          # Gently deflect (PRD: 降级处理)
-    REDIRECT = "redirect"            # Redirect to related safe content
-    APOLOGIZE = "apologize"          # Politely decline
+    DOWNGRADE = "downgrade"  # Gently deflect (PRD: 降级处理)
+    REDIRECT = "redirect"  # Redirect to related safe content
+    APOLOGIZE = "apologize"  # Politely decline
 
 
 @dataclass
@@ -35,7 +35,7 @@ class BlacklistMatch:
     matched_text: str
     position: tuple[int, int]
     added_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    added_by: str = ""              # parent_id
+    added_by: str = ""  # parent_id
 
     def to_dict(self) -> dict[str, Any]:
         return {

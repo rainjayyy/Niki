@@ -233,6 +233,7 @@ class TestRequestBodySchemas:
             ("post", "/api/v1/treehole/purge-expired"),
             ("post", "/api/v1/push/kick/{device_id}"),
             ("post", "/api/v1/push/enable/{device_id}"),
+            ("post", "/api/v1/children/letters/{letter_id}/read"),
         }
         missing: list[str] = []
         for m, p, info in api_paths:

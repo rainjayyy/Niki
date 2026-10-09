@@ -51,23 +51,25 @@ __all__ = [
 # is read by support tooling and (via /admin/audit) by parents, so it
 # is deliberately held to a stricter standard than the domain tables:
 # no free child text, no raw phone, no signature payload.
-_PII_METADATA_KEYS = frozenset({
-    "original_text",
-    "text",
-    "message",
-    "content",
-    "utterance",
-    "child_text",
-    "transcript",
-    "phone",
-    "phone_number",
-    "id_number",
-    "typed_signature",
-    "signature",
-    "email",
-    "address",
-    "name",
-})
+_PII_METADATA_KEYS = frozenset(
+    {
+        "original_text",
+        "text",
+        "message",
+        "content",
+        "utterance",
+        "child_text",
+        "transcript",
+        "phone",
+        "phone_number",
+        "id_number",
+        "typed_signature",
+        "signature",
+        "email",
+        "address",
+        "name",
+    }
+)
 
 _REDACTED = "[redacted]"
 
@@ -77,20 +79,22 @@ _REDACTED = "[redacted]"
 # the log line is emitted *before* the DB write, would lose the audit
 # row entirely. So colliding keys are prefixed for the log line only;
 # the persisted metadata keeps the caller's spelling.
-_RESERVED_LOG_FIELDS = frozenset({
-    "severity",
-    "actor_parent_id",
-    "target_parent_id",
-    "target_child_id",
-    "endpoint",
-    "method",
-    "reason",
-    "client_ip",
-    "event",
-    "level",
-    "timestamp",
-    "logger",
-})
+_RESERVED_LOG_FIELDS = frozenset(
+    {
+        "severity",
+        "actor_parent_id",
+        "target_parent_id",
+        "target_child_id",
+        "endpoint",
+        "method",
+        "reason",
+        "client_ip",
+        "event",
+        "level",
+        "timestamp",
+        "logger",
+    }
+)
 
 # Metadata values longer than this are truncated — a long string is
 # almost always free text that slipped past the key check.

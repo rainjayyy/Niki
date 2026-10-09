@@ -73,9 +73,7 @@ class HeartbeatService:
                 "build the service, register all checkers, then start()."
             )
         # Replace existing registration with the same name (last write wins).
-        self._registrations = [
-            r for r in self._registrations if r.name != name
-        ]
+        self._registrations = [r for r in self._registrations if r.name != name]
         self._registrations.append(
             _Registration(
                 name=name,

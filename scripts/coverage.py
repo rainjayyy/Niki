@@ -1,4 +1,5 @@
 """对比后端端点 vs 前端 mock 覆盖"""
+
 import re
 from pathlib import Path
 
@@ -30,15 +31,20 @@ for m in re.finditer(r"includes\(['\"]([^'\"]+)['\"]\)", mock_text):
 for m in re.finditer(r"match\(/\.([^\/]+)\/", mock_text):
     keywords.add(m.group(1))
 # 也包括字母路径（letters, register 等）
-keywords.update([
-    "/parents/{parent_id}/letters",
-    "/children/{child_id}/letters",
-    "/children/letters/{letter_id}/read",
-    "/dashboard/events/risk",          # 前端自定义
-    "/metrics/vitals",                 # 自定义
-    "/metrics/vitals/recent",
-    "/push/vapid-key", "/push/subscribe", "/push/unsubscribe",
-])
+keywords.update(
+    [
+        "/parents/{parent_id}/letters",
+        "/children/{child_id}/letters",
+        "/children/letters/{letter_id}/read",
+        "/dashboard/events/risk",  # 前端自定义
+        "/metrics/vitals",  # 自定义
+        "/metrics/vitals/recent",
+        "/push/vapid-key",
+        "/push/subscribe",
+        "/push/unsubscribe",
+    ]
+)
+
 
 # 模糊匹配：mock 的 endsWith 关键词在后端路径中以"结尾"形式出现
 def covered(method: str, path: str) -> bool:
@@ -55,6 +61,7 @@ def covered(method: str, path: str) -> bool:
             return True
     return False
 
+
 covered_list = []
 uncovered_list = []
 for method, path, src in backend_eps:
@@ -63,20 +70,21 @@ for method, path, src in backend_eps:
     else:
         uncovered_list.append((method, path, src))
 
-print(f"\n=== 覆盖统计 ===")
+print("\n=== 覆盖统计 ===")
 print(f"  后端端点: {len(backend_eps)}")
-print(f"  mock 覆盖: {len(covered_list)}  ({len(covered_list)/len(backend_eps)*100:.0f}%)")
-print(f"  未覆盖:   {len(uncovered_list)}  ({len(uncovered_list)/len(backend_eps)*100:.0f}%)")
+print(f"  mock 覆盖: {len(covered_list)}  ({len(covered_list) / len(backend_eps) * 100:.0f}%)")
+print(f"  未覆盖:   {len(uncovered_list)}  ({len(uncovered_list) / len(backend_eps) * 100:.0f}%)")
 
 # 按 router 统计
 from collections import defaultdict
+
 by_src = defaultdict(lambda: [0, 0])  # [total, covered]
 for m, p, s in backend_eps:
     by_src[s][0] += 1
 for m, p, s in covered_list:
     by_src[s][1] += 1
 
-print(f"\n=== 按 router 分布 ===")
+print("\n=== 按 router 分布 ===")
 for src in sorted(by_src):
     total, cov = by_src[src]
     pct = cov / total * 100 if total else 0

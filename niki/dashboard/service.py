@@ -211,9 +211,7 @@ class DashboardService:
         actions = self._action_suggestions(trend, anomalies)
 
         alerts = await self._repo.list_alerts(alert_type="safety_valve", child_id=child_id)
-        safety_count = sum(
-            1 for a in alerts if a.get("payload", {}).get("round_reached", 0) > 0
-        )
+        safety_count = sum(1 for a in alerts if a.get("payload", {}).get("round_reached", 0) > 0)
 
         return EmotionWeeklyReport(
             child_id=child_id,
@@ -255,9 +253,7 @@ class DashboardService:
             InterestTopic(
                 name=name,
                 count=count,
-                last_seen=topic_dates[name][-1].split("T")[0]
-                if topic_dates[name]
-                else "",
+                last_seen=topic_dates[name][-1].split("T")[0] if topic_dates[name] else "",
                 examples=topic_examples[name][:3],
             )
             for name, count in sorted_topics[:5]
@@ -268,9 +264,7 @@ class DashboardService:
             InterestTopic(
                 name=name,
                 count=count,
-                last_seen=topic_dates[name][-1].split("T")[0]
-                if topic_dates[name]
-                else "",
+                last_seen=topic_dates[name][-1].split("T")[0] if topic_dates[name] else "",
             )
             for name, count in sorted_topics
             if any(t >= week_ago.isoformat() for t in topic_dates.get(name, []))
@@ -290,9 +284,7 @@ class DashboardService:
     ) -> LearningWhitepaper:
         """Generate the learning whitepaper (PRD #26)."""
         queries = await self._repo.list_knowledge_queries(child_id)
-        alerts = await self._repo.list_alerts(
-            alert_type="safety_valve", child_id=child_id
-        )
+        alerts = await self._repo.list_alerts(alert_type="safety_valve", child_id=child_id)
         events = await self._repo.list_tutoring_events(child_id)
 
         new_knowledge = list(
@@ -326,19 +318,15 @@ class DashboardService:
         suggestions: list[str] = []
         if hard_problems:
             suggestions.append(
-                "💡 孩子在某些题目上需要更多帮助。"
-                "建议周末找时间和孩子一起看看这些题目。"
+                "💡 孩子在某些题目上需要更多帮助。建议周末找时间和孩子一起看看这些题目。"
             )
         if new_knowledge:
             top = new_knowledge[0]
             suggestions.append(
-                f"🌟 本周探索了「{top}」相关知识。"
-                f"推荐周末带 TA 去科技馆/图书馆深入了解。"
+                f"🌟 本周探索了「{top}」相关知识。推荐周末带 TA 去科技馆/图书馆深入了解。"
             )
 
-        total_solved = sum(
-            1 for e in events if e.get("payload", {}).get("solved")
-        )
+        total_solved = sum(1 for e in events if e.get("payload", {}).get("solved"))
 
         return LearningWhitepaper(
             child_id=child_id,
@@ -356,16 +344,10 @@ class DashboardService:
         child_id: str,
     ) -> dict[str, list[dict[str, Any]]]:
         """Get all pending alerts for a child."""
-        all_high_risk = await self._repo.list_alerts(
-            alert_type="high_risk", child_id=child_id
-        )
-        all_safety = await self._repo.list_alerts(
-            alert_type="safety_valve", child_id=child_id
-        )
+        all_high_risk = await self._repo.list_alerts(alert_type="high_risk", child_id=child_id)
+        all_safety = await self._repo.list_alerts(alert_type="safety_valve", child_id=child_id)
         return {
-            "high_risk": [
-                r for r in all_high_risk if r.get("delivered_at") is None
-            ],
+            "high_risk": [r for r in all_high_risk if r.get("delivered_at") is None],
             "safety_valve": list(all_safety),
         }
 
@@ -373,9 +355,7 @@ class DashboardService:
         """Mark an alert as delivered."""
         return await self._repo.mark_alert_delivered(alert_id)
 
-    async def dismiss_alerts_batch(
-        self, alert_ids: list[str]
-    ) -> dict[str, Any]:
+    async def dismiss_alerts_batch(self, alert_ids: list[str]) -> dict[str, Any]:
         """Dismiss many alerts in one logical call (BE-API-005).
 
         Each id is independent: a missing id is skipped with a
@@ -414,7 +394,9 @@ class DashboardService:
         # touch the repo, just slices the baseline in memory).
         ws_iso = week_start.date().isoformat()
         records = [r for r in baseline.records() if r.date >= ws_iso]
-        print(f"DEBUG _build_trend: ws_iso={ws_iso} all_dates={[r.date for r in baseline.records()]} in_range={[r.date for r in records]}")
+        print(
+            f"DEBUG _build_trend: ws_iso={ws_iso} all_dates={[r.date for r in baseline.records()]} in_range={[r.date for r in records]}"
+        )
         if not records:
             return WeeklyTrend(
                 start_date=ws_iso,
@@ -448,29 +430,21 @@ class DashboardService:
         else:
             return "🌧 本周孩子情绪偏负面，建议找时间聊一聊。"
 
-    def _discoveries(
-        self, trend: WeeklyTrend, baseline: EmotionBaseline
-    ) -> list[str]:
+    def _discoveries(self, trend: WeeklyTrend, baseline: EmotionBaseline) -> list[str]:
         out: list[str] = []
         for day, val in trend.daily_valences.items():
             if val > 0.4:
-                out.append(
-                    f"📈 {day} 的对话氛围特别好（平均情绪 {val:.2f}）"
-                )
+                out.append(f"📈 {day} 的对话氛围特别好（平均情绪 {val:.2f}）")
         return out
 
     def _fuzzy_negatives(self, trend: WeeklyTrend) -> list[str]:
         out: list[str] = []
         for day, val in trend.daily_valences.items():
             if val < -0.3:
-                out.append(
-                    f"⚠️ {day} 孩子情绪有点低落，注意观察"
-                )
+                out.append(f"⚠️ {day} 孩子情绪有点低落，注意观察")
         return out
 
-    def _anomaly_annotations(
-        self, baseline: EmotionBaseline, today: datetime
-    ) -> list[str]:
+    def _anomaly_annotations(self, baseline: EmotionBaseline, today: datetime) -> list[str]:
         # Use today_mean as today's valence proxy. If there's only one
         # record we can pass it directly.
         if not baseline.records():
@@ -482,9 +456,7 @@ class DashboardService:
         )
         if not anomaly.is_anomaly:
             return []
-        return [
-            f"🚨 {latest.date} 情绪偏离基线 {anomaly.z_score:.1f}σ"
-        ]
+        return [f"🚨 {latest.date} 情绪偏离基线 {anomaly.z_score:.1f}σ"]
 
     def _action_suggestions(
         self,
@@ -493,9 +465,7 @@ class DashboardService:
     ) -> list[str]:
         out: list[str] = []
         if anomalies:
-            out.append(
-                "💡 本周出现情绪异常波动，建议回顾当天对话找根因。"
-            )
+            out.append("💡 本周出现情绪异常波动，建议回顾当天对话找根因。")
         if not trend.daily_valences:
             out.append("本周数据不足，下周保持记录节奏。")
         return out

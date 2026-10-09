@@ -29,7 +29,7 @@ MAX_ROUNDS = 10
 class ConversationTurn:
     """A single turn in a conversation (child or Niki)."""
 
-    role: str                       # "child" | "niki"
+    role: str  # "child" | "niki"
     text: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     intent: str | None = None
@@ -118,6 +118,79 @@ class ShortTermMemory:
             pass
 
     async def clear_all(self) -> None:
-        """Clear all session memory (used for account deletion, PRD #35)."""
+        """Clear all session memory (used for account deletion, PRD #35).
+
+        Clears the in-process cache and scans + deletes every
+        `niki:short_term:*` key in Redis. Redis failures are
+        logged but do NOT block the local clear — the worst case
+        is that a stale Redis entry survives until its 1-day TTL
+        expires, which is acceptable for compliance.
+        """
         self._cache.clear()
-        # In production: scan + delete Redis keys with prefix
+        try:
+            redis = await RedisClient.get_client()
+            pattern = RedisClient.make_key("short_term", "*")
+            deleted = 0
+            async for key in redis.scan_iter(match=pattern, count=100):
+                await redis.delete(key)
+                deleted += 1
+            logger.info(
+                "short_term.clear_all.redis",
+                pattern=pattern,
+                deleted=deleted,
+            )
+        except Exception as exc:
+            # Local cache is already cleared; surface the Redis
+            # failure as a warning so account deletion does not
+            # 500 just because the cache is unreachable.
+            logger.warning(
+                "short_term.clear_all.redis_failed",
+                error=str(exc),
+                note="local cache cleared, Redis keys will expire via TTL",
+            )
+
+
+def turns_to_history(
+    turns: list[ConversationTurn],
+) -> list[dict[str, str]]:
+    """Map stored turns to LLM `messages` entries (child -> user, Niki -> assistant)."""
+    history: list[dict[str, str]] = []
+    for turn in turns:
+        role = "user" if turn.role == "child" else "assistant"
+        history.append({"role": role, "content": turn.text})
+    return history
+
+
+def format_history(
+    history: list[dict[str, str]] | None,
+) -> list[dict[str, str]]:
+    """Normalise history entries for LLM `messages` payloads."""
+    normalized: list[dict[str, str]] = []
+    for item in history or []:
+        role = item.get("role")
+        content = item.get("content")
+        if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+            normalized.append({"role": role, "content": content.strip()})
+    return normalized
+
+
+# ---------------------------------------------------------------------------
+# Process-wide singleton (shared by the chat orchestrator + SSE endpoint)
+# ---------------------------------------------------------------------------
+
+
+_memory: ShortTermMemory | None = None
+
+
+def get_short_term_memory() -> ShortTermMemory:
+    """Return the process-wide short-term memory (default: Redis + fallback)."""
+    global _memory
+    if _memory is None:
+        _memory = ShortTermMemory()
+    return _memory
+
+
+def set_short_term_memory(memory: ShortTermMemory | None) -> None:
+    """Override the process-wide short-term memory (tests / Redis swap)."""
+    global _memory
+    _memory = memory

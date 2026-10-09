@@ -158,7 +158,7 @@ _DEFAULT_ACTIONS_BY_TEMPLATE: dict[ReportTemplate, list[str]] = {
         "引导孩子用文字记录自己的心情",
     ],
     ReportTemplate.CHILD: [
-        "周末可一起读\"情绪绘本\"",
+        '周末可一起读"情绪绘本"',
         "每天 10 分钟亲子对话",
     ],
 }

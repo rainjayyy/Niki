@@ -19,8 +19,8 @@ class InterestTopic:
     """A single interest topic with metadata."""
 
     name: str
-    count: int                       # how many times discussed
-    last_seen: str                   # ISO date
+    count: int  # how many times discussed
+    last_seen: str  # ISO date
     subtopics: list[str] = field(default_factory=list)
     examples: list[str] = field(default_factory=list)  # sample questions
 
@@ -40,8 +40,8 @@ class InterestGraph:
 
     child_id: str
     top_topics: list[InterestTopic]
-    new_interests: list[InterestTopic]    # appeared this week
-    growing_topics: list[str]             # topic names trending up
+    new_interests: list[InterestTopic]  # appeared this week
+    growing_topics: list[str]  # topic names trending up
     generated_at: str
 
     def to_dict(self) -> dict[str, Any]:

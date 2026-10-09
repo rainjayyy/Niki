@@ -44,9 +44,7 @@ def _iso(dt: datetime) -> str:
     """Serialize an aware datetime as ISO 8601 with 'Z'."""
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat().replace(
-        "+00:00", "Z"
-    )
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _parse_iso(s: str) -> datetime:
@@ -76,9 +74,7 @@ class SessionStore(ABC):
     @abstractmethod
     def get_last_activity(self, child_id: str) -> datetime | None: ...
     @abstractmethod
-    def set_last_activity(
-        self, child_id: str, ts: datetime
-    ) -> None: ...
+    def set_last_activity(self, child_id: str, ts: datetime) -> None: ...
     @abstractmethod
     def clear_last_activity(self, child_id: str) -> None: ...
 
@@ -114,15 +110,9 @@ class InMemorySessionStore(SessionStore):
 
     def get_started_at(self, child_id: str) -> datetime | None:
         with self._lock:
-            return (
-                deepcopy(self._started[child_id])
-                if child_id in self._started
-                else None
-            )
+            return deepcopy(self._started[child_id]) if child_id in self._started else None
 
-    def set_started_at(
-        self, child_id: str, ts: datetime
-    ) -> None:
+    def set_started_at(self, child_id: str, ts: datetime) -> None:
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         with self._lock:
@@ -134,15 +124,9 @@ class InMemorySessionStore(SessionStore):
 
     def get_last_activity(self, child_id: str) -> datetime | None:
         with self._lock:
-            return (
-                deepcopy(self._activity[child_id])
-                if child_id in self._activity
-                else None
-            )
+            return deepcopy(self._activity[child_id]) if child_id in self._activity else None
 
-    def set_last_activity(
-        self, child_id: str, ts: datetime
-    ) -> None:
+    def set_last_activity(self, child_id: str, ts: datetime) -> None:
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         with self._lock:
@@ -210,6 +194,7 @@ class RedisSessionStore(SessionStore):
         if self._client is not None:
             return self._client
         from niki.infrastructure.redis import RedisClient
+
         self._client = await RedisClient.get_client()
         return self._client
 
@@ -234,44 +219,30 @@ class RedisSessionStore(SessionStore):
         v = await self._get(self._k(self._key_prefix, child_id, "started_at"))
         return _parse_iso(v) if v else None
 
-    async def set_started_at(
-        self, child_id: str, ts: datetime
-    ) -> None:
+    async def set_started_at(self, child_id: str, ts: datetime) -> None:
         await self._set(
             self._k(self._key_prefix, child_id, "started_at"),
             _iso(ts),
         )
 
     async def clear_started_at(self, child_id: str) -> None:
-        await self._delete(
-            self._k(self._key_prefix, child_id, "started_at")
-        )
+        await self._delete(self._k(self._key_prefix, child_id, "started_at"))
 
-    async def get_last_activity(
-        self, child_id: str
-    ) -> datetime | None:
-        v = await self._get(
-            self._k(self._key_prefix, child_id, "last_activity")
-        )
+    async def get_last_activity(self, child_id: str) -> datetime | None:
+        v = await self._get(self._k(self._key_prefix, child_id, "last_activity"))
         return _parse_iso(v) if v else None
 
-    async def set_last_activity(
-        self, child_id: str, ts: datetime
-    ) -> None:
+    async def set_last_activity(self, child_id: str, ts: datetime) -> None:
         await self._set(
             self._k(self._key_prefix, child_id, "last_activity"),
             _iso(ts),
         )
 
     async def clear_last_activity(self, child_id: str) -> None:
-        await self._delete(
-            self._k(self._key_prefix, child_id, "last_activity")
-        )
+        await self._delete(self._k(self._key_prefix, child_id, "last_activity"))
 
     async def is_soft_warned(self, child_id: str) -> bool:
-        v = await self._get(
-            self._k(self._key_prefix, child_id, "soft_warned")
-        )
+        v = await self._get(self._k(self._key_prefix, child_id, "soft_warned"))
         return v == "1"
 
     async def mark_soft_warned(self, child_id: str) -> None:
@@ -281,26 +252,16 @@ class RedisSessionStore(SessionStore):
         )
 
     async def clear_soft_warned(self, child_id: str) -> None:
-        await self._delete(
-            self._k(self._key_prefix, child_id, "soft_warned")
-        )
+        await self._delete(self._k(self._key_prefix, child_id, "soft_warned"))
 
     async def get_ended(self, child_id: str) -> str | None:
-        return await self._get(
-            self._k(self._key_prefix, child_id, "ended")
-        )
+        return await self._get(self._k(self._key_prefix, child_id, "ended"))
 
-    async def set_ended(
-        self, child_id: str, reason: str
-    ) -> None:
-        await self._set(
-            self._k(self._key_prefix, child_id, "ended"), reason
-        )
+    async def set_ended(self, child_id: str, reason: str) -> None:
+        await self._set(self._k(self._key_prefix, child_id, "ended"), reason)
 
     async def clear_ended(self, child_id: str) -> None:
-        await self._delete(
-            self._k(self._key_prefix, child_id, "ended")
-        )
+        await self._delete(self._k(self._key_prefix, child_id, "ended"))
 
 
 # ---------------------------------------------------------------------------
@@ -344,28 +305,20 @@ class FallbackSessionStore(SessionStore):
             )
             self._in_fallback = True
 
-    async def _run(
-        self, primary_attr: str, *args: Any
-    ) -> Any:
+    async def _run(self, primary_attr: str, *args: Any) -> Any:
         # Once we've flipped to fallback, never call primary
         # again (slowapi-style). This avoids hammering a dead
         # Redis and getting latency spikes on every request.
         if self._in_fallback:
             return await self._call(self._fallback, primary_attr, *args)
         try:
-            return await self._call(
-                self._primary, primary_attr, *args
-            )
+            return await self._call(self._primary, primary_attr, *args)
         except Exception as exc:
             self._maybe_flip(exc)
-            return await self._call(
-                self._fallback, primary_attr, *args
-            )
+            return await self._call(self._fallback, primary_attr, *args)
 
     @staticmethod
-    async def _call(
-        store: SessionStore, attr: str, *args: Any
-    ) -> Any:
+    async def _call(store: SessionStore, attr: str, *args: Any) -> Any:
         result = getattr(store, attr)(*args)
         if asyncio.iscoroutine(result):
             result = await result
@@ -374,22 +327,16 @@ class FallbackSessionStore(SessionStore):
     async def get_started_at(self, child_id: str) -> datetime | None:
         return await self._run("get_started_at", child_id)
 
-    async def set_started_at(
-        self, child_id: str, ts: datetime
-    ) -> None:
+    async def set_started_at(self, child_id: str, ts: datetime) -> None:
         await self._run("set_started_at", child_id, ts)
 
     async def clear_started_at(self, child_id: str) -> None:
         await self._run("clear_started_at", child_id)
 
-    async def get_last_activity(
-        self, child_id: str
-    ) -> datetime | None:
+    async def get_last_activity(self, child_id: str) -> datetime | None:
         return await self._run("get_last_activity", child_id)
 
-    async def set_last_activity(
-        self, child_id: str, ts: datetime
-    ) -> None:
+    async def set_last_activity(self, child_id: str, ts: datetime) -> None:
         await self._run("set_last_activity", child_id, ts)
 
     async def clear_last_activity(self, child_id: str) -> None:
@@ -407,9 +354,7 @@ class FallbackSessionStore(SessionStore):
     async def get_ended(self, child_id: str) -> str | None:
         return await self._run("get_ended", child_id)
 
-    async def set_ended(
-        self, child_id: str, reason: str
-    ) -> None:
+    async def set_ended(self, child_id: str, reason: str) -> None:
         await self._run("set_ended", child_id, reason)
 
     async def clear_ended(self, child_id: str) -> None:
@@ -482,6 +427,7 @@ class SyncSessionStore(SessionStore):
             # We're inside an async context — schedule the
             # coroutine and wait for it.
             import concurrent.futures
+
             fut = asyncio.run_coroutine_threadsafe(coro, loop)
             return fut.result(timeout=5)
         # No running loop — safe to spin one up.

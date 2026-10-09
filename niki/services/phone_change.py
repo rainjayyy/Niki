@@ -324,15 +324,11 @@ class PhoneChangeService:
         if not password or not password.strip():
             raise PhoneChangeInvalidPassword()
         if not validate_phone(new_phone):
-            raise AuthError(
-                "INVALID_PHONE_FORMAT", "Phone format invalid"
-            )
+            raise AuthError("INVALID_PHONE_FORMAT", "Phone format invalid")
 
         account = await self._account_repo.get(parent_id)
         if account is None:
-            raise AuthError(
-                "NOT_FOUND", f"Account {parent_id} not found"
-            )
+            raise AuthError("NOT_FOUND", f"Account {parent_id} not found")
 
         from niki.db.repositories.account_repo import AccountRepository
 
@@ -412,9 +408,7 @@ class PhoneChangeService:
                 # attempt counter. Production may have already
                 # consumed it during /sms/login. We let the row
                 # match override.
-                phone_for_sms = self._reverse_phone_hash(
-                    row.new_phone_hash
-                )
+                phone_for_sms = self._reverse_phone_hash(row.new_phone_hash)
                 await sms.verify(phone_for_sms, sms_code)
             except SMSTooManyAttempts as exc:
                 raise exc
@@ -442,9 +436,7 @@ class PhoneChangeService:
             reason="Phone-change SMS code verified",
             metadata={
                 "request_id": request_id,
-                "effective_at": row.effective_at.isoformat()
-                if row and row.effective_at
-                else None,
+                "effective_at": row.effective_at.isoformat() if row and row.effective_at else None,
             },
         )
         logger.info(
@@ -589,9 +581,7 @@ class PhoneChangeService:
         # 1. Mutate the parent row (no-op if `new_phone_raw` is None).
         new_phone_raw = row.new_phone_raw
         if new_phone_raw is not None:
-            new_acct = await self._account_repo.update_phone_hash(
-                row.parent_id, new_phone_raw
-            )
+            new_acct = await self._account_repo.update_phone_hash(row.parent_id, new_phone_raw)
         # 2. Flip the request row. Pass effective_at through so the
         #    bypass-cooling path (confirm_now from PENDING_VERIFICATION)
         #    lands the freshly-stamped `effective_at` on disk instead of
@@ -689,16 +679,12 @@ class EmailChangeService:
 
         account = await self._account_repo.get(parent_id)
         if account is None:
-            raise AuthError(
-                "NOT_FOUND", f"Account {parent_id} not found"
-            )
+            raise AuthError("NOT_FOUND", f"Account {parent_id} not found")
 
         from niki.db.repositories.account_repo import AccountRepository
 
         email_hash = AccountRepository.hash_field(new_email)
-        existing = await self._account_repo.find_by_email_hash(
-            email_hash
-        )
+        existing = await self._account_repo.find_by_email_hash(email_hash)
         if existing is not None and existing.id != parent_id:
             raise EmailChangeAlreadyUsed()
 
@@ -743,9 +729,7 @@ class EmailChangeService:
         except EmailCodeInvalid:
             raise EmailChangeCodeInvalid()
 
-        account = await self._account_repo.update_email(
-            parent_id, new_email
-        )
+        account = await self._account_repo.update_email(parent_id, new_email)
         if account is None:
             raise EmailChangeRequestNotFound()
         await self._emit_audit(
@@ -757,11 +741,7 @@ class EmailChangeService:
         return account
 
     def _email_or_default(self):
-        return (
-            self._email
-            if self._email is not None
-            else get_email_code_service()
-        )
+        return self._email if self._email is not None else get_email_code_service()
 
 
 # ---------------------------------------------------------------------------

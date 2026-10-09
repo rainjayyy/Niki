@@ -23,8 +23,8 @@ class NewVocabulary:
     """A new word/phrase the child learned this week."""
 
     word: str
-    context: str                       # sample sentence / topic
-    first_seen: str                    # ISO date
+    context: str  # sample sentence / topic
+    first_seen: str  # ISO date
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,10 +39,10 @@ class LearningWhitepaper:
     """A weekly learning summary for the parent."""
 
     child_id: str
-    new_knowledge_explored: list[str]     # encyclopedia topics
-    hard_problems_attempted: list[str]   # tutoring safety-valve events
+    new_knowledge_explored: list[str]  # encyclopedia topics
+    hard_problems_attempted: list[str]  # tutoring safety-valve events
     new_vocabulary: list[NewVocabulary]
-    action_suggestions: list[str]         # PRD: 行动建议伴行
+    action_suggestions: list[str]  # PRD: 行动建议伴行
     total_questions_asked: int = 0
     total_problems_solved: int = 0
     generated_at: str = ""

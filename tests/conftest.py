@@ -162,6 +162,32 @@ def _reset_unified_audit():
     set_audit_log_service(AuditLogService(repo=repo))
 
 
+@pytest.fixture(autouse=True)
+def _reset_letter_repo():
+    """Reset the in-memory letter store between tests."""
+    from niki.db.repositories.letter_repo import (
+        InMemoryLetterRepository,
+        set_letter_repository,
+    )
+
+    set_letter_repository(InMemoryLetterRepository())
+    yield
+    set_letter_repository(InMemoryLetterRepository())
+
+
+@pytest.fixture(autouse=True)
+def _reset_short_term_memory():
+    """Reset the process-wide short-term memory between tests."""
+    from niki.memory.short_term import (
+        ShortTermMemory,
+        set_short_term_memory,
+    )
+
+    set_short_term_memory(ShortTermMemory())
+    yield
+    set_short_term_memory(None)
+
+
 @pytest.fixture(scope="session")
 def event_loop() -> Any:
     """Create a session-scoped event loop for async tests."""

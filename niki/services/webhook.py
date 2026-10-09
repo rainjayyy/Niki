@@ -117,9 +117,7 @@ def sign_payload(secret: str, payload_bytes: bytes) -> str:
     re-serialised dict — JSON key order or whitespace
     differences would otherwise break verification.
     """
-    digest = hmac.new(
-        secret.encode("utf-8"), payload_bytes, hashlib.sha256
-    ).hexdigest()
+    digest = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
 
 
@@ -183,14 +181,10 @@ class WebhookDispatcherService:
             event_types=list(event_types),
         )
 
-    async def list_for_owner(
-        self, owner_id: str
-    ) -> list[dict[str, Any]]:
+    async def list_for_owner(self, owner_id: str) -> list[dict[str, Any]]:
         return await self.repo.list_subscriptions_for_owner(owner_id)
 
-    async def get(
-        self, subscription_id: str, owner_id: str
-    ) -> dict[str, Any] | None:
+    async def get(self, subscription_id: str, owner_id: str) -> dict[str, Any] | None:
         row = await self.repo.get_subscription(subscription_id)
         if row is None or row["owner_id"] != owner_id:
             # Collapse "not found" + "not yours" to None so the
@@ -215,12 +209,8 @@ class WebhookDispatcherService:
             is_active=is_active,
         )
 
-    async def disable(
-        self, subscription_id: str, owner_id: str
-    ) -> dict[str, Any] | None:
-        return await self.repo.disable_subscription(
-            subscription_id, owner_id
-        )
+    async def disable(self, subscription_id: str, owner_id: str) -> dict[str, Any] | None:
+        return await self.repo.disable_subscription(subscription_id, owner_id)
 
     async def get_deliveries(
         self,
@@ -264,22 +254,16 @@ class WebhookDispatcherService:
         if event_id is None:
             event_id = f"evt-{secrets.token_urlsafe(16)}"
 
-        subs = await self.repo.list_active_subscriptions_for_event(
-            event_type
-        )
+        subs = await self.repo.list_active_subscriptions_for_event(event_type)
         if not subs:
             return []
 
-        body_bytes = json.dumps(
-            payload, ensure_ascii=False, separators=(",", ":")
-        ).encode("utf-8")
+        body_bytes = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
         results: list[dict[str, Any]] = []
         for sub in subs:
             results.append(
-                await self._dispatch_one(
-                    sub, event_type, event_id, body_bytes, http_client
-                )
+                await self._dispatch_one(sub, event_type, event_id, body_bytes, http_client)
             )
         return results
 
@@ -311,8 +295,7 @@ class WebhookDispatcherService:
                 sub["id"], sub["owner_id"], limit=1000
             )
             existing_match = next(
-                (d for d in (existing or [])
-                 if d.get("event_id") == event_id),
+                (d for d in (existing or []) if d.get("event_id") == event_id),
                 None,
             )
             return {
@@ -400,9 +383,7 @@ class WebhookDispatcherService:
             "User-Agent": USER_AGENT,
         }
         owns_client = http_client is None
-        client = http_client or httpx.AsyncClient(
-            timeout=DEFAULT_TIMEOUT_SECONDS
-        )
+        client = http_client or httpx.AsyncClient(timeout=DEFAULT_TIMEOUT_SECONDS)
         try:
             response = await client.post(
                 sub["target_url"],

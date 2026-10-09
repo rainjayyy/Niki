@@ -215,8 +215,7 @@ class PushDeliveryResult:
     ) -> None:
         if status not in VALID_DELIVERY_STATUSES:
             raise ValueError(
-                f"invalid status {status!r}; "
-                f"expected one of {sorted(VALID_DELIVERY_STATUSES)}"
+                f"invalid status {status!r}; expected one of {sorted(VALID_DELIVERY_STATUSES)}"
             )
         self.device_id = device_id
         self.channel = channel
@@ -319,9 +318,7 @@ class InMemoryPushDeliveryService(PushDeliveryService):
                 dry_run=dry_run,
             )
         elif dry_run:
-            latency = random.randint(
-                _DRY_RUN_LATENCY_MIN_MS, _DRY_RUN_LATENCY_MAX_MS
-            )
+            latency = random.randint(_DRY_RUN_LATENCY_MIN_MS, _DRY_RUN_LATENCY_MAX_MS)
             result = PushDeliveryResult(
                 device_id=device_id,
                 channel=channel,
@@ -653,9 +650,7 @@ class WebPushDeliveryBackend(PushDeliveryService):
 
         # A push service answers 201 Created on success; 200/202 are
         # accepted by some implementations, so treat any 2xx as sent.
-        delivered = error is None and (
-            status_code is None or 200 <= status_code < 300
-        )
+        delivered = error is None and (status_code is None or 200 <= status_code < 300)
         if not delivered and error is None:
             error = f"HTTP_{status_code}"
 
@@ -836,9 +831,7 @@ class CompositePushDeliveryService(InMemoryPushDeliveryService):
         web_backend: Optional[PushDeliveryService] = None,
     ) -> None:
         super().__init__(capacity=capacity)
-        self._web_backend: PushDeliveryService = (
-            web_backend or WebPushDeliveryBackend()
-        )
+        self._web_backend: PushDeliveryService = web_backend or WebPushDeliveryBackend()
 
     @property
     def web_backend(self) -> PushDeliveryService:
@@ -854,9 +847,7 @@ class CompositePushDeliveryService(InMemoryPushDeliveryService):
         if _device_attr(device, "platform") != "web":
             return await super().deliver(device, payload, dry_run=dry_run)
 
-        result = await self._web_backend.deliver(
-            device, payload, dry_run=dry_run
-        )
+        result = await self._web_backend.deliver(device, payload, dry_run=dry_run)
         # The web backend does its own audit + logging; the ring
         # buffer is this class's job.
         self._record(result, payload=payload)

@@ -18,11 +18,11 @@ from typing import Any
 class AccountStatus(StrEnum):
     """Lifecycle status of a parent account."""
 
-    PENDING = "pending"              # Signup started, verification incomplete
-    VERIFIED = "verified"            # All 3 verifications passed
-    SUSPENDED = "suspended"          # Manually suspended (e.g. fraud)
+    PENDING = "pending"  # Signup started, verification incomplete
+    VERIFIED = "verified"  # All 3 verifications passed
+    SUSPENDED = "suspended"  # Manually suspended (e.g. fraud)
     DELETION_PENDING = "deletion_pending"  # Deletion requested, 30-day window
-    DELETED = "deleted"              # Fully removed
+    DELETED = "deleted"  # Fully removed
 
 
 class AuthError(Exception):
@@ -78,10 +78,10 @@ class ParentAccount:
 
     id: str
     name: str
-    id_number_masked: str          # For storage; raw never persisted
+    id_number_masked: str  # For storage; raw never persisted
     phone_masked: str
     email: str | None = None
-    email_verified: bool = False     # BE-AUTH-006
+    email_verified: bool = False  # BE-AUTH-006
     status: AccountStatus = AccountStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     verified_at: datetime | None = None
@@ -132,14 +132,10 @@ class ParentAccount:
             "created_at": self.created_at.isoformat(),
             "verified_at": self.verified_at.isoformat() if self.verified_at else None,
             "deletion_requested_at": (
-                self.deletion_requested_at.isoformat()
-                if self.deletion_requested_at
-                else None
+                self.deletion_requested_at.isoformat() if self.deletion_requested_at else None
             ),
             "deletion_completed_at": (
-                self.deletion_completed_at.isoformat()
-                if self.deletion_completed_at
-                else None
+                self.deletion_completed_at.isoformat() if self.deletion_completed_at else None
             ),
             "deletion_window_remaining_days": self.deletion_window_remaining_days,
             "child_ids": list(self.child_ids),

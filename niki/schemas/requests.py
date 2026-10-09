@@ -41,7 +41,9 @@ class SMSSendRequest(BaseModel):
     `Settings.sms_captcha_required`.
     """
 
-    phone: str = Field(..., min_length=11, max_length=11, description="11-digit Chinese mobile number")
+    phone: str = Field(
+        ..., min_length=11, max_length=11, description="11-digit Chinese mobile number"
+    )
     captcha_id: str | None = Field(None, description="BE-COMP-006 captcha token id")
     # Captcha answer is coerced from the puzzle's arithmetic result;
     # callers may send either an int (e.g. eval("3 + 4") → 7) or a string.
@@ -86,7 +88,9 @@ class RecordHighRiskRequest(BaseModel):
     """
 
     child_id: str = Field(..., min_length=1, description="Child whose signal triggered the record")
-    original_text: str = Field(..., min_length=1, max_length=2000, description="Child's exact words")
+    original_text: str = Field(
+        ..., min_length=1, max_length=2000, description="Child's exact words"
+    )
     niki_response_summary: str | None = Field(
         None,
         max_length=2000,
@@ -99,7 +103,9 @@ class RecordSafetyValveRequest(BaseModel):
 
     child_id: str = Field(..., min_length=1)
     problem_summary: str = Field(..., min_length=1, max_length=2000)
-    round_reached: int = Field(4, ge=1, le=10, description="Which tutoring round the valve fired at (1-10)")
+    round_reached: int = Field(
+        4, ge=1, le=10, description="Which tutoring round the valve fired at (1-10)"
+    )
 
 
 class PushTestRequest(BaseModel):
@@ -116,8 +122,14 @@ class PushTestRequest(BaseModel):
         max_length=64,
         description="Target device id (1-64 chars [A-Za-z0-9._-])",
     )
-    title: str | None = Field(None, max_length=200, description="Notification title (default: '测试推送')")
-    body: str | None = Field(None, max_length=2000, description="Notification body (default: '这是一条测试推送')")
+    title: str | None = Field(
+        None, max_length=200, description="Notification title (default: '测试推送')"
+    )
+    body: str | None = Field(
+        None, max_length=2000, description="Notification body (default: '这是一条测试推送')"
+    )
     severity: str | None = Field(None, description="One of info|warning|critical (default: info)")
-    dedupe_key: str | None = Field(None, description="Dedupe key — same key collapses to one notification")
+    dedupe_key: str | None = Field(
+        None, description="Dedupe key — same key collapses to one notification"
+    )
     data: dict | None = Field(None, description="Free-form payload attached to the notification")

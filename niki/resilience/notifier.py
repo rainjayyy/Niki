@@ -16,9 +16,7 @@ logger = structlog.get_logger(__name__)
 
 
 # PRD #60: silent message (positive, reassuring tone)
-DEGRADATION_MESSAGE = (
-    "Niki 正在做一个小小的内部调整，功能正常但回答可能会简单一些，请放心使用~"
-)
+DEGRADATION_MESSAGE = "Niki 正在做一个小小的内部调整，功能正常但回答可能会简单一些，请放心使用~"
 
 
 @dataclass

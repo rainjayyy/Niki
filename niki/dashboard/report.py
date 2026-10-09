@@ -24,8 +24,8 @@ logger = structlog.get_logger(__name__)
 class MoodTrend(StrEnum):
     """Overall emotional trend for the week."""
 
-    IMPROVING = "improving"        # better than last week
-    STABLE = "stable"              # similar to last week
+    IMPROVING = "improving"  # better than last week
+    STABLE = "stable"  # similar to last week
     NEEDS_ATTENTION = "needs_attention"  # more negative dips than last week
 
 
@@ -61,12 +61,12 @@ class EmotionWeeklyReport:
 
     child_id: str
     trend: WeeklyTrend
-    headline: str                     # one-sentence positive summary
-    discoveries: list[str]             # positive findings (exploration, growth)
-    fuzzy_negatives: list[str]         # action-language negatives
-    anomaly_annotations: list[str]     # abnormal-baseline flags
-    action_suggestions: list[str]      # actionable advice
-    safety_valve_count: int = 0        # tutoring safety-valve events
+    headline: str  # one-sentence positive summary
+    discoveries: list[str]  # positive findings (exploration, growth)
+    fuzzy_negatives: list[str]  # action-language negatives
+    anomaly_annotations: list[str]  # abnormal-baseline flags
+    action_suggestions: list[str]  # actionable advice
+    safety_valve_count: int = 0  # tutoring safety-valve events
     treehole_engagement_count: int = 0  # tree-hole conversations (anonymized)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     week_start: str = ""

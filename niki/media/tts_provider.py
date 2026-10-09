@@ -85,7 +85,7 @@ class TTSProvider(ABC):
 
 
 # WAV synthesis parameters (must match each other).
-_MOCK_WAV_SAMPLE_RATE = 8000      # 8 kHz, mono, 8-bit unsigned
+_MOCK_WAV_SAMPLE_RATE = 8000  # 8 kHz, mono, 8-bit unsigned
 _MOCK_WAV_BITS = 8
 _MOCK_WAV_CHANNELS = 1
 # Characters per second approximation; matches a slow news-reader pace.
@@ -114,11 +114,11 @@ def _make_silent_wav(text: str, speed: float) -> tuple[bytes, int]:
     header = struct.pack(
         "<4sI4s4sIHHIIHH4sI",
         b"RIFF",
-        36 + data_size,    # 36 = header size minus 8 for "RIFF<size>"
+        36 + data_size,  # 36 = header size minus 8 for "RIFF<size>"
         b"WAVE",
         b"fmt ",
-        16,                # fmt chunk size for PCM
-        1,                 # audio format = PCM
+        16,  # fmt chunk size for PCM
+        1,  # audio format = PCM
         _MOCK_WAV_CHANNELS,
         _MOCK_WAV_SAMPLE_RATE,
         byte_rate,
