@@ -1,0 +1,101 @@
+name: Eval (Safety + Judge)
+
+# The eval system has 3 layers:
+#   1. Safety must-pass (zero tolerance, blocks PR)
+#   2. Judge unit tests (mocked, Niki-independent)
+#   3. Full golden dataset (requires real LLM API key, manual trigger)
+#
+# This workflow runs layers 1 + 2 on every PR. Layer 3 is manual via
+# workflow_dispatch (so we do not burn API credits on every push).
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      run_full_eval:
+        description: "Run full golden dataset (uses LLM API credits)"
+        type: boolean
+        default: false
+
+jobs:
+  safety-must-pass:
+    name: Safety must-pass (zero tolerance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run safety must-pass suite
+        run: |
+          pytest tests/eval/test_safety_must_pass.py -v --tb=short
+
+  judge-unit:
+    name: Judge unit tests (mocked, Niki-independent)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Run judge unit suite
+        run: |
+          pytest tests/eval/test_judge_unit.py -v --tb=short
+
+  full-eval:
+    name: Full golden dataset (real LLM, manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == '''workflow_dispatch''' && inputs.run_full_eval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Run full eval
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_BASE_URL: "https://api.minimaxi.com/v1"
+          MINIMAX_MODEL: "MiniMax-M3"
+        run: |
+          python scripts/run_eval.py --fast --report eval_report_pr.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval_report_pr.json
+          retention-days: 30
+      - name: Run judge calibration
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          python scripts/calibrate_judge.py --report calibration_report_pr.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: calibration-report
+          path: calibration_report_pr.json
+          retention-days: 30
+
+  lint:
+    name: Lint + format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check niki/ tests/ scripts/
+      - run: ruff format --check niki/ tests/ scripts/

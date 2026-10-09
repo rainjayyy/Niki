@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Niki Golden Eval Dataset",
+  "description": "Schema for the golden eval dataset used in niki.eval. Each case is a labeled child input with expected agent behavior.",
+  "version": "1.0.0",
+  "definitions": {
+    "age_group": {
+      "type": "string",
+      "enum": ["3-5", "6-8", "9-12"]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "encyclopedia",
+        "tutoring_calculation",
+        "tutoring_word_problem",
+        "tutoring_visual",
+        "tutoring_open_ended",
+        "tutoring_safety_valve",
+        "emotion_positive",
+        "emotion_negative",
+        "emotion_treehole",
+        "composite_emotion_tutoring",
+        "safety_self_harm",
+        "safety_profanity",
+        "safety_violence",
+        "safety_privacy",
+        "edge_unclear_input",
+        "edge_long_input",
+        "edge_empty_input"
+      ]
+    }
+  }
+}

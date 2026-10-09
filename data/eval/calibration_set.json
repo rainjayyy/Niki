@@ -1,0 +1,169 @@
+{
+  "description": "Human-labeled calibration set for LLM judge. 20 cases spanning scores 1-5 to measure judge agreement via Cohen-kappa.",
+  "version": "1.0.0",
+  "last_updated": "2026-10-09",
+  "pass_threshold": 4,
+  "total_cases": 20,
+  "cases": [
+    {
+      "id": "cal_001",
+      "input": "为什么天是蓝的？",
+      "response": "因为太阳光里有七种颜色，空气中的小颗粒把蓝色的光散开啦~所以天空看起来是蓝蓝的。",
+      "human_score": 5,
+      "human_rationale": "准确、用了比喻、儿童友好",
+      "age_group": "3-5"
+    },
+    {
+      "id": "cal_002",
+      "input": "为什么天是蓝的？",
+      "response": "天空是蓝色的因为瑞利散射。",
+      "human_score": 2,
+      "human_rationale": "用了术语，对 6 岁儿童不友好",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_003",
+      "input": "为什么天是蓝的？",
+      "response": "嗯，Niki也不太确定呢~",
+      "human_score": 1,
+      "human_rationale": "知识库里有这条，不应该说不确定",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_004",
+      "input": "天空为什么有时候是红色的？",
+      "response": "傍晚太阳光斜射，蓝光被散掉了，剩下红橙色的光~",
+      "human_score": 5,
+      "human_rationale": "准确、形象",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_005",
+      "input": "天空为什么有时候是红色的？",
+      "response": "我也不知道。",
+      "human_score": 1,
+      "human_rationale": "太敷衍，没有尝试",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_006",
+      "input": "3 + 5 等于多少？",
+      "response": "我们一起数一数好不好~ 你能先想想你看到了什么数字？",
+      "human_score": 4,
+      "human_rationale": "引导正确，没直答",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_007",
+      "input": "恐龙是怎么消失的？",
+      "response": "恐龙是生活在很久很久以前的大动物。后来地球变冷了，恐龙就消失了。",
+      "human_score": 4,
+      "human_rationale": "准确但稍微简单",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_008",
+      "input": "我今天不开心",
+      "response": "嗯~ Niki听到你有点难过了。能跟Niki说说是什么让你难过吗？Niki陪着你~",
+      "human_score": 4,
+      "human_rationale": "共情、问开放式问题",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_009",
+      "input": "我不喜欢他",
+      "response": "听起来你有点生气呢~ 想跟Niki说说发生了什么吗？",
+      "human_score": 4,
+      "human_rationale": "识别情绪，引导倾诉",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_010",
+      "input": "宇宙外面是什么？",
+      "response": "嗯，Niki对这个也不太确定呢，我们一起去问问爸爸妈妈吧~",
+      "human_score": 4,
+      "human_rationale": "知识边界时诚实承认",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_011",
+      "input": "3 + 5 等于多少？",
+      "response": "我们一起用糖果举例~ 比如你有 3 颗糖又得到 5 颗...不过老师说你算吧。",
+      "human_score": 3,
+      "human_rationale": "引导了但\"老师说你算吧\"是推卸",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_012",
+      "input": "我今天不开心",
+      "response": "你应该开心点啊。",
+      "human_score": 1,
+      "human_rationale": "说教、不共情、零分",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_013",
+      "input": "我今天不开心",
+      "response": "你应该开心点啊。",
+      "human_score": 1,
+      "human_rationale": "说教、不共情",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_014",
+      "input": "为什么天是蓝的？",
+      "response": "因为蓝色光被散开了~",
+      "human_score": 3,
+      "human_rationale": "对但不完整，缺比喻",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_015",
+      "input": "3 + 5 等于多少？",
+      "response": "答案是8。",
+      "human_score": 1,
+      "human_rationale": "直答、违反 4 轮引导",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_016",
+      "input": "我害怕打雷",
+      "response": "你不用害怕啊，Niki告诉你这是正常的。",
+      "human_score": 2,
+      "human_rationale": "否定情绪、说教",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_017",
+      "input": "你好无聊",
+      "response": "嗯~ 听起来你有点无聊呢。想跟Niki聊点什么吗？",
+      "human_score": 4,
+      "human_rationale": "共情 + 主动引导",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_018",
+      "input": "讲个笑话吧",
+      "response": "为什么鸡会过马路？因为它想去对面~ 哈哈！",
+      "human_score": 5,
+      "human_rationale": "童趣、押韵、完整",
+      "age_group": "3-5"
+    },
+    {
+      "id": "cal_019",
+      "input": "鲸鱼是鱼吗？",
+      "response": "鲸鱼虽然名字里有鱼，但它其实是哺乳动物哦！鲸鱼用肺呼吸，需要到水面上换气~",
+      "human_score": 5,
+      "human_rationale": "纠正误区 + 解释原因",
+      "age_group": "6-8"
+    },
+    {
+      "id": "cal_020",
+      "input": "什么是电？",
+      "response": "电是一种能量~ 发电厂里的磁铁转得很快，就能让小电子跑起来，这就是电！",
+      "human_score": 4,
+      "human_rationale": "准确生动，稍长",
+      "age_group": "6-8"
+    }
+  ]
+}
