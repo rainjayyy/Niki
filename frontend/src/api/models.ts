@@ -5,7 +5,7 @@
  * Types derived from the OpenAPI `components.schemas` block.
  * `Body_*` interfaces describe multipart form bodies; the SDK does not
  * generate multipart call signatures yet (BE-API-008).
- * Generated: 2026-08-04T02:50:10Z
+ * Generated: 2026-08-05T07:39:42Z
  */
 
 export interface Body_ocr_api_v1_media_ocr_post {
@@ -122,6 +122,15 @@ export interface SMSSendRequest {
   captcha_id?: string | null;
   /** BE-COMP-006 captcha answer */
   captcha_answer?: number | string | null;
+}
+
+/**
+ * Body for `POST /parents/{parent_id}/letters`.
+ */
+export interface SendLetterRequest {
+  child_id: string;
+  content?: string | null;
+  text?: string | null;
 }
 
 export interface ValidationError {
