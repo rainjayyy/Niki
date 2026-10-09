@@ -14,6 +14,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 import structlog
 
@@ -84,11 +85,11 @@ class LLMJudge:
 
     def __init__(
         self,
-        model=None,
-        max_length_for_judge=DEFAULT_MAX_LENGTH_FOR_JUDGE,
-        swap_position_runs=True,
-        max_tokens=1024,
-    ):
+        model: DoubaoClient | None = None,
+        max_length_for_judge: int = DEFAULT_MAX_LENGTH_FOR_JUDGE,
+        swap_position_runs: bool = True,
+        max_tokens: int = 1024,
+    ) -> None:
         """LLM-as-judge with bias controls.
 
         Args:
@@ -106,7 +107,9 @@ class LLMJudge:
         self._swap_position_runs = swap_position_runs
         self._max_tokens = max_tokens
 
-    async def score(self, case, response_text, child_age):
+    async def score(
+        self, case: dict[str, Any], response_text: str, child_age: int
+    ) -> JudgeResult:
         """Score a single response against a golden case."""
         normalized = self._normalize(response_text, self._max_length)
         prompt = self._build_user_prompt(case, normalized, child_age)
@@ -148,7 +151,12 @@ class LLMJudge:
             malformed=False,
         )
 
-    def compare_to_human(self, judge_results, human_scores, case_ids=None):
+    def compare_to_human(
+        self,
+        judge_results: list[JudgeResult],
+        human_scores: list[int],
+        case_ids: list[str] | None = None,
+    ) -> CalibrationReport:
         if len(judge_results) != len(human_scores):
             raise ValueError("length mismatch")
         n = len(judge_results)
@@ -170,7 +178,9 @@ class LLMJudge:
             per_case_diff=per_case,
         )
 
-    def _build_user_prompt(self, case, response_text, child_age):
+    def _build_user_prompt(
+        self, case: dict[str, Any], response_text: str, child_age: int
+    ) -> str:
         criteria = case.get("llm_judge_criteria", "回复是否合适")
         mc = case.get("must_contain", [])
         mnc = case.get("must_not_contain", [])
@@ -189,7 +199,7 @@ class LLMJudge:
             f"评估标准:{nl}" + nl.join(lines) + f"{nl}{nl}最低通过: {min_score}/5"
         )
 
-    async def _call_judge(self, prompt):
+    async def _call_judge(self, prompt: str) -> str:
         resp = await self._model.chat(
             messages=[
                 {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
@@ -198,9 +208,11 @@ class LLMJudge:
             temperature=0.1,
             max_tokens=self._max_tokens,
         )
-        return resp.get("content", "")
+        return str(resp.get("content", ""))
 
-    async def _single_score_pass(self, case, response_text, child_age):
+    async def _single_score_pass(
+        self, case: dict[str, Any], response_text: str, child_age: int
+    ) -> dict[str, Any]:
         raw = await self._call_judge(self._build_user_prompt(case, response_text, child_age))
         try:
             return self._parse_judge_output(raw)
@@ -208,7 +220,7 @@ class LLMJudge:
             return {"score": 0}
 
     @staticmethod
-    def _parse_judge_output(raw):
+    def _parse_judge_output(raw: str) -> dict[str, Any]:
         """Extract and validate the JSON object from judge output.
 
         Tolerates three common LLM artifacts:
@@ -255,7 +267,7 @@ class LLMJudge:
         return data
 
     @staticmethod
-    def _normalize(text, max_length):
+    def _normalize(text: str, max_length: int) -> str:
         if not text:
             return ""
         text = " ".join(text.split())
@@ -264,7 +276,7 @@ class LLMJudge:
         return text[: max_length - 3] + "..."
 
     @staticmethod
-    def _score_to_verdict(score):
+    def _score_to_verdict(score: int) -> JudgeVerdict:
         if score <= 2:
             return JudgeVerdict.FAIL
         if score == 3:
@@ -273,11 +285,11 @@ class LLMJudge:
             return JudgeVerdict.PASS
         return JudgeVerdict.STRONG
 
-    def _model_name(self):
+    def _model_name(self) -> str:
         return getattr(self._model, "model", "unknown-judge")
 
     @staticmethod
-    def _cohen_kappa(a, b):
+    def _cohen_kappa(a: list[int], b: list[int]) -> float:
         if not a:
             return 0.0
         if len(a) != len(b):
@@ -292,7 +304,12 @@ class LLMJudge:
         return (po - pe) / (1 - pe)
 
 
-async def run_golden_case(judge, case, response_text, child_age):
+async def run_golden_case(
+    judge: LLMJudge,
+    case: dict[str, Any],
+    response_text: str,
+    child_age: int,
+) -> tuple[JudgeResult, bool]:
     """Score one case, return (result, passed).
 
     passed is True if all of these hold:

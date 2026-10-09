@@ -38,7 +38,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _bytes_to_b64(b):
+def _bytes_to_b64(b: bytes | str | None) -> str | None:
     if b is None:
         return None
     if isinstance(b, str):
@@ -46,7 +46,7 @@ def _bytes_to_b64(b):
     return base64.b64encode(b).decode("ascii")
 
 
-async def _collect_account(parent_id):
+async def _collect_account(parent_id: str) -> dict[str, Any]:
     return {
         "exported_at": _now_iso(),
         "parent_id": parent_id,
@@ -62,7 +62,7 @@ async def _collect_account(parent_id):
     }
 
 
-async def _collect_children(parent_id, child_id):
+async def _collect_children(parent_id: str, child_id: str | None) -> dict[str, Any]:
     return {
         "exported_at": _now_iso(),
         "record_count": 0,
@@ -78,7 +78,9 @@ async def _collect_children(parent_id, child_id):
     }
 
 
-async def _collect_alerts(repo, parent_id, child_id):
+async def _collect_alerts(
+    repo: DashboardRepository, parent_id: str, child_id: str | None
+) -> dict[str, Any]:
     rows = await repo.list_alerts(alert_type=None, child_id=child_id)
     owned = [r for r in rows if r.get("parent_id") == parent_id]
     return {
@@ -97,7 +99,9 @@ async def _collect_alerts(repo, parent_id, child_id):
     }
 
 
-async def _collect_tutoring_events(repo, parent_id, child_id):
+async def _collect_tutoring_events(
+    repo: DashboardRepository, parent_id: str, child_id: str | None
+) -> dict[str, Any]:
     items = await repo.list_tutoring_events(child_id) if child_id else []
     owned = [r for r in items if r.get("parent_id") == parent_id]
     return {
@@ -114,7 +118,9 @@ async def _collect_tutoring_events(repo, parent_id, child_id):
     }
 
 
-async def _collect_knowledge_queries(repo, parent_id, child_id):
+async def _collect_knowledge_queries(
+    repo: DashboardRepository, parent_id: str, child_id: str | None
+) -> dict[str, Any]:
     items = await repo.list_knowledge_queries(child_id) if child_id else []
     owned = [r for r in items if r.get("parent_id") == parent_id]
     return {
@@ -131,7 +137,9 @@ async def _collect_knowledge_queries(repo, parent_id, child_id):
     }
 
 
-async def _collect_treehole(repo, parent_id, child_id):
+async def _collect_treehole(
+    repo: TreeholeRepository, parent_id: str, child_id: str | None
+) -> dict[str, Any]:
     # Use list_for_child when child_id is set; list_all() when None
     # (list_for_child filters by child_id == None which matches nothing).
     rows = await repo.list_for_child(child_id) if child_id else await repo.list_all()
@@ -166,7 +174,9 @@ async def _collect_treehole(repo, parent_id, child_id):
     }
 
 
-async def _collect_emotion_baseline(repo, parent_id):
+async def _collect_emotion_baseline(
+    repo: EmotionBaselineRepository, parent_id: str
+) -> dict[str, Any]:
     rows = await repo.list_in_window(window_days=30)
     return {
         "exported_at": _now_iso(),
@@ -183,7 +193,9 @@ async def _collect_emotion_baseline(repo, parent_id):
     }
 
 
-def _build_manifest(parent_id, child_id, sections):
+def _build_manifest(
+    parent_id: str, child_id: str | None, sections: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     return {
         "exported_at": _now_iso(),
         "parent_id": parent_id,
@@ -200,7 +212,7 @@ def _build_manifest(parent_id, child_id, sections):
     }
 
 
-def _readme_text(parent_id, child_id):
+def _readme_text(parent_id: str, child_id: str | None) -> str:
     scope = "child " + str(child_id) if child_id else "ALL children"
     parts = [
         "Niki data portability export",
@@ -227,7 +239,7 @@ def _readme_text(parent_id, child_id):
     return "\n".join(parts) + "\n"
 
 
-async def build_export_zip(parent_id, child_id=None):
+async def build_export_zip(parent_id: str, child_id: str | None = None) -> bytes:
     """Build a ZIP archive of all of a parent's data."""
     dashboard_repo = get_dashboard_repository()
     treehole_repo = get_treehole_repository()
