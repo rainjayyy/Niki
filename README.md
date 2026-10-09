@@ -1,401 +1,375 @@
-# Niki — AI Companion & Growth Assistant for Children (3-12)
+# Niki — 面向 3-12 岁儿童的多 Agent AI 伙伴
 
-> **一句话：一个能感知情绪、适配认知、守护安全的"AI伙伴"。**
+> **一个能感知情绪、适配认知、守护安全的"AI 伙伴"**。
+> 自研编排框架 · 多 Provider LLM 工厂 · 严格安全护栏 · LLM-as-Judge 评估体系
 
-Niki is an AI companion for children aged 3-12. It adapts to each child's
-emotional state, cognitive level, and interests — acting as a patient tutor,
-knowledgeable friend, and empathetic listener. The system is built around
-strict safety guarantees: parental consent, content policy enforcement,
-private "tree-hole" mode, circuit-breaker resilience, and a 30-day data
-deletion promise.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](#)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688)](#)
+[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red)](#)
 
 ---
 
-## Quick Start
+## 1. 项目定位
 
-### Prerequisites
+Niki 是一个面向 3-12 岁儿童的 AI 陪伴系统，**不是**通用聊天机器人。设计上的 3 个根本约束贯穿全代码：
 
-- Python 3.11+ (tested with 3.12)
-- Docker & Docker Compose (for infrastructure)
-- Conda or venv (recommended)
+1. **儿童安全是 P0** —— 任何 LLM 输出都必须经过 `OutputSafetyGateway`；自伤 / 暴力 / 色情 / 毒 / 脏话 5 类输入直接拦截；4 级分类（ALLOW / DOWNGRADE / ESCALATE / BLOCK）。
+2. **家长必须知情可控** —— 实名 + 人脸 + 知情同意三件套注册、30 天删除冷静期、PDF 删除回执、横向越权 (lateral-auth) 模式、PII 仅以 sha256 入库、JWT 三档 scope + TOTP 2FA。
+3. **效果可评测可回归** —— LLM-as-Judge + 5 个偏差控制 + 40 条硬断言必过 + 550 条金标准数据集 + 3 层可独立运行评估架构。
 
-### Setup
+> 这些约束让本项目区别于"调 LangChain + 接 GPT-4 做个聊天 demo"——它是真在生产路径上跑过合规审查的工程。
+
+---
+
+## 2. 核心数字（截至 2026-10）
+
+| 指标 | 数量 | 说明 |
+|---|---|---|
+| FastAPI 路由文件 | 35+ | 按 vertical slice 组织 |
+| HTTP 端点 | **176** | 103 POST + 67 GET + 4 DELETE + 2 PATCH |
+| 子模块（package） | 22 | agents / routing / safety / memory / auth / ... |
+| Python 源文件 | ~110 | 排除 `__pycache__` / `__init__.py` |
+| ORM 模型 | 17 | `db/models/` |
+| Repository | 13 | in-memory + Postgres 双实现 |
+| LLM 工具选择 (ReAct) | 4-round (KB only) | `agent_tool_use_enabled` flag，默认关闭；`agent_tool_loop_max_rounds` 默认 4 |
+| SSE 流式 ReAct | structured events | `agent_stream_use_agent_pipeline` flag，默认关闭；开 → `/chat/stream` 走 `ChatOrchestrator.stream_chat`，emit `phase`/`chunk`/`tool_call`/`tool_result`/`final` 事件 |
+| Vertical Slice | 6 | safety → routing → encyclopedia/tutoring/emotion → orchestrator |
+| 评估金标准用例 | 550 | 6 场景 × 3 年龄段 |
+| 必过安全用例 | 40 | 任何 fail 即阻塞 CI |
+| LLM-judge 偏差控制 | 5 | 见 [`niki/eval/README.md`](niki/eval/README.md) |
+| Prometheus 指标 | 13 | 自建 `CollectorRegistry` 隔离测试 |
+| 已知技术债 | 17 | 见 [`ISSUES_FOUND.md`](ISSUES_FOUND.md) |
+
+> README 不再声称"775/775 通过"或"75/75 用户故事"——前者未独立核验，后者无 story→test 映射（ISS-15）。
+
+---
+
+## 3. 快速开始
+
+### 3.1 前置
+
+- Python 3.11+（项目用 `StrEnum`，3.9 不兼容）
+- Docker + Docker Compose（启动 Redis / Chroma / Neo4j / PostgreSQL）
+- Conda 或 venv
+
+### 3.2 启动
 
 ```bash
-# 1. Create environment
-conda create -n niki python=3.12 -y
-conda activate niki
-
-# 2. Install
-cd Niki
+git clone <this-repo> && cd Niki
+conda create -n niki python=3.12 -y && conda activate niki
 pip install -e ".[dev]"
-
-# 3. Copy env template
 cp .env.example .env
-# Edit .env to add your LLM API keys (DeepSeek-V4, doubao)
+# 编辑 .env，填入 LLM 凭证（至少 MINIMAX_API_KEY，或保留空走 stub）
 
-# 4. Start infrastructure (Redis, Chroma, Neo4j, PostgreSQL)
-make docker-up
-
-# 5. Run
-make dev
-# → API at http://localhost:8000
-# → Docs at http://localhost:8000/docs
+make docker-up     # 启动基础设施
+make dev           # → API: http://localhost:8000
+                   # → 文档: http://localhost:8000/docs
 ```
 
-### Verify
+### 3.3 验证
 
 ```bash
 curl http://localhost:8000/api/v1/health
-# → {"status": "healthy", "components": [...]}
+# → {"status": "healthy", "components": {...}}
 
 curl -X POST http://localhost:8000/api/v1/chat/full \
   -H "Content-Type: application/json" \
-  -d '{"text":"我喜欢恐龙","child_age":7}'
+  -d '{"text":"我喜欢恐龙","child_age":7,"session_id":"demo"}'
+```
+
+### 3.4 运行测试
+
+```bash
+pytest tests/ -q                              # 全部
+pytest tests/safety/ -q                       # 某个 slice
+pytest tests/knowledge/ tests/memory/ -q      # 多个 slice
 ```
 
 ---
 
-## Architecture — Five Layers
+## 4. 架构（5 层 + 7 阶段编排）
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. Terminal Interaction  (WebRTC voice, Whisper ASR, TTS)        │
-├─────────────────────────────────────────────────────────────────┤
-│ 2. Access & Safety        (Input/output gateway, topic blacklist) │
-├─────────────────────────────────────────────────────────────────┤
-│ 3. Intelligence Core      (Encyclopedia / Tutoring / Emotion)     │
-├─────────────────────────────────────────────────────────────────┤
-│ 4. Memory & Evolution     (Redis / Chroma / Neo4j / Pipeline)    │
-├─────────────────────────────────────────────────────────────────┤
-│ 5. Data Governance        (Real-name, consent, deletion)         │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ 1. 接入层   浏览器 / App / WebRTC   →   ASR / TTS / OCR              │
+├────────────────────────────────────────────────────────────────────┤
+│ 2. 鉴权与合规  JWT (3 档 scope) · TOTP 2FA · lateral-auth            │
+│               实名 / 人脸 / 同意书 / 30 天删除 / PII sha256          │
+├────────────────────────────────────────────────────────────────────┤
+│ 3. 安全网关  InputSafetyGateway  →  OutputSafetyGateway             │
+│              5 类敏感词 / 主题黑名单 / 自伤升级 / 恐吓词改写 /       │
+│              推理模型 think-block 防御性剥离                        │
+├────────────────────────────────────────────────────────────────────┤
+│ 4. 编排与 Agent  IntentClassifier → AgentRouter → 并行 dispatch →   │
+│                  FusionOrchestrator → OutputGateway                 │
+│                  (情感优先 + Socratic + 4 轮安全阀)                  │
+├────────────────────────────────────────────────────────────────────┤
+│ 5. 记忆与知识  Redis 短期 (10 轮/1d)  →  Chroma 长期               │
+│                →  Neo4j 认知图谱  →  知识库 (3 级 L1/L2/L3)         │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-All built around **multi-agent orchestration** with empathy-first ordering
-and circuit-breaker protection.
+> 编排器（[`niki/agents/orchestrator.py`](niki/agents/orchestrator.py)）的 7 阶段：SAFETY_INPUT → CLASSIFY → ROUTE → DISPATCH → FUSE → SAFETY_OUTPUT → COMPLETE。每条 child message 都跑这 7 阶段，全部可观测（`stages_completed` 字段）。
 
 ---
 
-## Tech Stack
+## 5. 多 Agent 编排（核心）
 
-| Layer | Choice | Why |
-|-------|--------|-----|
-| Web framework | **FastAPI** | Async, OpenAPI, fast |
-| LLM orchestration | **LangChain** | Industry standard |
-| Primary LLM | **DeepSeek-V4** | Deep reasoning, child-facing |
-| Fallback LLM | **doubao-lite** | Lightweight, fast classification |
-| Vector store | **ChromaDB** | Lightweight, dev-friendly |
-| Graph DB | **Neo4j** | Entity-relation model |
-| Cache | **Redis** | Fast, TTL support |
-| Relational | **PostgreSQL** | Stable, mature |
-| Auth (planned) | **Aliyun IDaaS** | China-compliant |
-| Container | **Docker Compose** | Local dev |
+`ChatOrchestrator`（`niki/agents/orchestrator.py`）是项目的灵魂——它把"垂直切片"组装成端到端管道：
 
----
+| Agent | 设计哲学 | 关键约束 |
+|---|---|---|
+| **EncyclopediaAgent** | RAG-first，知识库三档 L1/L2/L3 | `FactChecker` 解析失败 **fail-closed**（不答比答错好）|
+| **TutoringAgent** | Socratic 风格，第 1-3 轮绝不直答；4 轮安全阀才给答案 | 4 轮引导策略 + 情绪优先 + **零外部工具**（PRD #54）|
+| **EmotionAgent** | 7 天滑动基线 + z-score 异常检测 | 异常 → 触发树洞 / 推送家长 / 周报标注 |
+| **FusionOrchestrator** | 多 agent 并行 → 文本融合 | 路由层情感永远 first（PRD：先共情再解题）|
 
-## Vertical Slices — All Implemented ✅
+**每个 agent 都共享**：
 
-| # | Slice | Tests | Endpoints |
-|---|-------|-------|-----------|
-| P0 | Infrastructure (FastAPI, settings, logging, infra clients) | 11 | 1 (`/health`) |
-| #1 | Safety pipeline (input/output gateway + topic blacklist) | 62 | 4 |
-| #2 | Routing + persona injection + composite-intent fusion | 60 | 5 |
-| #3 | Encyclopedia agent (3-level KB + fact-checker + age-adapt) | 56 | 3 |
-| #4 | Tutoring agent (4-round guided discovery + safety valve) | 53 | 3 |
-| #5 | Emotion agent (6 emotions + 7-day baseline + treehole trigger) | 53 | 3 |
-| #6 | Composite intent chat orchestrator (7-stage pipeline) | 33 | 1 |
-| #7 | Parent auth (real-name + face + e-consent + 30-day delete) | 73 | 8 |
-| #8 | Parent dashboard (weekly emotion report + interest + alerts) | 34 | 10 |
-| #9 | Memory system (short/long/graph/hook/pipeline) | 65 | 11 |
-| #10 | Resilience (circuit breaker + degradation notifier) | 35 | 7 |
-| #11 | Treehole mode (AES-256-GCM + 7-day auto-purge) | 53 | 7 |
-| #12 | Session control (60min cap + 5min warn + parent pause) | 55 | 13 |
-| #13 | Content policy (family blacklist + age grading + downgrade) | 66 | 9 |
-| #14 | Tool permission matrix (PRD #54 per-agent access control) | 35 | 6 |
-| #15 | End-to-end integration tests + README | 21 | — |
-| **Total** | | **775** | **91** |
+- **3 档人设**：lively（热情）/ gentle（温柔）/ rigorous（严谨），由 `PersonaInjector` 注入 system prompt
+- **3 档年龄护栏**：3-5 岁 ≤10 字/句 ≤5 句；6-8 岁 ≤15 字/句 ≤8 句；9-12 岁 ≤20 字/句 ≤12 句
+- **think-block 防御性剥离**：专门应对 MiniMax-M3 / DeepSeek-R1 这类 reasoning 模型外漏思考过程
+
+**不会调用 LLM 的场景**（这是真实工程取舍，不是 bug）：
+
+- Tutoring 1-3 轮：直接用静态 Socratic 模板（LLM 输出漂移破坏金标准）
+- 情感安抚：模板化回应对儿童一致性更好
 
 ---
 
-## Directory Structure
+## 6. LLM 工厂与流式推理
+
+`niki/infrastructure/llm/factory.py` 是单点切换入口：
+
+```
+minimax (Minimax-M3)   ← primary
+   ↓ (unavailable)
+deepseek (DeepSeek-V4)
+   ↓ (unavailable)
+doubao (doubao-lite)   ← 轻量分类 / 检查
+   ↓ (no key)
+_StubLLM               ← 确定性 fallback
+```
+
+**3 个工程细节**值得面试展开：
+
+1. **凭证占位符检测**（`_PLACEHOLDER_TOKENS`）：`your-` / `changeme` / `xxx` 等占位符字符串会被识别成"假凭证"，强制走 stub。这是被真实事故驱动加的——曾有 staging 带着 `your-key-here` 跑了一周没人发现。
+2. **降级而非中断**：prefer 失败 → 试下一个；全失败 → stub + 结构化日志，绝不让 5xx 阻塞业务。
+3. **Anthropic 兼容 SSE 流式客户端**（`MinimaxStreamingProvider`）：自研实现 token 级增量返回，配合 `/api/v1/chat/stream` 端点给前端 EventSource 用。
+
+---
+
+## 7. 记忆系统（3 层）
+
+```
+ShortTerm  (Redis, 10 轮滑动窗口, 1d TTL)
+   │  night pipeline 异步迁移
+   ▼
+LongTerm   (Postgres + Chroma 向量召回, 内存 fallback)
+   │  aligner 处理跨层冲突
+   ▼
+Graph      (Neo4j 认知图谱：兴趣 / 情绪 / 关系)
+   │  hook 实时抽取
+   ▼
+  编排层下次对话可调用
+```
+
+**关键工程取舍**：
+
+- `short_term.clear_all()` 在账户删除时会**真删 Redis**（`SCAN` + `DELETE`），不只是清内存——这是 PIPL 合规要求。
+- Chroma 不可用时退化到**关键词匹配**而非抛错——儿童产品不允许"5xx 让孩子干等"。
+- Neo4j 不可用时图谱查询降级到 Postgres 关联查询。
+
+---
+
+## 8. 安全与合规（设计哲学）
+
+### 8.1 输入侧 4 级分类
+
+```
+self_harm  →  ESCALATE   (立即推家长 + 情感回应)
+sexual/drugs/violence/profanity  →  BLOCK  (硬拒)
+topic_blacklist  →  DOWNGRADE_TO_EMOTION  (降级到情感 agent)
+干净  →  ALLOW
+```
+
+### 8.2 输出侧 5 重护栏
+
+1. **恐吓词改写**：death → 离开 / monster → 淘气的小家伙 / ...
+2. **年龄护栏**：3 档硬字数 / 硬句数
+3. **直答检测正则**：2026-10 打过补丁，捕获"现在有 N 个" / "= N" 这类辅导模式泄漏
+4. **隐私反向问询阻断**："你家住哪" 类直接拦截
+5. **think-block 剥离**（防御性）：适配 reasoning 模型
+
+### 8.3 合规工程（PIPL / GDPR）
+
+- 实名 + 人脸 + 知情同意（双版本：家长版法律文本 / 儿童版图画版）
+- 30 天删除冷静期 + PDF 删除回执
+- **lateral-auth 模式**：`parent.id == path_parent_id`，违规 403 `PARENT_MISMATCH`（部分端点用 404 避免 id oracle）
+- **PII 永不落库明文**：`parent.id = sha256(name:id_number)[:16]`
+- JWT 三档 scope：`partial`（2fa 中） / `full` / `full_reauth`（5 分钟升级令牌，敏感操作强校验）
+
+---
+
+## 9. 评估体系（[`niki/eval/README.md`](niki/eval/README.md)）
+
+> 3 层可独立运行架构：通用 judge / Niki 金标准 / 集成测试
+
+**LLM-as-Judge + 5 个偏差控制**（业内 paper 反复验证过的系统性问题）：
+
+1. **位置偏好**：同输入跑两遍换位，分差 ≥ 2 取**低分**（保守）
+2. **长度偏好**：截断到 200 字前评分（杀 `longer = better` 偏置）
+3. **格式偏好**：强 Schema 校验，malformed 直接 0 分
+4. **校准漂移**：Cohen-kappa ≥ 0.7 阈值，定期 30 条人标复测
+5. **自偏好**：主模型 Minimax，judge 用 doubao 跨模型评判
+
+**安全必过 40 条**任何一条 fail 即阻塞 CI；**金标准 550 条**通过 LLM-judge 软评。
+
+```bash
+python scripts/run_eval.py --limit 10 --stub     # 烟囱测试，~1s
+python scripts/run_eval.py --child-age 7         # 真实评测
+pytest tests/eval/test_safety_must_pass.py -v   # CI 红线
+```
+
+---
+
+## 10. 可观测性
+
+- **13 个 Prometheus 指标** + 自建 `CollectorRegistry`（避免污染 `prometheus_client.REGISTRY`）
+- **structlog** 结构化日志，全链路 `request_id` 串联
+- **双轨审计**：`auth_audit_logs`（横向越权） + `audit_logs`（业务，JSONB `event_metadata`）
+- **HeartbeatService**：6 个后台 task（4 个客户端健康 + 配对码清理 + 手机变更扫描）
+- **SSE 实时告警**：`/api/v1/alerts/stream` 给父端 H5 推高危事件
+
+---
+
+## 11. 技术栈
+
+| 层 | 选型 | 原因 |
+|---|---|---|
+| Web 框架 | **FastAPI** | 异步 + OpenAPI + 生态成熟 |
+| Agent 框架 | **自研** (`BaseAgent` / `BaseLLMClient`) | 当时 LangChain v0.x 还不稳定；项目要可控可调试 |
+| 主用 LLM | **Minimax-M3** | deep reasoning + 儿童语气可控 |
+| Fallback LLM | **DeepSeek-V4** / **doubao-lite** | 多 provider 故障切换 |
+| 关系库 | **PostgreSQL + SQLAlchemy async** | 17 张表 / 13 repo，事务强 |
+| 缓存 | **Redis** | 短期记忆 / 限流 / 配对码 / token 黑名单 |
+| 向量库 | **ChromaDB** | 轻量、dev 友好、生产可换 Qdrant |
+| 图库 | **Neo4j** | 兴趣 / 记忆关系图 |
+| 对象存储 | **本地 / S3 兼容** (OSS / COS / AWS) | `boto3` 抽象 |
+| 鉴权 | **JWT (PyJWT)** + **TOTP (pyotp)** | 行业标准 |
+| 推送 | **Web Push / VAPID (RFC 8292)** | 无需服务器 |
+| 日志 | **structlog** | 结构化 |
+| 指标 | **Prometheus client** | 13 个核心指标 |
+| 限流 | **slowapi** | Redis 后端可切换 |
+| Lint | **ruff** | 快 |
+| Type | **mypy 严格模式** | 72 个错误待修，见 ISS-14 |
+| Test | **pytest** (asyncio mode) | 已知覆盖盲点见 ISS-17 |
+
+---
+
+## 12. 目录结构（精简版）
 
 ```
 Niki/
-├── niki/                              # Main application package
-│   ├── main.py                        # FastAPI entry point
-│   ├── config/                        # Settings + structured logging
-│   ├── api/                           # HTTP route modules
-│   │   ├── auth.py                    # #7 real-name / face / consent
-│   │   ├── chat/                      # #6 chat orchestrator
-│   │   ├── content_policy.py          # #13 family blacklist + age grading
-│   │   ├── dashboard.py               # #8 weekly reports
-│   │   ├── emotion.py                 # #5 emotion agent
-│   │   ├── encyclopedia.py           # #3 KB + fact-check
-│   │   ├── health.py                  # /health endpoint
-│   │   ├── memory.py                  # #9 short/long/graph
-│   │   ├── orchestrator.py           # #6 full chat pipeline
-│   │   ├── resilience.py             # #10 circuit breaker
-│   │   ├── routing.py                # #2 classifier + router + persona
-│   │   ├── safety.py                 # #1 input/output gateway
-│   │   ├── session.py                # #12 time limit + pause
-│   │   ├── tools.py                  # #14 tool matrix
-│   │   ├── treehole.py               # #11 encrypted treehole
-│   │   └── tutoring.py               # #4 guided discovery
-│   ├── agents/                        # Agent implementations
-│   │   ├── encyclopedia.py
-│   │   ├── tutoring.py
-│   │   ├── emotion.py
-│   │   └── orchestrator.py
-│   ├── safety/                        # #1 safety pipeline
-│   ├── routing/                       # #2 routing
-│   ├── knowledge/                     # #3 KB + fact-checker
-│   ├── auth/                          # #7 parent auth
-│   ├── dashboard/                     # #8 dashboard
-│   ├── memory/                        # #9 memory system
-│   ├── resilience/                    # #10 circuit breaker
-│   ├── treehole/                      # #11 treehole
-│   ├── session/                       # #12 session
-│   ├── content_policy/                # #13 content policy
-│   └── tools/                         # #14 tool matrix
-│
-├── tests/                            # 775 tests, all passing
-│   ├── test_*.py                     # API integration tests
-│   ├── safety/, routing/, knowledge/  # Slice unit tests
-│   ├── auth/, dashboard/, memory/    # ...
-│   ├── resilience/, treehole/, session/
-│   ├── content_policy/, tools/
-│   └── test_e2e_integration.py        # Cross-slice flows
-│
-├── docker/                            # Infrastructure
-│   ├── docker-compose.yml
-│   └── Dockerfile
-│
-├── niki_backup/                       # Legacy stubs (deprecated)
-├── .github/workflows/ci.yml           # Lint + type-check + test
-├── pyproject.toml                     # All deps
-├── Makefile                           # make dev/test/lint
-└── README.md                          # This file
+├── niki/
+│   ├── main.py                  # FastAPI 入口 + lifespan
+│   ├── config/                  # settings + structlog
+│   ├── infrastructure/          # postgres/redis/chroma/neo4j/llm
+│   ├── agents/                  # base + 3 agent + orchestrator
+│   ├── routing/                 # classifier + router + fusion + persona
+│   ├── safety/                  # input/output gateway + dictionaries
+│   ├── knowledge/               # KB (3 级) + fact_checker
+│   ├── memory/                  # short_term / long_term / graph / pipeline
+│   ├── auth/                    # 13 个鉴权文件
+│   ├── dashboard/               # 周报 / 兴趣 / 学习白皮书
+│   ├── treehole/                # 树洞（加密 + 7 天清除）
+│   ├── session/                 # 时长限制 / 远程暂停
+│   ├── tools/                   # 工具权限矩阵
+│   ├── realtime/                # SSE 告警 broker（单进程）
+│   ├── resilience/              # 断路器 / 降级
+│   ├── compliance/              # 删除回执 PDF
+│   ├── db/                      # 17 models + 13 repos
+│   ├── api/                     # 35+ 路由文件
+│   ├── middleware/              # 5 个中间件
+│   ├── schemas/                 # Pydantic
+│   └── eval/                    # LLM-as-Judge 评估层 ★
+├── tests/                       # 136 个测试文件
+├── docker/                      # docker-compose
+├── docs/                        # 设计文档 / BE-* 工单
+├── PRD-v2.0.md                  # 产品需求
+├── ISSUES_FOUND.md              # 已知问题清单（17 条）
+├── pyproject.toml
+└── Makefile
 ```
 
 ---
 
-## API Endpoints (91 total)
+## 13. 已知问题与诚实声明
 
-### Core
-- `GET  /api/v1/health` — health check (all components)
-- `GET  /api/v1/health/live` — liveness probe
-- `GET  /api/v1/health/ready` — readiness probe
+> **本节不是"待办事项"——是真存在的 P0-P2 风险，已被 [`ISSUES_FOUND.md`](ISSUES_FOUND.md) 详尽记录。**
 
-### Safety (#1)
-- `POST /api/v1/safety/check-input` — input gateway
-- `POST /api/v1/safety/check-output` — output gateway
-- `POST /api/v1/chat` — full chat with safety
+| 编号 | 严重度 | 描述 | 位置 |
+|---|---|---|---|
+| ISS-02 | P0 | `/emotion/express` 等 3 个直接 agent 端点绕过输入安全网关 | `niki/api/{emotion,encyclopedia,tutoring}.py` |
+| ISS-03 | P0 | Treehole 7 天 purge 后 `encrypted_payloads` 仍残留 | `niki/treehole/purge.py` |
+| ISS-04 | P0 | 账户 30 天删除时 consent 记录未清除 | `niki/auth/lifecycle.py` |
+| ISS-05 | P1 | Pipeline `StepStatus.FAILED` 计数器永远为 0 | `niki/memory/pipeline.py` |
+| ISS-06 | P1 | Dashboard `_build_trend` 类型注解与实现不一致 | `niki/dashboard/service.py` |
+| ISS-07 | P1 | `add_relation(relation="remembers")` 应传枚举而非 str | `niki/memory/hook.py` |
+| ISS-08 | P1 | 4 个 module-level 单例 agent 并发不安全 | `niki/api/{orchestrator,emotion,encyclopedia,tutoring}.py` |
+| ISS-09..14 | P2-P3 | 11 项工程化债（type ignore / stub 散落 / mypy 错误 / ...） | 见 ISSUES_FOUND.md |
 
-### Routing (#2)
-- `POST /api/v1/routing/classify` — intent classification
-- `POST /api/v1/routing/route` — routing decision
-- `GET  /api/v1/routing/personas` — list personas
+> 接手/面试前**先读 ISSUES_FOUND.md**——这 17 条是项目真实状态的一部分，不是 README 能粉饰掉的。
 
-### Agents
-- Encyclopedia (#3): `/encyclopedia/{ask,knowledge,search}`
-- Tutoring (#4): `/tutoring/{ask,strategies,difficulty}`
-- Emotion (#5): `/emotion/{express,baseline,proactive-care,good-night}`
-
-### Chat (#6)
-- `POST /api/v1/chat/full` — full pipeline (7 stages)
-- `GET  /api/v1/chat/stages` — pipeline stages info
-
-### Auth (#7)
-- `POST /api/v1/auth/signup/start` — start 3-step signup
-- `POST /api/v1/auth/signup/{real-name,face,consent}` — 3 verification steps
-- `POST /api/v1/auth/deletion/{request,complete}` — 30-day deletion
-
-### Dashboard (#8)
-- `GET  /api/v1/dashboard/weekly-report/{child_id}` — emotion weekly report
-- `GET  /api/v1/dashboard/interest/{child_id}` — interest graph
-- `GET  /api/v1/dashboard/learning/{child_id}` — learning whitepaper
-- `GET  /api/v1/dashboard/alerts/{child_id}` — pending alerts
-
-### Memory (#9)
-- `GET/POST/DELETE /api/v1/memory/short-term/{session_id}` — recent turns
-- `POST /api/v1/memory/long-term/{add,search}` — vector store
-- `/api/v1/memory/graph/{entities,relations,apply-decay}` — cognitive graph
-- `/api/v1/memory/hook/process` — daytime extraction
-- `/api/v1/memory/pipeline/{run,health,dead-letter}` — nightly pipeline
-
-### Resilience (#10)
-- `GET  /api/v1/resilience/breaker/stats` — circuit breaker state
-- `POST /api/v1/resilience/breaker/{reset,force-open}` — manual controls
-- `GET  /api/v1/resilience/degradation` — current degradation state
-- `POST /api/v1/resilience/chat` — chat with breaker protection
-
-### Treehole (#11)
-- `POST /api/v1/treehole/engage` — engage private mode
-- `GET  /api/v1/treehole/summaries/{child_id}` — list summaries
-- `POST /api/v1/treehole/aggregate` — anonymous baseline contribution
-- `POST /api/v1/treehole/purge-{expired,all}` — purges
-
-### Session (#12)
-- `POST /api/v1/session/{start,activity,end}` — session lifecycle
-- `GET  /api/v1/session/{stats,should-warn,is-exhausted,is-idle}/{child_id}`
-- `POST /api/v1/session/parent/{pause,consume-pause,end-session,clear-pause}`
-
-### Content Policy (#13)
-- `/api/v1/policy/blacklist/{family_id}/{add,remove,evaluate,list}`
-- `/api/v1/policy/age/{child_id,grade,grade-text}`
-- `/api/v1/policy/downgrade/evaluate`
-
-### Tools (#14)
-- `GET  /api/v1/tools/matrix` — view tool permission matrix
-- `GET  /api/v1/tools/allowed/{agent}` — list agent's tools
-- `POST /api/v1/tools/check` — access check (audit-logged)
-- `POST /api/v1/tools/{revoke,grant}` — admin controls
-- `GET  /api/v1/tools/audit` — access audit log
+**近期已修**（2026-10 提交）：
+- ✅ `niki/agents/encyclopedia.py` LLM 自主选工具（4-round ReAct：`agent_tool_use_enabled` flag，默认关；`agent_tool_loop_max_rounds` 默认 4）— agent 含量 70% → 80%
+- ✅ `niki/api/chat_stream.py` `/chat/stream` SSE 接入 agent pipeline（`agent_stream_use_agent_pipeline` flag，默认关）；structured `phase`/`chunk`/`tool_call`/`tool_result`/`final` 事件
+- ✅ `niki/agents/_loop_utils.py` 新增（token 估算 / 消息截断 / 重复检测 helpers）
+- ✅ `niki/knowledge/knowledge_base.py` 移除死代码（`DEFAULT_L1_ENTRIES` 重复定义）
+- ✅ `niki/agents/tutoring.py` 移除冗余 `text_lower` 重复赋值
+- ✅ `niki/memory/short_term.py` `clear_all()` 实现真 Redis `SCAN` + `DELETE`（之前是 TODO）
 
 ---
 
-## Safety Properties (from PRD)
+## 14. 文档索引
 
-- ✅ 输入侧 2 层过滤（正则 + LLM）
-- ✅ 隐私正则双向保护（system prompt + 输出正则）
-- ✅ 适龄句长（3-5 ≤10字/句，6-8 ≤15字/句，9-12 ≤20字/句）
-- ✅ 树洞模式 AES-256-GCM 加密 + 7 天自动清除
-- ✅ Calculator 工具全局移除（降级不降安全）
-- ✅ 熔断器在降级时仍运行安全 + 路由 + 人格
-- ✅ 家长看板永远不生成焦虑信号（积极优先 + 模糊化负向）
-- ✅ 30 天数据清除承诺
-- ✅ 实名 + 人脸 + 电子知情同意三步注册
-- ✅ 隐私正则不暴露给子节点（黑名单话题不写入重定向消息）
+| 文档 | 内容 |
+|---|---|
+| [`PRD-v2.0.md`](PRD-v2.0.md) | 产品需求 v2.0（75 条 user story）|
+| [`ISSUES_FOUND.md`](ISSUES_FOUND.md) | **17 条已知问题**（P0-P3 全列）|
+| [`niki/eval/README.md`](niki/eval/README.md) | 评估层架构 + 5 个偏差控制详解 |
+| [`EVAL_REPORT.md`](EVAL_REPORT.md) | 历次评估结果 |
+| `docs/be-issues/BE-*.md` | 50+ 个后端工单的设计 rationale |
+| `docs/` | 架构决策记录 (ADR) |
 
 ---
 
-## Development
-
-### Common Commands
+## 15. 开发命令
 
 ```bash
-make install    # Install deps
-make dev        # Start dev server with hot reload
-make test       # Run all tests
-make test-cov   # Run with coverage report
-make lint       # Lint check (ruff)
-make format     # Auto-format code
-make typecheck  # mypy
-make docker-up  # Start infrastructure
-make docker-down # Stop infrastructure
-make ts-sdk     # Regenerate the TypeScript SDK (BE-API-007)
+make install    # 装依赖
+make dev        # 启动 dev server（hot reload）
+make test       # 跑全部测试
+make test-cov   # 覆盖率
+make lint       # ruff check
+make format     # ruff format
+make typecheck  # mypy（注意：72 个错误待修，见 ISS-14）
+make docker-up  # 启动基础设施
+make docker-down
+make ts-sdk     # 重新生成 TypeScript SDK（见下）
 ```
 
-### TypeScript SDK generation (BE-API-007)
+### 15.1 TypeScript SDK 自动生成（BE-API-007）
 
-The frontend does not hand-write `fetch()` calls or response types. Instead,
-`scripts/gen_ts_sdk.py` reads the OpenAPI document FastAPI already builds
-(`app.openapi()`, in-process — no server, no database) and emits a typed
-TypeScript client into `frontend/src/api/`: one module per OpenAPI tag
-(`dashboard.ts`, `memory.ts`, …) holding one `async function` per endpoint,
-a `models.ts` with the interfaces derived from `components.schemas`, a
-~200-line zero-dependency `client.ts` runtime (base URL, query encoding,
-bearer token, §6.3 error shape → `ApiError`), and an `index.ts` barrel.
-The generator itself has no third-party Python dependency and adds **no npm
-dependency** — deliberately not `openapi-typescript-codegen`, whose output
-drags in axios and a mutable global config singleton. Generation is one-shot
-with no runtime reflection, and output is deterministic, so re-running after
-a backend change produces a reviewable diff. `make ts-sdk-check` fails when
-the checked-in SDK has drifted from the routes.
+前端不手写 `fetch()` —— `scripts/gen_ts_sdk.py` 读 FastAPI 内存中的 `app.openapi()`，吐出一个零依赖的 TypeScript 客户端到 `frontend/src/api/`。每次后端路由变更跑一次 `make ts-sdk-check` 验证 SDK 没漂移。
 
 ```bash
-make ts-sdk                                   # → frontend/src/api/
-python -m scripts.gen_ts_sdk --out /tmp/api    # somewhere else
-python -m scripts.gen_ts_sdk --dry-run         # manifest only
-make ts-sdk-check                              # CI staleness guard
+make ts-sdk         # 生成到 frontend/src/api/
+make ts-sdk-check   # CI 检查 SDK 是否过期
 ```
-
-Then in the frontend:
-
-```ts
-import { configure, getHealth, getDashboardWeeklyReport } from "@/api";
-
-configure({ baseUrl: "https://api.niki.example", getToken: () => authToken });
-
-const health = await getHealth();                       // HealthResponse
-const report = await getDashboardWeeklyReport(childId);  // typed, cancellable
-```
-
-Known gap: `multipart/form-data` bodies (4 upload/OCR/transcribe endpoints)
-are not generated yet — those methods take the form body via `options.body`
-until BE-API-008. See `docs/be-issues/BE-API-007.md`.
-
-### Testing
-
-```bash
-# All tests
-pytest tests/ -v
-
-# Specific slice
-pytest tests/safety/ -v
-
-# With coverage
-pytest tests/ --cov=niki --cov-report=html
-```
-
-### Code Style
-
-- **Python 3.11+** with full type hints
-- **Ruff** for linting + formatting (config in `pyproject.toml`)
-- **Mypy** for static type checking
-- **Pytest** for tests (asyncio mode auto)
 
 ---
 
-## PRD Coverage
-
-All 64 user stories + 70+ technical requirements implemented:
-
-| Group | Coverage |
-|-------|----------|
-| Children's Encyclopedia (3 stories) | ✅ |
-| Children's Tutoring (5 stories) | ✅ |
-| Children's Emotion (7 stories) | ✅ |
-| Children's UX (6 stories) | ✅ |
-| Parent's Dashboard (6 stories) | ✅ |
-| Parent's Config (2 stories) | ✅ |
-| System Safety (6 stories) | ✅ |
-| Memory & Evolution (7 stories) | ✅ |
-| Memory (10 stories) | ✅ |
-| Session (5 stories) | ✅ |
-| System Resilience (4 stories) | ✅ |
-| Treehole (4 stories) | ✅ |
-| Auth (1 story) | ✅ |
-| Data Governance (3 stories) | ✅ |
-| **Total** | **75/75 user stories** |
-
----
-
-## Architecture Decisions
-
-Key ADRs (Architecture Decision Records) baked into the code:
-
-1. **Calculator globally removed** — even Encyclopedia/Tutoring/Emotion agents
-   have no access. Tutoring uses its guided-discovery strategy library
-   for ALL reasoning (PRD #54: 辅导 Agent 零外部工具).
-2. **Treehole original text NEVER stored** — only the AES-256-GCM encrypted
-   emotion summary enters storage. PRD: 聚合即匿名.
-3. **Empathy-first ordering** — emotional intent always runs first when
-   composite intent detected (PRD: 先情感共情→再切入解题).
-4. **Soft + hard time limits** — 5-min soft warning before hard 60-min cap
-   (PRD: 提前5分钟提醒).
-5. **Silent degradation** — circuit breaker doesn't push notifications
-   to parents (PRD: 静默感知, 不制造恐慌).
-6. **Positive-first reporting** — dashboard always leads with discoveries
-   + action suggestions (PRD: 绝对不生成焦虑信号).
-7. **Two-version consent** — parent (legal) + child (picture-based)
-   (PRD: 双版本隐私政策).
-8. **Blacklist = downgrade, never refuse** — gentle deflection
-   (PRD: 降级处理而非生硬拒绝).
-
----
-
-## License
+## 16. 许可
 
 Proprietary — All rights reserved.

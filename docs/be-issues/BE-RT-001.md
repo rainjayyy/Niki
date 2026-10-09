@@ -114,3 +114,33 @@ with client.stream("POST", "/chat/stream", json={...}) as resp:
 - **BE-RT-002**：WebSocket 高危告警推送（家长端实时收到）
 - **BE-RT-001-real**：接入 DeepSeek-V4 streaming mode
 - **BE-RT-003**：流式 TTS，每段 Niki 输出立刻合成音频
+
+---
+
+## ISS-23 修订（2026-10）
+
+### AC-10 — Agent pipeline 模式 emit phase 事件
+
+当 `agent_stream_use_agent_pipeline=True` 时，`/chat/stream` 应输出
+如下结构的 SSE 事件流（payload key 互斥、closed-enum）：
+
+  * `{"phase": "<name>", "payload": {...}}` — `name ∈ {input_safety_ok,
+    input_blocked, input_escalation, routed, agent_start, agent_end,
+    thinking_start, thinking_end, tool_call, tool_result, answer_start,
+    answer_end, fused, output_safety_ok, output_safety_block}`
+  * `{"chunk": "<text>", "token_index": <int>}` — 最终回答的 codepoint chunks
+  * `{"tool_call": {"agent": "...", "name": "...", "args": {...}}}`
+  * `{"tool_result": {"agent": "...", "name": "...", "ok": <bool>, "hit_count": <int>}}`
+  * `{"is_final": true, "total_text": "...", ...}` — 终止事件
+  * `[DONE]` — sentinel
+
+每个 `tool_*` / `agent_start` / `agent_end` 事件 payload 必须带
+`agent: str` 区分并行 agent。Wire format 通过
+`tests/test_orchestrator_streaming.py` 9 个测试类 + `tests/api/test_chat_stream.py`
+12 个测试（flag-off 时 raw path 不变）共同守护。
+
+### AC-11 — 断连时记忆完整性
+
+child turn 在 SSE handler 里 eager append；Niki turn 用 `try/finally`
+包 per-chunk 循环保证 disconnect 后 partial turn 仍落盘。`try/finally`
+（**不是** `try/except`）以保留 `asyncio.CancelledError` 传播。

@@ -21,16 +21,23 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
+from niki.config.settings import get_settings
 from niki.infrastructure.llm.streaming import get_streaming_provider
+from niki.memory.short_term import (
+    ConversationTurn,
+    get_short_term_memory,
+    turns_to_history,
+)
 from niki.metrics import get_registry
 from niki.middleware.rate_limit import limiter
 from typing import Annotated
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
-router = APIRouter(prefix="/chat", tags=[
-    {"name": "chat", "description": "SSE chat streaming endpoint (BE-RT-001)."}
-])
+router = APIRouter(
+    prefix="/chat",
+    tags=[{"name": "chat", "description": "SSE chat streaming endpoint (BE-RT-001)."}],
+)
 
 
 def _format_sse(data: dict | str) -> bytes:
@@ -52,31 +59,144 @@ async def _sse_generator(
     persona: str | None,
     session_id: str | None,
 ) -> AsyncIterator[bytes]:
-    """Yield SSE-formatted chunks from the streaming provider."""
+    """Yield SSE-formatted chunks from the streaming provider.
+
+    BE-RT-001 raw path. ISS-23 keeps this path intact when the agent
+    pipeline flag is off; when the flag is on, ``_sse_generator_agent``
+    is used instead.
+    """
     full_text_parts: list[str] = []
     token_index = 0
+    history = (
+        turns_to_history(await get_short_term_memory().get_recent(session_id)) if session_id else []
+    )
 
-    async for chunk in get_streaming_provider().stream(
-        prompt,
-        child_age=child_age,
-        persona=persona,
-        session_id=session_id,
-    ):
-        if chunk:  # skip blanks from the provider
-            full_text_parts.append(chunk)
-            yield _format_sse(
-                {"chunk": chunk, "token_index": token_index}
+    # Q4 fix: eagerly append the child's turn BEFORE streaming so
+    # even a mid-stream disconnect leaves the input in short-term memory.
+    if session_id:
+        try:
+            await get_short_term_memory().append(
+                session_id, ConversationTurn(role="child", text=prompt)
             )
-            token_index += 1
+        except Exception:  # pragma: no cover — best-effort
+            pass
+
+    try:
+        async for chunk in get_streaming_provider().stream(
+            prompt,
+            child_age=child_age,
+            persona=persona,
+            session_id=session_id,
+            history=history,
+        ):
+            if chunk:  # skip blanks from the provider
+                full_text_parts.append(chunk)
+                yield _format_sse({"chunk": chunk, "token_index": token_index})
+                token_index += 1
+    finally:
+        # Q4 fix: even on a mid-stream disconnect (CancelledError
+        # leaves the generator here), record what we did manage to
+        # stream into short-term memory. ``try/finally`` (NOT
+        # ``except``) preserves ``CancelledError`` so the disconnect
+        # still propagates upstream.
+        if session_id and full_text_parts:
+            try:
+                await get_short_term_memory().append(
+                    session_id,
+                    ConversationTurn(
+                        role="niki",
+                        text="".join(full_text_parts),
+                    ),
+                )
+            except Exception:  # pragma: no cover — best-effort
+                pass
 
     # Final metadata event before [DONE] sentinel.
+    full_text = "".join(full_text_parts)
     yield _format_sse(
         {
             "session_id": session_id,
-            "total_text": "".join(full_text_parts),
+            "total_text": full_text,
             "is_final": True,
         }
     )
+    yield _format_sse("[DONE]")
+
+
+async def _sse_generator_agent(
+    prompt: str,
+    *,
+    child_age: int | None,
+    persona: str | None,
+    session_id: str | None,
+) -> AsyncIterator[bytes]:
+    """Yield SSE-formatted events from ``ChatOrchestrator.stream_chat(...)``.
+
+    ISS-23 path — runs the full agent pipeline (input safety,
+    classify, dispatch with tool loop, fuse, output safety) and
+    streams structured events:
+
+      * ``phase`` — input_safety_ok / blocked / escalation, routed,
+        agent_start/end, fused, output_safety_ok / block.
+      * ``chunk`` — final answer text (codepoints, after output safety).
+      * ``tool_call`` / ``tool_result`` — LLM-initiated tool calls.
+      * ``final`` — terminal event with diagnostic metadata.
+
+    Wire format is identical to the raw path (``data: <json>\\n\\n``),
+    just with extra event kinds. Existing 12 tests that consume the
+    raw path stay green because they flip the flag off.
+    """
+    from niki.agents.orchestrator import ChatOrchestrator
+
+    if session_id is None:
+        session_id = "default"
+
+    # Q4 fix: eagerly append the child's turn BEFORE streaming so
+    # the input survives even on a mid-stream disconnect.
+    try:
+        await get_short_term_memory().append(
+            session_id, ConversationTurn(role="child", text=prompt)
+        )
+    except Exception:  # pragma: no cover — best-effort
+        pass
+
+    orchestrator = ChatOrchestrator(
+        child_age=child_age or 7,
+        persona=persona or "gentle",
+    )
+
+    full_text_parts: list[str] = []
+
+    try:
+        async for event in orchestrator.stream_chat(
+            prompt,
+            session_id=session_id,
+            child_age=child_age,
+            persona=persona,
+        ):
+            kind = event.get("kind")
+            if kind == "chunk":
+                full_text_parts.append(event.get("text", ""))
+            yield _format_sse(event)
+    finally:
+        # Q4 fix: also record a (possibly partial) niki turn on
+        # disconnect. The orchestrator.stream_chat already appends
+        # the niki turn on the happy path; this catch-all keeps
+        # memory consistent even when the client disconnects
+        # mid-stream. ``try/finally`` (not ``except``) so
+        # CancelledError still propagates.
+        if full_text_parts and session_id:
+            try:
+                await get_short_term_memory().append(
+                    session_id,
+                    ConversationTurn(
+                        role="niki",
+                        text="".join(full_text_parts),
+                    ),
+                )
+            except Exception:  # pragma: no cover — best-effort
+                pass
+
     yield _format_sse("[DONE]")
 
 
@@ -133,9 +253,10 @@ async def chat_stream(
 
     # BE-API-009: count every chat-stream request.
     try:
-        provider_name = type(
-            get_streaming_provider()
-        ).__name__.lower().replace("streamingprovider", "") or "mock"
+        provider_name = (
+            type(get_streaming_provider()).__name__.lower().replace("streamingprovider", "")
+            or "mock"
+        )
     except Exception:  # pragma: no cover
         provider_name = "mock"
     get_registry().CHAT_TOTAL.labels(
@@ -144,11 +265,20 @@ async def chat_stream(
         mode="stream",
     ).inc()
 
-    gen = _sse_generator(
-        text,
-        child_age=child_age,
-        persona=persona,
-        session_id=session_id,
+    gen = (
+        _sse_generator_agent(
+            text,
+            child_age=child_age,
+            persona=persona,
+            session_id=session_id,
+        )
+        if get_settings().agent_stream_use_agent_pipeline
+        else _sse_generator(
+            text,
+            child_age=child_age,
+            persona=persona,
+            session_id=session_id,
+        )
     )
     return StreamingResponse(
         gen,

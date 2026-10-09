@@ -46,11 +46,11 @@ class Settings(BaseSettings):
     deepseek_max_retries: int = 3
 
     # --- Minimax (primary LLM — replaces DeepSeek-V4 by default) ---
-    # Anthropic-Messages-compatible API at api.minimaxi.com/anthropic.
+    # OpenAI-compatible API at api.minimaxi.com/v1 (chat/completions).
     # All Niki agents currently route through this single client;
     # DeepSeek / doubao remain as fallback providers (BE-LLM-ops).
     minimax_api_key: str = ""
-    minimax_base_url: str = "https://api.minimaxi.com/anthropic"
+    minimax_base_url: str = "https://api.minimaxi.com/v1"
     minimax_model: str = "MiniMax-M3"
     minimax_timeout: int = 30  # seconds
     minimax_max_retries: int = 3
@@ -125,6 +125,13 @@ class Settings(BaseSettings):
     # requests don't 500 just because the cache is down.
     rate_limit_storage_uri: str = "memory://"
 
+    # --- BE-AUTH-002: SMS send rate limit ---
+    # Global per-client budget for POST /auth/sms/send. Production keeps
+    # the conservative 3/minute default; dev / E2E environments can raise
+    # it (e.g. "20/minute") so multi-flow integration suites don't trip
+    # on the anti-pump guard while they exercise every screen.
+    sms_send_rate_limit: str = "3/minute"
+
     # --- BE-AUTH-001-rollout-alerts-rollout: email sink ---
     # SMTP delivery of SecurityAlerts. When `auth_alert_smtp_host`
     # is empty the EmailAlertDispatcher short-circuits to a
@@ -134,7 +141,7 @@ class Settings(BaseSettings):
     auth_alert_smtp_username: str = ""
     auth_alert_smtp_password: str = ""
     auth_alert_email_from: str = ""
-    auth_alert_email_to: str = ""        # comma-separated recipients
+    auth_alert_email_to: str = ""  # comma-separated recipients
     auth_alert_smtp_timeout_s: int = 5
 
     # --- BE-MEDIA-001-real: object storage backend ---
@@ -142,7 +149,7 @@ class Settings(BaseSettings):
     # "s3"      → S3CompatibleStorage (Aliyun OSS / Tencent COS /
     #             AWS S3 via boto3, production)
     media_storage_backend: str = "local"
-    s3_endpoint_url: str = ""        # empty = AWS S3 default
+    s3_endpoint_url: str = ""  # empty = AWS S3 default
     s3_region: str = "us-east-1"
     s3_bucket_name: str = "niki-media"
     s3_access_key: str = ""
@@ -158,6 +165,41 @@ class Settings(BaseSettings):
     # don't need a captcha round-trip; flip on in production
     # via NIKI_SMS_CAPTCHA_REQUIRED=true.
     sms_captcha_required: bool = False
+
+    # --- BE-AGENT-001: LLM-driven tool-use loop (EncyclopediaAgent) ---
+    # When True, EncyclopediaAgent runs an LLM-driven tool-use loop
+    # (currently 1-round: KB.search → second LLM call to compose the
+    # answer), with ToolAccessChecker enforcing the PRD #54 permission
+    # matrix. Default off so the legacy "1 LLM call" path stays the
+    # production behaviour. Flip on via AGENT_TOOL_USE_ENABLED=true
+    # (Pydantic BaseSettings reads the field name uppercased; this
+    # module has no `env_prefix` so the leading `NIKI_` would not
+    # match).
+    agent_tool_use_enabled: bool = False
+
+    # --- ISS-22: bounded ReAct loop controls ---
+    # These three values tune the bounded ReAct loop that runs when
+    # ``agent_tool_use_enabled`` is True. They are NO-OPS when the
+    # master flag is off. Defaults keep backward compatibility:
+    #   - max_rounds=1 reproduces the BE-AGENT-001 1-round baseline.
+    #   - max_tokens / max_tool_calls cap the runaway LLM scenarios.
+    # The new default ``max_rounds=4`` gives the LLM room for query
+    # refinement (e.g. "sky is blue" → "why blue → light scattering")
+    # without unbounded recursion. Override via the uppercased env vars
+    # (e.g. ``AGENT_TOOL_LOOP_MAX_ROUNDS=4``); settings module has no
+    # ``env_prefix``.
+    agent_tool_loop_max_rounds: int = 4
+    agent_tool_loop_max_tokens: int = 8000
+    agent_tool_loop_max_tool_calls: int = 8
+
+    # --- ISS-23: SSE streaming endpoint hooks into the agent pipeline ---
+    # When False (default), ``/chat/stream`` keeps the existing raw-stream
+    # path that bypasses agents + safety + tool loop (BE-RT-001 baseline).
+    # When True, ``/chat/stream`` runs through ``ChatOrchestrator.stream_chat``
+    # yielding structured phase events + answer chunks. Flip on via
+    # ``AGENT_STREAM_USE_AGENT_PIPELINE=true`` — orthogonal to
+    # ``agent_tool_use_enabled`` (each flag gates one slice of staging).
+    agent_stream_use_agent_pipeline: bool = False
 
     # --- BE-MISC-002: feature flags ---
     # JSON-encoded dict of global flag defaults. Empty `{}` is
@@ -270,9 +312,7 @@ def _generate_vapid_pair() -> tuple[str, str]:
     return _normalize_pem(private_pem), _b64url_no_pad(public_point)
 
 
-def _read_cached_vapid_pair(
-    private_path: Path, public_path: Path
-) -> tuple[str, str] | None:
+def _read_cached_vapid_pair(private_path: Path, public_path: Path) -> tuple[str, str] | None:
     """Read a previously-generated pair off disk, or None."""
     try:
         if not private_path.is_file() or not public_path.is_file():
@@ -337,9 +377,7 @@ def get_or_generate_vapid_keys(
     cached = _read_cached_vapid_pair(private_path, public_path)
     if cached is None:
         private_pem, public_b64 = _generate_vapid_pair()
-        _write_cached_vapid_pair(
-            private_path, public_path, private_pem, public_b64
-        )
+        _write_cached_vapid_pair(private_path, public_path, private_pem, public_b64)
         logger.info(
             "vapid.keys_generated",
             private_key_file=str(private_path),

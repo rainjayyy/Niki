@@ -6,7 +6,7 @@ Runnable interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import structlog
 
@@ -109,12 +109,21 @@ class BaseAgent(ABC):
         self,
         child_input: ChildInput,
         context: dict[str, Any] | None = None,
+        *,
+        on_phase: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        on_chunk: Callable[[str, int], Awaitable[None]] | None = None,
     ) -> AgentOutput:
         """Process the child's input and produce an agent response.
 
         Args:
             child_input: The child's transcribed input and metadata.
             context: Optional conversation context (memory, emotion state, etc.).
+            on_phase: Optional coroutine called with ``(name, payload)``
+                at well-defined phase transitions (ISS-23). ``None`` =
+                silent (the legacy default — backward compatible).
+            on_chunk: Optional coroutine called with ``(text, idx)`` for
+                each codepoint chunk of the FINAL answer text (after
+                output safety). ``None`` = silent.
 
         Returns:
             AgentOutput with the response text and metadata.
@@ -125,10 +134,29 @@ class BaseAgent(ABC):
         self,
         child_input: ChildInput,
         context: dict[str, Any] | None = None,
+        *,
+        on_phase: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        on_chunk: Callable[[str, int], Awaitable[None]] | None = None,
     ) -> AgentOutput:
         """Public entry point: invoke the agent.
 
         Calls `_process()` with logging and error handling.
+
+        ISS-23 streaming seam — both kwargs are optional coroutine-
+        callables, default ``None``. When provided, ``_process`` is
+        expected to ``await`` them at well-defined transitions:
+
+          * ``on_phase(name: str, payload: dict)`` — phase events
+            (e.g. ``"thinking_start"``, ``"tool_call"``,
+            ``"answer_end"``); payload MAY carry an ``agent: str``
+            discriminator when multiple agents run in parallel.
+          * ``on_chunk(text: str, token_index: int)`` — answer-text
+            codepoints streamed after the output-safety gateway.
+
+        Callback exceptions are isolated by the agent — a misbehaving
+        consumer cannot crash an agent. The FINAL answer is always
+        delivered via the returned :class:`AgentOutput`; individual
+        events may be lost under backpressure.
         """
         logger.info(
             "agent.invoke",
@@ -139,7 +167,7 @@ class BaseAgent(ABC):
         )
 
         try:
-            output = await self._process(child_input, context)
+            output = await self._process(child_input, context, on_phase=on_phase, on_chunk=on_chunk)
             logger.info(
                 "agent.invoke.complete",
                 agent_type=self.agent_type,
