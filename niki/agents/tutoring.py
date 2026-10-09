@@ -294,7 +294,7 @@ class TutoringAgent(BaseAgent):
             draft = prompt
         else:
             try:
-                response = await self.llm.chat(  # type: ignore[union-attr]
+                response = await self.llm.chat(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         *format_history(child_input.history),

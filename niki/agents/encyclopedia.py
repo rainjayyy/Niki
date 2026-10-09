@@ -262,7 +262,7 @@ class EncyclopediaAgent(BaseAgent):
         ]
 
         try:
-            response = await self.llm.chat(  # type: ignore[union-attr]
+            response = await self.llm.chat(
                 messages=messages,
                 temperature=0.5,
                 max_tokens=512,
@@ -492,7 +492,7 @@ class EncyclopediaAgent(BaseAgent):
 
             # LLM call.
             try:
-                response = await self.llm.chat(  # type: ignore[union-attr]
+                response = await self.llm.chat(
                     messages=messages,
                     tools=tool_schemas,
                     tool_choice="auto",
@@ -648,7 +648,7 @@ class EncyclopediaAgent(BaseAgent):
 
         if round_idx >= max_rounds and not last_was_no_tool and last_response is not None:
             try:
-                final = await self.llm.chat(  # type: ignore[union-attr]
+                final = await self.llm.chat(
                     messages=messages,
                     temperature=0.5,
                     max_tokens=512,

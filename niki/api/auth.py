@@ -164,8 +164,8 @@ def _audit_hook_factory():
 # Install the hook on the default singletons so endpoint handlers
 # don't have to re-wire it. Tests that inject their own services
 # can attach a custom hook via `set_phone_change_service(...)`.
-get_phone_change_service()._audit_hook = _audit_hook_factory()  # type: ignore[attr-defined]
-get_email_change_service()._audit_hook = _audit_hook_factory()  # type: ignore[attr-defined]
+get_phone_change_service()._audit_hook = _audit_hook_factory()
+get_email_change_service()._audit_hook = _audit_hook_factory()
 
 # Translation-key map for the structured AuthError codes. The
 # `code` is what the frontend branches on (and what we test

@@ -293,4 +293,4 @@ async def chat_stream(
 
 def register_status() -> int:
     """Diagnostic helper — returns 1 to confirm import works."""
-    return status.HTTP_200_OK  # type: ignore[no-any-return]
+    return status.HTTP_200_OK

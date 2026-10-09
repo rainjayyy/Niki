@@ -154,7 +154,7 @@ class FactChecker:
             '{"supported": true|false, "confidence": 0.0-1.0, "reason": "..."}'
         )
 
-        response = await self._llm_judge.chat(  # type: ignore[union-attr]
+        response = await self._llm_judge.chat(
             messages=[
                 {"role": "system", "content": "你是事实核查专家。"},
                 {"role": "user", "content": prompt},

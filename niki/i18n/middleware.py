@@ -147,7 +147,7 @@ class LanguageMiddleware(BaseHTTPMiddleware):
         self._default_lang = default_lang
         self._supported: tuple[str, ...] = tuple(self._translator.languages)
 
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+    async def dispatch(self, request: Request, call_next):
         # `request.query_params` is cached; reading it is cheap.
         query_lang = request.query_params.get("lang")
         lang = pick_lang(

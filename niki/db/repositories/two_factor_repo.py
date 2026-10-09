@@ -218,7 +218,7 @@ class PostgresTwoFactorRepository(TwoFactorRepository):
             row.backup_codes_hash = backup_codes_hash
             row.backup_codes_used = list(backup_codes_used)
         await self._session.flush()
-        return self._to_data(row)  # type: ignore[return-value]
+        return self._to_data(row)
 
     async def delete(self, parent_id: str) -> None:
         from sqlalchemy import delete as sa_delete

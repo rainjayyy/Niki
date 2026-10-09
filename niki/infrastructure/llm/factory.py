@@ -69,7 +69,7 @@ class _StubLLM(BaseLLMClient):
     def provider_name(self) -> str:
         return "stub"
 
-    async def chat(  # type: ignore[override]
+    async def chat(
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,

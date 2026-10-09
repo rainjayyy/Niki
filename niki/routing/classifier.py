@@ -205,7 +205,7 @@ class IntentClassifier:
             '"tutoring_subtype": "..."}]}'
         )
 
-        response = await self._llm.chat(  # type: ignore[union-attr]
+        response = await self._llm.chat(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text},

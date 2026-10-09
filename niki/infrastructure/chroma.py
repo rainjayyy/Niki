@@ -46,7 +46,7 @@ def _patched_httpx_client_init(self, *args, **kwargs):
     _original_httpx_client_init(self, *args, **kwargs)
 
 
-httpx.Client.__init__ = _patched_httpx_client_init  # type: ignore[assignment]
+httpx.Client.__init__ = _patched_httpx_client_init  # type: ignore[method-assign]
 
 # Collection names
 COLLECTION_CONVERSATIONS = "conversations"
@@ -87,7 +87,7 @@ class ChromaClient:
         )
 
         try:
-            cls._client = chromadb.HttpClient(  # type: ignore[assignment]
+            cls._client = chromadb.HttpClient(
                 host=settings.chroma_host,
                 port=settings.chroma_port,
             )
