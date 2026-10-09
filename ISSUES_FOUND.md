@@ -41,7 +41,7 @@
   - 三个端点统一加 `_input_gateway = InputSafetyGateway()` 并在调 Agent 前 `await _input_gateway.check(text)`
   - blocked / escalation / rewrite 三态都正确反映在响应 `metadata` 字段
   - 新增 `tests/api/test_agent_endpoint_safety.py`（4 个端到端回归测试）覆盖：self-harm escalation（emotion + tutoring）、violence block（encyclopedia）、clean text 通过
-  - 已知安全盲点：`SELF_HARM_CN` 字典未覆盖"想死"等常见表达（如"我好想死啊"），需要补词表——与 ISS-02 修复独立，单独跟踪
+  - 同期扩展 `SELF_HARM_CN` 词表（增加 想死 / 不想活 / 活不下去 / 想轻生 / 一了百了），并新增 `test_self_harm_phrases_escalate` 参数化测试覆盖 8 个常见表达（含 "我好想死啊" 这类之前漏掉的）
 - 关联：ISS-01（已独立修复）
 
 ### ISS-03 Treehole 加密载荷在 7 天 purge 后仍残留

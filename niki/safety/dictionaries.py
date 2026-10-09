@@ -33,8 +33,23 @@ _VIOLENCE_CN = {"杀", "杀死", "谋杀", "枪杀", "砍死", "掐死", "砍头
 VIOLENCE = _VIOLENCE_EN | _VIOLENCE_CN
 
 # Self-harm — triggers immediate escalation (PRD #29, #61-64)
+# Phrases below are chosen to be unambiguous self-harm signals in
+# child Mandarin usage; substring-matched by InputSafetyGateway.
+# Gaps discovered while writing ISS-02 endpoint regression tests
+# (e.g. "我好想死啊" did not match any token).
 _SELF_HARM_EN = {"suicide", "kill myself", "end my life", "want to die"}
-_SELF_HARM_CN = {"自杀", "不想活了", "轻生", "结束生命", "寻死"}
+_SELF_HARM_CN = {
+    "自杀",
+    "不想活了",
+    "不想活",
+    "轻生",
+    "想轻生",
+    "结束生命",
+    "寻死",
+    "想死",
+    "活不下去",
+    "一了百了",
+}
 SELF_HARM = _SELF_HARM_EN | _SELF_HARM_CN
 
 # Sexual content

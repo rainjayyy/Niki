@@ -330,6 +330,7 @@ Niki/
 - ✅ `niki/memory/short_term.py` `clear_all()` 实现真 Redis `SCAN` + `DELETE`（之前是 TODO）
 - ✅ **ISS-02**：`niki/api/{emotion,encyclopedia,tutoring}.py` 三个直接端点加 `InputSafetyGateway` 前置过滤；新增 `tests/api/test_agent_endpoint_safety.py` 4 个端到端回归测试
 - ✅ 3 个 `pytest.mark.skip` 修复：`test_treehole_activated`（改 confidentiality marker 多选一断言）、`test_real_llm_reply_used`（改名为 `test_v1_uses_curated_template_not_llm`，断言 v1 模板路径）、`test_orchestrator_remembers_context`（改走 encyclopedia 路径验证 history 转发）
+- ✅ `SELF_HARM_CN` 词表补全（`niki/safety/dictionaries.py`）：增加 想死 / 不想活 / 活不下去 / 想轻生 / 一了百了；新增 `test_self_harm_phrases_escalate` 参数化测试（8 表达）+ `test_self_harm_phrase_xsiangsi_escalates` 端到端回归（"我好想死啊" 之前会漏检）
 
 ---
 

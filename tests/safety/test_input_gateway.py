@@ -62,8 +62,40 @@ class TestInputGatewayEscalate:
     ) -> None:
         """Self-harm outranks topic blacklist (most severe wins)."""
         # '死亡' is in default blacklist, but '不想活了' should escalate not downgrade
-        v = await gateway.check("我不想活了")
+        v = await gateway.check("不想活了")
         assert v.action == InputAction.ESCALATE
+
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "我好想死啊",       # 想死 (gap fix: previously missed)
+            "我不想活了",
+            "我今天不想活",     # 不想活
+            "我活不下去了",     # 活不下去
+            "我想轻生",         # 想轻生
+            "我想一了百了",     # 一了百了
+            "我已经决定自杀了",  # 自杀 (was already covered but re-asserted)
+            "I want to die",    # English equivalent
+        ],
+    )
+    async def test_self_harm_phrases_escalate(
+        self, gateway: InputSafetyGateway, phrase: str
+    ) -> None:
+        """All common self-harm phrasings must escalate (PRD #29, #64).
+
+        Added after the ISS-02 regression test
+        (tests/api/test_agent_endpoint_safety.py) discovered that
+        "我好想死啊" did not match the original ``SELF_HARM_CN``
+        dictionary — only "自杀/不想活了/轻生/结束生命/寻死" did. The
+        dictionary has been extended with 想死 / 不想活 / 活不下去 /
+        想轻生 / 一了百了 to cover the most common child Mandarin
+        self-harm expressions.
+        """
+        v = await gateway.check(phrase)
+        assert v.is_escalation, (
+            f"phrase {phrase!r} should escalate but got action={v.action.value}"
+        )
+        assert v.matched_category == "self_harm"
 
 
 class TestInputGatewayBlock:
