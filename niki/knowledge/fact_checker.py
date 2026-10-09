@@ -128,8 +128,7 @@ class FactChecker:
             reason = f"overlap with {len(matched)} evidence pieces"
         else:
             reason = (
-                f"insufficient overlap (confidence={confidence:.2f} "
-                f"< threshold={self._threshold})"
+                f"insufficient overlap (confidence={confidence:.2f} < threshold={self._threshold})"
             )
 
         return FactCheckResult(
@@ -166,10 +165,13 @@ class FactChecker:
 
         # Parse JSON
         import json
+
         try:
             content = response["content"].strip()
             if content.startswith("```"):
-                content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content, flags=re.MULTILINE).strip()
+                content = re.sub(
+                    r"^```(?:json)?\s*|\s*```$", "", content, flags=re.MULTILINE
+                ).strip()
             data = json.loads(content)
             is_confident = bool(data.get("supported", False))
             confidence = float(data.get("confidence", 0.0 if not is_confident else 1.0))

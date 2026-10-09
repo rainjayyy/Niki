@@ -58,9 +58,7 @@ def _canonical_text(
     Must remain stable across runs / versions so a parent can
     re-verify the receipt months later.
     """
-    completed = (
-        completed_at.isoformat() if completed_at else "PENDING"
-    )
+    completed = completed_at.isoformat() if completed_at else "PENDING"
     return (
         f"DELETION_CERTIFICATE\n"
         f"request_id={request_id}\n"
@@ -84,9 +82,7 @@ def render_deletion_receipt(
     """Render the deletion-receipt PDF. Returns the encoded
     bytes (ready to send as application/pdf)."""
     _ensure_cjk_font()
-    canonical = _canonical_text(
-        request_id, parent_id, requested_at, completed_at
-    )
+    canonical = _canonical_text(request_id, parent_id, requested_at, completed_at)
     digest = _hash(canonical)
 
     base = getSampleStyleSheet()
@@ -128,16 +124,15 @@ def render_deletion_receipt(
     )
     story: list = []
     story.append(Paragraph("Niki 数据删除凭证", title))
-    story.append(Paragraph(
-        "本凭证依据《个人信息保护法》§47 条出具，证明您的"
-        "个人数据已按要求删除。",
-        body,
-    ))
+    story.append(
+        Paragraph(
+            "本凭证依据《个人信息保护法》§47 条出具，证明您的个人数据已按要求删除。",
+            body,
+        )
+    )
     story.append(Spacer(1, 8))
 
-    completed_str = (
-        completed_at.isoformat() if completed_at else "PENDING"
-    )
+    completed_str = completed_at.isoformat() if completed_at else "PENDING"
     table = Table(
         [
             ["字段", "值"],
@@ -168,11 +163,13 @@ def render_deletion_receipt(
     story.append(table)
     story.append(Spacer(1, 8))
 
-    story.append(Paragraph(
-        "本凭证由 Niki 自动生成。任何对上述内容的篡改都会"
-        "导致 sha256 校验失败。如需申诉，可将本凭证提交至 "
-        "support@niki.example。",
-        meta,
-    ))
+    story.append(
+        Paragraph(
+            "本凭证由 Niki 自动生成。任何对上述内容的篡改都会"
+            "导致 sha256 校验失败。如需申诉，可将本凭证提交至 "
+            "support@niki.example。",
+            meta,
+        )
+    )
     doc.build(story)
     return buf.getvalue()
