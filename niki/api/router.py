@@ -13,12 +13,14 @@ from niki.api.dashboard import router as dashboard_router
 from niki.api.config import router as config_router
 from niki.api.status import router as status_router
 from niki.api.children import router as children_router
+from niki.api.child_data import router as child_data_router
 from niki.api.data_export import router as data_export_router
 from niki.api.deletion import router as deletion_router
 from niki.api.emotion import router as emotion_router
 from niki.api.encyclopedia import router as encyclopedia_router
 from niki.api.health import router as health_router
 from niki.api.media import router as media_router
+from niki.api.letters import router as letters_router
 from niki.api.memory import router as memory_router
 from niki.api.metrics import router as metrics_router
 from niki.api.notifications import router as notifications_router
@@ -62,8 +64,7 @@ def _collect_tag_metadata(*routers) -> list[dict]:
             elif isinstance(tag, str):
                 seen.setdefault(tag, "")
     return [
-        {"name": name, "description": description}
-        for name, description in sorted(seen.items())
+        {"name": name, "description": description} for name, description in sorted(seen.items())
     ]
 
 
@@ -77,6 +78,7 @@ OPENAPI_TAGS: list[dict] = _collect_tag_metadata(
     safety_chat_router,
     audio_router,
     media_router,
+    letters_router,
     routing_router,
     encyclopedia_router,
     tutoring_router,
@@ -117,6 +119,9 @@ api_router.include_router(audio_router)
 
 # BE-MEDIA-001: Generic file upload
 api_router.include_router(media_router)
+
+# Parent-to-child letters (dashboard send + child inbox)
+api_router.include_router(letters_router)
 
 # Routing pipeline (#2 vertical slice)
 api_router.include_router(routing_router)
@@ -166,6 +171,9 @@ api_router.include_router(data_export_router)
 # BE-STOR-001-ext-E: children registration
 api_router.include_router(children_router)
 
+# BE-STOR-001-ext-F: persistent child achievements / chat history / weekly report history
+api_router.include_router(child_data_router)
+
 # BE-DEV-004: parent-child pairing code
 api_router.include_router(pairing_router)
 
@@ -202,5 +210,3 @@ api_router.include_router(webhooks_router)
 # BE-AUTH-007: parent 2FA / TOTP endpoints (mount under /auth so
 # the full path is /api/v1/auth/2fa/*).
 api_router.include_router(two_factor_router)
-
-
