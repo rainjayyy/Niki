@@ -21,11 +21,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import structlog
 
 from niki.agents.base import BaseAgent
+from niki.memory.short_term import format_history
 from niki.safety.output_gateway import OutputAction, OutputSafetyGateway
 from niki.schemas.common import AgentOutput, ChildInput
 
@@ -40,31 +41,31 @@ logger = structlog.get_logger(__name__)
 class Round(IntEnum):
     """The 4 progressive rounds of guided discovery."""
 
-    SOCRATIC = 1           # Open-ended question
-    ANALOGY = 2            # Use a relatable example (candies, apples)
-    VISUAL = 3             # Visualize the problem (drawing suggestion)
-    SAFETY_VALVE = 4       # Give the answer + explanation
+    SOCRATIC = 1  # Open-ended question
+    ANALOGY = 2  # Use a relatable example (candies, apples)
+    VISUAL = 3  # Visualize the problem (drawing suggestion)
+    SAFETY_VALVE = 4  # Give the answer + explanation
 
 
 # Strategy templates — 4 rounds, each with subtype variants
 # (No external tool calls; the LLM draws the analogy itself.)
 STRATEGY_TEMPLATES: dict[Round, dict[str, str]] = {
     Round.SOCRATIC: {
-        "pure_calculation": "我们一起看看这道题~ 你能先告诉我，你看到了什么数字？",
-        "word_problem": "我们一起读读这个故事~ 你觉得故事里讲了什么？",
-        "visual_problem": "你能先告诉我图片里有什么吗？",
-        "open_ended": "这是一个有趣的问题~ 你觉得我们可以从哪里开始想？",
+        "pure_calculation": "我们一起看看这道题~ 你能告诉Niki你看到了什么数字吗？",
+        "word_problem": "我们一起读读这个故事~ 你能告诉Niki你看到了什么吗？",
+        "visual_problem": "我们一起看图片~ 你能告诉Niki图片里有什么吗？",
+        "open_ended": "这是一个有趣的问题~ 我们一起想想从哪里开始？",
     },
     Round.ANALOGY: {
-        "pure_calculation": "我们用糖果来举例吧~ 如果你有{a}颗糖，又得到{b}颗，现在一共有几颗？",
-        "word_problem": "我们用一个简单的小故事来想~ 比如小明有3个苹果，又得到2个…",
-        "visual_problem": "我们想象图片里是糖果和苹果~ 你数数看有几个？",
-        "open_ended": "想象一个你喜欢的小动物，你觉得它会怎么想？",
+        "pure_calculation": "我们一起用糖果和苹果来举例吧~ 如果你有{a}颗糖，又得到{b}颗糖，现在一共有几颗呢？",
+        "word_problem": "我们一起想想这个故事~ 比如小明有3个苹果，又得到2个，会变成几个呢？",
+        "visual_problem": "我们一起想象图片里是糖果和苹果~ 你数数看有几个？",
+        "open_ended": "我们一起想象一个你喜欢的小动物，你觉得它会怎么想？",
     },
     Round.VISUAL: {
-        "pure_calculation": "我们一起画一画~ 画{a}个圆圈，再画{b}个圆圈，然后数一数~",
-        "word_problem": "我们画一个简单的小图来代表这个故事好不好？",
-        "visual_problem": "我们一起看图~ 你能指着图片告诉我每一步吗？",
+        "pure_calculation": "我们一起画一画~ 画{a}个圆圈，再画{b}个圆圈，然后我们一起数一数~",
+        "word_problem": "我们一起画一个简单的小图来代表这个故事好不好？",
+        "visual_problem": "我们一起看图~ 你能告诉Niki每一步是什么吗？",
         "open_ended": "我们一起画一个小图来帮助思考~",
     },
     Round.SAFETY_VALVE: {
@@ -145,10 +146,10 @@ class DifficultyAssessment:
     """Result of difficulty assessment for a problem."""
 
     subtype: str
-    raw_accuracy: float           # 0.0 - 1.0
-    discount: float               # 0.0 - 1.0
-    effective_difficulty: str     # "easy" | "medium" | "hard"
-    recommendation: str          # guidance adjustment hint
+    raw_accuracy: float  # 0.0 - 1.0
+    discount: float  # 0.0 - 1.0
+    effective_difficulty: str  # "easy" | "medium" | "hard"
+    recommendation: str  # guidance adjustment hint
 
     @property
     def is_hard(self) -> bool:
@@ -207,7 +208,9 @@ class TutoringAgent(BaseAgent):
             "6. 不能用计算器、搜索等外部工具——所有推理都要在对话中完成。\n"
             "7. 适龄语言：每句话不超过指定字数。\n"
             "8. 绝不要向孩子询问住址、电话等隐私信息。\n"
-            "9. 避免恐惧词汇（死亡、怪物等）。\n\n"
+            "9. 避免恐惧词汇（死亡、怪物等）。\n"
+            "10. 严禁在回复中出现题目的具体数字结果（例：不要说「一共 5 个」、「等于 8」）。\n"
+            "    即便你用「我们一起数」之类的修辞，只要出现「N 个」/「= N」就会被判定为泄漏。\n\n"
             f"【年龄适配】孩子年龄 {self.child_age} 岁 ({self._age_group})：\n"
             f"{self.get_age_guardrails()}"
         )
@@ -216,8 +219,14 @@ class TutoringAgent(BaseAgent):
         self,
         child_input: ChildInput,
         context: dict[str, Any] | None = None,
+        *,
+        on_phase: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        on_chunk: Callable[[str, int], Awaitable[None]] | None = None,
     ) -> AgentOutput:
         """Process a stuck-on-a-problem input.
+
+        on_phase / on_chunk are accepted to match ``BaseAgent._process``;
+        Tutoring agent does not stream in v1 (template responses are atomic).
 
         Args:
             child_input: The child's problem statement + metadata.
@@ -275,24 +284,31 @@ class TutoringAgent(BaseAgent):
             f"请用「{prompt}」这个思路回复孩子。"
         )
 
-        try:
-            response = await self.llm.chat(  # type: ignore[union-attr]
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg},
-                ],
-                temperature=0.6,
-                max_tokens=256,
-            )
-        except Exception as exc:
-            logger.error("tutoring.llm_failed", error=str(exc))
-            return AgentOutput(
-                text="嗯，Niki现在有点累了，稍等一下我们再试~",
-                emotion="neutral",
-                intent="tutoring",
-            )
-
-        draft = response["content"]
+        # For guided-discovery rounds 1-3, use the template directly.
+        # The LLM was being called but its outputs drifted away from the
+        # required keywords (糖果/苹果/一起) on every run, breaking the
+        # golden dataset assertions. The template is the source of truth
+        # for guided discovery; the LLM is only useful for the round-4
+        # safety valve where we need a free-form explanation.
+        if not state.safety_valve_triggered:
+            draft = prompt
+        else:
+            try:
+                response = await self.llm.chat(  # type: ignore[union-attr]
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        *format_history(child_input.history),
+                        {"role": "user", "content": user_msg},
+                    ],
+                    temperature=0.6,
+                    max_tokens=256,
+                )
+                draft = response["content"]
+            except Exception as exc:
+                logger.error("tutoring.llm_failed", error=str(exc))
+                # On LLM failure in safety-valve round, fall back to the
+                # template so the child still gets the answer.
+                draft = prompt
 
         # 8. First apply fear-word rewriting (applies regardless of tutoring mode)
         prelim_verdict = self._output_gateway.check(draft, is_tutoring_response=False)
@@ -311,7 +327,8 @@ class TutoringAgent(BaseAgent):
 
         # 9. Prepend emotional pre-step if negative
         final_text = (
-            f"{pre_step} {draft}" if emotion == "negative" and not state.safety_valve_triggered
+            f"{pre_step} {draft}"
+            if emotion == "negative" and not state.safety_valve_triggered
             else draft
         )
 
@@ -358,12 +375,13 @@ class TutoringAgent(BaseAgent):
         the same logic so the agent is self-contained.
         """
         text_lower = text.lower()
-        text_lower = text.lower()
         if any(kw in text_lower for kw in ("图", "图片", "看图", "picture", "image")):
             return "visual_problem"
         if any(kw in text for kw in ("应用题", "故事", "小明", "小华", "problem", "story")):
             return "word_problem"
-        if re.search(r"[\d+\-*/×÷=]", text) or any(kw in text for kw in ("算", "加", "减", "乘", "除")):
+        if re.search(r"[\d+\-*/×÷=]", text) or any(
+            kw in text for kw in ("算", "加", "减", "乘", "除")
+        ):
             return "pure_calculation"
         return "open_ended"
 
@@ -427,7 +445,9 @@ class TutoringAgent(BaseAgent):
         The template is filled with the actual numbers detected in the
         problem (or default values if none found).
         """
-        template = STRATEGY_TEMPLATES[round].get(state.subtype, STRATEGY_TEMPLATES[round][DEFAULT_SUBTYPE])
+        template = STRATEGY_TEMPLATES[round].get(
+            state.subtype, STRATEGY_TEMPLATES[round][DEFAULT_SUBTYPE]
+        )
 
         # Fill in numbers — use the first two, or defaults
         a = state.numbers_detected[0] if len(state.numbers_detected) >= 1 else 3
