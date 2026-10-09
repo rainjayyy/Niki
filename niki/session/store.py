@@ -215,52 +215,52 @@ class RedisSessionStore(SessionStore):
         if keys:
             await client.delete(*keys)
 
-    async def get_started_at(self, child_id: str) -> datetime | None:
+    async def get_started_at(self, child_id: str) -> datetime | None:  # type: ignore[override]
         v = await self._get(self._k(self._key_prefix, child_id, "started_at"))
         return _parse_iso(v) if v else None
 
-    async def set_started_at(self, child_id: str, ts: datetime) -> None:
+    async def set_started_at(self, child_id: str, ts: datetime) -> None:  # type: ignore[override]
         await self._set(
             self._k(self._key_prefix, child_id, "started_at"),
             _iso(ts),
         )
 
-    async def clear_started_at(self, child_id: str) -> None:
+    async def clear_started_at(self, child_id: str) -> None:  # type: ignore[override]
         await self._delete(self._k(self._key_prefix, child_id, "started_at"))
 
-    async def get_last_activity(self, child_id: str) -> datetime | None:
+    async def get_last_activity(self, child_id: str) -> datetime | None:  # type: ignore[override]
         v = await self._get(self._k(self._key_prefix, child_id, "last_activity"))
         return _parse_iso(v) if v else None
 
-    async def set_last_activity(self, child_id: str, ts: datetime) -> None:
+    async def set_last_activity(self, child_id: str, ts: datetime) -> None:  # type: ignore[override]
         await self._set(
             self._k(self._key_prefix, child_id, "last_activity"),
             _iso(ts),
         )
 
-    async def clear_last_activity(self, child_id: str) -> None:
+    async def clear_last_activity(self, child_id: str) -> None:  # type: ignore[override]
         await self._delete(self._k(self._key_prefix, child_id, "last_activity"))
 
-    async def is_soft_warned(self, child_id: str) -> bool:
+    async def is_soft_warned(self, child_id: str) -> bool:  # type: ignore[override]
         v = await self._get(self._k(self._key_prefix, child_id, "soft_warned"))
         return v == "1"
 
-    async def mark_soft_warned(self, child_id: str) -> None:
+    async def mark_soft_warned(self, child_id: str) -> None:  # type: ignore[override]
         await self._set(
             self._k(self._key_prefix, child_id, "soft_warned"),
             "1",
         )
 
-    async def clear_soft_warned(self, child_id: str) -> None:
+    async def clear_soft_warned(self, child_id: str) -> None:  # type: ignore[override]
         await self._delete(self._k(self._key_prefix, child_id, "soft_warned"))
 
-    async def get_ended(self, child_id: str) -> str | None:
+    async def get_ended(self, child_id: str) -> str | None:  # type: ignore[override]
         return await self._get(self._k(self._key_prefix, child_id, "ended"))
 
-    async def set_ended(self, child_id: str, reason: str) -> None:
+    async def set_ended(self, child_id: str, reason: str) -> None:  # type: ignore[override]
         await self._set(self._k(self._key_prefix, child_id, "ended"), reason)
 
-    async def clear_ended(self, child_id: str) -> None:
+    async def clear_ended(self, child_id: str) -> None:  # type: ignore[override]
         await self._delete(self._k(self._key_prefix, child_id, "ended"))
 
 
@@ -324,40 +324,40 @@ class FallbackSessionStore(SessionStore):
             result = await result
         return result
 
-    async def get_started_at(self, child_id: str) -> datetime | None:
+    async def get_started_at(self, child_id: str) -> datetime | None:  # type: ignore[override]
         return await self._run("get_started_at", child_id)
 
-    async def set_started_at(self, child_id: str, ts: datetime) -> None:
+    async def set_started_at(self, child_id: str, ts: datetime) -> None:  # type: ignore[override]
         await self._run("set_started_at", child_id, ts)
 
-    async def clear_started_at(self, child_id: str) -> None:
+    async def clear_started_at(self, child_id: str) -> None:  # type: ignore[override]
         await self._run("clear_started_at", child_id)
 
-    async def get_last_activity(self, child_id: str) -> datetime | None:
+    async def get_last_activity(self, child_id: str) -> datetime | None:  # type: ignore[override]
         return await self._run("get_last_activity", child_id)
 
-    async def set_last_activity(self, child_id: str, ts: datetime) -> None:
+    async def set_last_activity(self, child_id: str, ts: datetime) -> None:  # type: ignore[override]
         await self._run("set_last_activity", child_id, ts)
 
-    async def clear_last_activity(self, child_id: str) -> None:
+    async def clear_last_activity(self, child_id: str) -> None:  # type: ignore[override]
         await self._run("clear_last_activity", child_id)
 
-    async def is_soft_warned(self, child_id: str) -> bool:
+    async def is_soft_warned(self, child_id: str) -> bool:  # type: ignore[override]
         return await self._run("is_soft_warned", child_id)
 
-    async def mark_soft_warned(self, child_id: str) -> None:
+    async def mark_soft_warned(self, child_id: str) -> None:  # type: ignore[override]
         await self._run("mark_soft_warned", child_id)
 
-    async def clear_soft_warned(self, child_id: str) -> None:
+    async def clear_soft_warned(self, child_id: str) -> None:  # type: ignore[override]
         await self._run("clear_soft_warned", child_id)
 
-    async def get_ended(self, child_id: str) -> str | None:
+    async def get_ended(self, child_id: str) -> str | None:  # type: ignore[override]
         return await self._run("get_ended", child_id)
 
-    async def set_ended(self, child_id: str, reason: str) -> None:
+    async def set_ended(self, child_id: str, reason: str) -> None:  # type: ignore[override]
         await self._run("set_ended", child_id, reason)
 
-    async def clear_ended(self, child_id: str) -> None:
+    async def clear_ended(self, child_id: str) -> None:  # type: ignore[override]
         await self._run("clear_ended", child_id)
 
 
