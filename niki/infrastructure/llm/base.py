@@ -1,6 +1,7 @@
 """Abstract base class for LLM clients."""
 
 from abc import ABC, abstractmethod
+import asyncio
 from typing import Any
 
 import httpx
@@ -44,18 +45,32 @@ class BaseLLMClient(ABC):
         self.model = model
         self.timeout = timeout
         self.max_retries = max_retries
-        self._client: httpx.AsyncClient | None = None
+        # httpx AsyncClient instances are bound to the event loop they
+        # were first used on. TestClient / multi-loop environments can
+        # close one loop and reuse the same client from another, which
+        # surfaces as "Event loop is closed". Cache one client per loop
+        # so each loop gets a fresh connection pool.
+        self._clients: dict[int, tuple[asyncio.AbstractEventLoop | None, httpx.AsyncClient]] = {}
 
     @property
     def client(self) -> httpx.AsyncClient:
-        """Lazy initialization of the httpx async client."""
-        if self._client is None:
-            self._client = httpx.AsyncClient(
-                base_url=self.base_url,
-                timeout=httpx.Timeout(self.timeout),
-                headers=self._default_headers(),
-            )
-        return self._client
+        """Return an httpx client bound to the current event loop."""
+        try:
+            loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        key = id(loop) if loop is not None else 0
+        entry = self._clients.get(key)
+        if entry is not None and entry[0] is loop:
+            return entry[1]
+
+        client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=httpx.Timeout(self.timeout),
+            headers=self._default_headers(),
+        )
+        self._clients[key] = (loop, client)
+        return client
 
     def _default_headers(self) -> dict[str, str]:
         """Build default HTTP headers for API requests."""
@@ -84,10 +99,18 @@ class BaseLLMClient(ABC):
             messages: List of message dicts with 'role' and 'content' keys.
             temperature: Sampling temperature (0.0–2.0).
             max_tokens: Maximum tokens in the response.
-            **kwargs: Provider-specific extra parameters.
+            **kwargs: Provider-specific extra parameters. OpenAI-style
+                tool calling is supported via ``tools=[...]`` and
+                ``tool_choice=...`` — forwarded verbatim to the
+                upstream API.
 
         Returns:
-            The parsed response from the LLM provider.
+            The parsed response from the LLM provider. When the model
+            issues a tool call the response dict also carries a
+            ``tool_calls`` key (list of OpenAI-standard call objects
+            with ``id``, ``type``, ``function.name``,
+            ``function.arguments``). When no tool call is made the
+            key is absent.
         """
         ...
 
@@ -117,10 +140,10 @@ class BaseLLMClient(ABC):
             return False
 
     async def close(self) -> None:
-        """Close the underlying HTTP client."""
-        if self._client is not None:
-            await self._client.aclose()
-            self._client = None
+        """Close every underlying HTTP client."""
+        for _loop, client in list(self._clients.values()):
+            await client.aclose()
+        self._clients.clear()
 
     def _handle_http_error(self, status_code: int, model: str) -> None:
         """Map HTTP status codes to Niki exceptions."""

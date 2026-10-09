@@ -72,6 +72,10 @@ class DeepSeekClient(BaseLLMClient):
             "usage": data.get("usage", {}),
             "finish_reason": choice.get("finish_reason", "stop"),
         }
+        # Pass through tool_calls when present (OpenAI standard).
+        # `tools=[...]` and `tool_choice=...` are already forwarded via **kwargs.
+        if choice["message"].get("tool_calls"):
+            result["tool_calls"] = choice["message"]["tool_calls"]
 
         logger.debug(
             "deepseek.chat.response",

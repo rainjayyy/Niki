@@ -35,6 +35,7 @@ class StreamingLLMProvider(ABC):
         child_age: int | None = None,
         persona: str | None = None,
         session_id: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[str]:
         """Yield successive text chunks for `prompt`.
 
@@ -91,6 +92,7 @@ class MockStreamingProvider(StreamingLLMProvider):
         child_age: int | None = None,
         persona: str | None = None,
         session_id: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[str]:
         # Pick a reply deterministically by prompt length so the same
         # input always yields the same stream.
@@ -135,6 +137,7 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
         if self._client is not None:
             return self._client
         from niki.infrastructure.llm.factory import get_or_create_llm
+
         return get_or_create_llm()
 
     async def stream(
@@ -144,6 +147,7 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
         child_age: int | None = None,
         persona: str | None = None,
         session_id: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> AsyncIterator[str]:
         client = self._get_client()
         # If the factory is in stub mode, fall back to the deterministic
@@ -158,7 +162,10 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
                 yield chunk
             return
 
-        messages = [{"role": "user", "content": prompt}]
+        messages = [
+            *(history or []),
+            {"role": "user", "content": prompt},
+        ]
         async for chunk in client.stream(
             messages,
             temperature=0.7,
@@ -232,8 +239,7 @@ def _build_streaming_system_prompt(
         "2. 用简单、生动、有趣的比喻解释。\n"
         "3. 避免恐惧词汇（死亡、怪物、灾难等），用更温柔的词替代。\n"
         "4. 绝不询问住址、电话等隐私信息。\n"
-        "5. 回答要简短、友好、充满鼓励。\n"
-        + (f"【年龄适配】{guardrail}\n" if guardrail else "")
+        "5. 回答要简短、友好、充满鼓励。\n" + (f"【年龄适配】{guardrail}\n" if guardrail else "")
     )
 
 
@@ -257,7 +263,8 @@ def _default_provider() -> StreamingLLMProvider:
     return MockStreamingProvider()
 
 
-_provider: StreamingLLMProvider = MockStreamingProvider()
+_DEFAULT_MOCK: StreamingLLMProvider = MockStreamingProvider()
+_provider: StreamingLLMProvider = _DEFAULT_MOCK
 
 
 def get_streaming_provider() -> StreamingLLMProvider:
@@ -269,7 +276,7 @@ def get_streaming_provider() -> StreamingLLMProvider:
     default.
     """
     global _provider
-    if isinstance(_provider, MockStreamingProvider):
+    if _provider is _DEFAULT_MOCK:
         # First access — decide real vs mock once, then cache.
         candidate = _default_provider()
         if not isinstance(candidate, MockStreamingProvider):
@@ -286,4 +293,4 @@ def set_streaming_provider(provider: StreamingLLMProvider) -> None:
 def reset_for_tests() -> None:
     """Restore the default streaming provider so the next call re-resolves."""
     global _provider
-    _provider = MockStreamingProvider()
+    _provider = _DEFAULT_MOCK

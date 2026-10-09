@@ -37,7 +37,7 @@ class DoubaoClient(BaseLLMClient):
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.3,  # Lower default for classification tasks
-        max_tokens: int = 512,     # Shorter responses for lightweight tasks
+        max_tokens: int = 512,  # Shorter responses for lightweight tasks
         task_type: TaskType = TASK_CLASSIFICATION,
         **kwargs: Any,
     ) -> dict[str, Any]:
@@ -82,6 +82,10 @@ class DoubaoClient(BaseLLMClient):
             "usage": data.get("usage", {}),
             "finish_reason": choice.get("finish_reason", "stop"),
         }
+        # Pass through tool_calls when present (OpenAI standard).
+        # `tools=[...]` and `tool_choice=...` are already forwarded via **kwargs.
+        if choice["message"].get("tool_calls"):
+            result["tool_calls"] = choice["message"]["tool_calls"]
 
         logger.debug(
             "doubao.chat.response",

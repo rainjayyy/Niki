@@ -99,7 +99,7 @@ def _build_client(settings: Settings) -> BaseLLMClient:
                 api_key=settings.minimax_api_key,
                 base_url=settings.minimax_base_url,
                 model=settings.minimax_model,
-                timeout=settings.minimax_timeout,
+                timeout=90,  # raised from settings default 30 — too short for reasoning models
                 max_retries=settings.minimax_max_retries,
             )
             if _is_real_key(settings.minimax_api_key)
@@ -205,20 +205,21 @@ def reset_for_tests() -> None:
         old = _singleton
         _singleton = None
     # Best-effort cleanup of the old client's httpx connection pool.
-    if old is not None and getattr(old, "_client", None) is not None:
+    if old is not None:
         try:
-            # _client is an httpx.AsyncClient; close it to release the
-            # underlying socket during test isolation.
             import asyncio
 
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    loop.create_task(old._client.aclose())  # type: ignore[union-attr]
-                else:
-                    loop.run_until_complete(old._client.aclose())  # type: ignore[union-attr]
+                loop = asyncio.get_running_loop()
             except RuntimeError:
-                # No loop in this thread — skip; the OS will reap on exit.
-                pass
+                loop = None
+            if loop is not None and loop.is_running():
+                loop.create_task(old.close())
+            else:
+                cleanup_loop = asyncio.new_event_loop()
+                try:
+                    cleanup_loop.run_until_complete(old.close())
+                finally:
+                    cleanup_loop.close()
         except Exception:  # pragma: no cover — best effort
             pass
