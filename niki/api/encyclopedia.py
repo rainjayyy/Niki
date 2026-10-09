@@ -22,16 +22,14 @@ from niki.knowledge.knowledge_base import (
 )
 from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
+from niki.tools import ToolAccessChecker, ToolMatrix
 
 router = APIRouter(
     prefix="/encyclopedia",
     tags=[
         {
             "name": "encyclopedia",
-            "description": (
-                "Encyclopedia Agent API endpoints — child-facing "
-                "knowledge Q&A."
-            ),
+            "description": ("Encyclopedia Agent API endpoints — child-facing knowledge Q&A."),
         },
     ],
 )
@@ -42,6 +40,11 @@ _fact_checker = FactChecker(_kb)
 # ISS-02: a shared input gateway so self-harm / blacklisted topics
 # trigger parent alert even when calling the agent directly (not via /chat).
 _input_gateway = InputSafetyGateway()
+# BE-AGENT-001: shared tool-permission checker for the
+# LLM-driven tool-use loop. A fresh matrix is fine here because
+# the matrix is read-only in production; the checker's audit log
+# is bounded (deque(maxlen=2000)).
+_tool_checker = ToolAccessChecker(ToolMatrix())
 
 
 # Wire the production LLM via the factory — returns the real
@@ -63,6 +66,7 @@ _agent = EncyclopediaAgent(
     fact_checker=_fact_checker,
     persona="gentle",
     child_age=7,
+    tool_checker=_tool_checker,
 )
 
 
@@ -80,6 +84,7 @@ def _get_agent(child_age: int) -> EncyclopediaAgent:
             fact_checker=_fact_checker,
             persona="gentle",
             child_age=child_age,
+            tool_checker=_tool_checker,
         )
     return _agent_cache[child_age]
 

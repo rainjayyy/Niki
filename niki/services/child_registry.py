@@ -72,3 +72,44 @@ def set_child_registry(registry: ChildRegistry) -> None:
     """Override the process-wide child registry (for tests / Postgres)."""
     global _registry
     _registry = registry
+
+
+async def sync_child_registry_from_postgres() -> None:
+    """Load persisted child rows into the in-memory registry at startup."""
+    from sqlalchemy import select
+
+    from niki.db.models import Child
+    from niki.infrastructure.postgres import PostgresClient
+
+    if PostgresClient._engine is None:
+        return
+    registry = get_child_registry()
+    async for session in PostgresClient.get_session():
+        rows = (await session.execute(select(Child))).scalars().all()
+        for row in rows:
+            registry.register(row.id, row.parent_id, name=row.name or "(child)")
+
+
+async def persist_child_to_postgres(
+    child_id: str,
+    parent_id: str,
+    name: str = "(child)",
+) -> None:
+    """Write a child registration through to PostgreSQL when available."""
+    from sqlalchemy import select
+
+    from niki.db.models import Child
+    from niki.infrastructure.postgres import PostgresClient
+
+    if PostgresClient._engine is None:
+        return
+    async for session in PostgresClient.get_session():
+        row = (
+            await session.execute(select(Child).where(Child.id == child_id))
+        ).scalar_one_or_none()
+        if row is None:
+            session.add(Child(id=child_id, parent_id=parent_id, name=name or "(child)"))
+        else:
+            row.parent_id = parent_id
+            row.name = name or row.name
+        await session.commit()

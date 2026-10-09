@@ -58,6 +58,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         PostgresClient.get_engine()
         logger.info("app.postgres_ready")
+        from niki.infrastructure.repository_wiring import wire_postgres_repositories
+
+        wire_postgres_repositories()
+        logger.info("app.repositories_postgres_wired")
+        from niki.services.child_registry import sync_child_registry_from_postgres
+
+        await sync_child_registry_from_postgres()
+        logger.info("app.child_registry_loaded")
     except Exception as exc:
         logger.warning("app.postgres_unavailable", error=str(exc))
 
@@ -82,6 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     heartbeat.register("neo4j", Neo4jClient.health_check, interval_seconds=30)
     # BE-DEV-004: periodic cleanup of expired pairing codes (5-min TTL).
     from niki.infrastructure.heartbeat import cleanup_expired_pairing_codes
+
     heartbeat.register(
         "pairing_cleanup",
         cleanup_expired_pairing_codes,
@@ -93,6 +102,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from niki.infrastructure.heartbeat import (
         cleanup_completed_phone_changes,
     )
+
     heartbeat.register(
         "phone_change_sweep",
         cleanup_completed_phone_changes,

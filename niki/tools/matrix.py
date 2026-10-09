@@ -16,6 +16,7 @@ Tutoring agent has NO external tools (PRD #54: 辅导 Agent 零外部工具 —
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -28,13 +29,13 @@ logger = structlog.get_logger(__name__)
 class ToolName(StrEnum):
     """All tools available in the Niki system."""
 
-    SEARCH_API = "search_api"               # Web search
-    CALCULATOR = "calculator"              # Math calculator (globally removed)
-    TIME_QUERY = "time_query"              # Current time lookup
-    WEATHER_QUERY = "weather_query"        # Weather lookup
+    SEARCH_API = "search_api"  # Web search
+    CALCULATOR = "calculator"  # Math calculator (globally removed)
+    TIME_QUERY = "time_query"  # Current time lookup
+    WEATHER_QUERY = "weather_query"  # Weather lookup
     IMAGE_RECOGNITION = "image_recognition"  # Vision API for photo understanding
     EMOTION_BASELINE = "emotion_baseline"  # Internal: emotion baseline read
-    KNOWLEDGE_BASE = "knowledge_base"      # Internal: encyclopedia KB
+    KNOWLEDGE_BASE = "knowledge_base"  # Internal: encyclopedia KB
     GUIDED_DISCOVERY = "guided_discovery"  # Internal: tutoring strategy library
 
 
@@ -43,7 +44,9 @@ _DEFAULT_PERMISSIONS: dict[ToolName, set[str]] = {
     ToolName.SEARCH_API: {"encyclopedia_agent"},
     ToolName.CALCULATOR: set(),  # PRD: globally removed
     ToolName.TIME_QUERY: {
-        "encyclopedia_agent", "tutoring_agent", "emotional_agent",
+        "encyclopedia_agent",
+        "tutoring_agent",
+        "emotional_agent",
     },
     ToolName.WEATHER_QUERY: {"encyclopedia_agent", "emotional_agent"},
     ToolName.IMAGE_RECOGNITION: {"encyclopedia_agent", "tutoring_agent"},
@@ -102,11 +105,7 @@ class ToolMatrix:
 
     def get_allowed_tools(self, agent: str) -> list[ToolName]:
         """List all tools the agent can use."""
-        return [
-            tool
-            for tool, agents in self._permissions.items()
-            if agent in agents
-        ]
+        return [tool for tool, agents in self._permissions.items() if agent in agents]
 
     def get_agent_for_tool(self, tool: ToolName) -> list[str]:
         """List all agents that can use a given tool."""
@@ -126,10 +125,7 @@ class ToolMatrix:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise the matrix."""
-        return {
-            tool.value: sorted(agents)
-            for tool, agents in self._permissions.items()
-        }
+        return {tool.value: sorted(agents) for tool, agents in self._permissions.items()}
 
 
 class ToolAccessChecker:
@@ -141,7 +137,11 @@ class ToolAccessChecker:
 
     def __init__(self, matrix: ToolMatrix | None = None) -> None:
         self._matrix = matrix or ToolMatrix()
-        self._checks: list[ToolAccess] = []   # audit log
+        # BE-AGENT-001: bounded audit log. A long-lived orchestrator
+        # (or the process-wide admin instance) would otherwise grow
+        # this list without bound; the deque caps it so a misuse can't
+        # exhaust memory. Oldest entries fall off when the cap is hit.
+        self._checks: deque[ToolAccess] = deque(maxlen=2000)
 
     @property
     def matrix(self) -> ToolMatrix:
@@ -167,8 +167,7 @@ class ToolAccessChecker:
             reason = f"agent '{agent}' is in allow-list for '{tool.value}'"
         else:
             reason = (
-                f"agent '{agent}' is NOT in allow-list for '{tool.value}' "
-                f"(PRD #54 matrix denial)"
+                f"agent '{agent}' is NOT in allow-list for '{tool.value}' (PRD #54 matrix denial)"
             )
 
         access = ToolAccess(
@@ -198,3 +197,22 @@ class ToolAccessChecker:
     def get_denied_attempts(self) -> list[ToolAccess]:
         """Get all denied tool access attempts (for the audit log)."""
         return [c for c in self._checks if not c.allowed]
+
+    def get_denied_attempts_since(self, since_count: int) -> list[ToolAccess]:
+        """Get denied attempts from the most recent ``since_count`` entries.
+
+        Useful for tail-style monitoring without having to re-scan the
+        full deque. Mirrors the existing :meth:`get_denied_attempts`
+        API but bounded by the tail.
+
+        Args:
+            since_count: How many of the most recent checks to scan.
+                Non-positive values return an empty list.
+
+        Returns:
+            The denied attempts within the tail (most recent first).
+        """
+        if since_count <= 0:
+            return []
+        tail = list(self._checks)[-since_count:]
+        return [c for c in tail if not c.allowed]
