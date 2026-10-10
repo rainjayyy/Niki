@@ -23,19 +23,18 @@ from niki.agents.emotion import (
     EmotionRecord,
     should_activate_treehole,
 )
-from niki.api._stub_llm import _StubLLM
+from niki.api._fallback_llm import FallbackLLM
 from niki.dashboard.service import DashboardService
 from niki.safety.input_gateway import InputSafetyGateway
-from niki.schemas.common import ChildInput
 
 router = APIRouter(
     prefix="/emotion",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "emotion",
             "description": ("Emotion Agent API endpoints — child-facing emotional support."),
         },
-    ],
+    ]
 )
 
 # ISS-02: a shared input gateway so self-harm / blacklisted topics
@@ -50,12 +49,12 @@ _baseline = EmotionBaseline()
 # Wire the production LLM via the factory — see encyclopedia.py
 from niki.infrastructure.llm.factory import (  # noqa: E402
     get_or_create_llm as _get_llm,
-    is_stub_mode as _is_stub,
+    is_fallback_mode as _is_stub,
 )
 
 # In stub mode, layer on the generic stub so dev / tests can still
 # exercise the pipeline without network access.
-_llm = _StubLLM() if _is_stub() else _get_llm()
+_llm = FallbackLLM() if _is_stub() else _get_llm()
 
 _orchestrator = EmotionAgent(
     llm=_llm,
@@ -91,7 +90,7 @@ async def express_emotion(
     as the orchestrator path.
     """
     text = payload.get("text", "")
-    child_age = int(payload.get("child_age", 7))
+    int(payload.get("child_age", 7))
 
     # ISS-02: safety gate before agent dispatch
     safety_verdict = await _input_gateway.check(text)
@@ -245,6 +244,7 @@ async def record_tutoring_event(
     """Record a tutoring event (for whitepaper generation)."""
     _dashboard.record_tutoring_event(
         child_id=payload["child_id"],
+        parent_id=parent.id,
         problem=payload["problem"],
         solved=bool(payload.get("solved", False)),
         safety_valve=bool(payload.get("safety_valve", False)),
@@ -264,6 +264,7 @@ async def record_knowledge_query(
     """Record a knowledge-base query."""
     _dashboard.record_knowledge_query(
         child_id=payload["child_id"],
+        parent_id=parent.id,
         question=payload["question"],
         topic=payload.get("topic", ""),
     )

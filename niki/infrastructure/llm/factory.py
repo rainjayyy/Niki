@@ -1,10 +1,10 @@
-"""LLM client factory — picks the real provider based on settings, falls back to a stub.
+"""LLM client factory — picks the real provider based on settings, falls back.
 
 Design:
 - When MINIMAX_API_KEY (or the configured primary provider's key) is set,
   the factory returns a real `MinimaxClient` (or whatever provider the
   `primary_llm_provider` setting names).
-- When no key is configured, returns a `_StubLLM` so the API still
+- When no key is configured, returns a `FallbackLLM` so the API still
   boots for local dev / tests / smoke checks.
 - `get_or_create_llm()` is a process-wide singleton; tests that need
   isolation use `reset_for_tests()`.
@@ -57,11 +57,11 @@ _lock = threading.Lock()
 _singleton: BaseLLMClient | None = None
 
 
-class _StubLLM(BaseLLMClient):
+class FallbackLLM(BaseLLMClient):
     """Trivial stub used when no real API key is configured.
 
     Returns a deterministic, safe response. Mirrors the
-    `niki.api._stub_llm._StubLLM` shape so agent code doesn't need
+    `niki.api._fallback_llm.FallbackLLM` shape so agent code doesn't need
     to special-case the absence of credentials.
     """
 
@@ -160,7 +160,7 @@ def _build_client(settings: Settings) -> BaseLLMClient:
             "enable real responses."
         ),
     )
-    return _StubLLM(
+    return FallbackLLM(
         api_key="",
         base_url="",
         model="stub-llm",
@@ -184,7 +184,7 @@ def get_or_create_llm() -> BaseLLMClient:
     return _singleton
 
 
-def is_stub_mode() -> bool:
+def is_fallback_mode() -> bool:
     """True when no real provider is wired — i.e. the factory returned
     the fallback stub. Endpoint modules use this to decide whether
     they should layer on a more domain-aware stub (e.g. the

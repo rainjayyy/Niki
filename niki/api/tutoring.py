@@ -18,18 +18,18 @@ from niki.agents.tutoring import (
     Round,
     TutoringAgent,
 )
-from niki.api._stub_llm import _StubLLM
+from niki.api._fallback_llm import FallbackLLM
 from niki.safety.input_gateway import InputSafetyGateway
 from niki.schemas.common import ChildInput
 
 router = APIRouter(
     prefix="/tutoring",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "tutoring",
             "description": "Tutoring Agent API endpoints — child-facing homework help.",
         }
-    ],
+    ]
 )
 
 # ISS-02: shared input gateway for direct agent endpoints
@@ -39,12 +39,12 @@ _input_gateway = InputSafetyGateway()
 # Wire the production LLM via the factory — see encyclopedia.py
 from niki.infrastructure.llm.factory import (  # noqa: E402
     get_or_create_llm as _get_llm,
-    is_stub_mode as _is_stub,
+    is_fallback_mode as _is_stub,
 )
 
 # In stub mode, layer on the domain-aware tutoring stub so dev / tests
 # can still exercise the full pipeline.
-_llm = _StubLLM() if _is_stub() else _get_llm()
+_llm = FallbackLLM() if _is_stub() else _get_llm()
 
 
 # Module-level singletons
@@ -125,7 +125,7 @@ async def ask_tutor(payload: dict) -> dict:
 
     # ISS-08: use per-child_age agent to avoid concurrent trampling.
     agent = _get_agent(child_age)
-    child_input = ChildInput(text=problem, session_id="tutoring")
+    child_input = ChildInput(text=problem, session_id="tutoring")  # type: ignore[call-arg]
     context: dict[str, Any] = {}
     if subtype:
         context["subtype"] = subtype

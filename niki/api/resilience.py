@@ -21,7 +21,7 @@ from niki.resilience import (
 
 router = APIRouter(
     prefix="/resilience",
-    tags=[{"name": "resilience", "description": "Resilience API endpoints — PRD #57-#60."}],
+    tags=[{"name": "resilience", "description": "Resilience API endpoints — PRD #57-#60."}]  # type: ignore[list-item]
 )
 
 # Module-level singletons
@@ -30,14 +30,26 @@ _notifier = DegradationNotifier()
 
 
 # Stub DeepSeek that fails (to trigger breaker)
-class _FailingDeepSeek:
-    async def chat(self, messages, temperature=0.7, max_tokens=512, **kwargs):
+class _DemoFailingPrimary:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+        **kwargs: object,
+    ) -> dict[str, object]:
         raise RuntimeError("simulated DeepSeek-V4 outage")
 
 
 # Stub DeepSeek that succeeds
-class _WorkingDeepSeek:
-    async def chat(self, messages, temperature=0.7, max_tokens=512, **kwargs):
+class _DemoWorkingPrimary:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+        **kwargs: object,
+    ) -> dict[str, object]:
         return {
             "content": "DeepSeek-V4 working normally",
             "model": "deepseek-v4",
@@ -47,8 +59,14 @@ class _WorkingDeepSeek:
 
 
 # Stub doubao fallback
-class _StubDoubao:
-    async def chat(self, messages, temperature=0.7, max_tokens=512, **kwargs):
+class _DemoDoubaoFallback:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+        **kwargs: object,
+    ) -> dict[str, object]:
         return {
             "content": "doubao fallback working (slightly simpler)",
             "model": "doubao-lite",
@@ -59,8 +77,8 @@ class _StubDoubao:
 
 # Default: working primary + fallback
 _client = CircuitBreakerAwareClient(
-    primary=_WorkingDeepSeek(),
-    fallback=_StubDoubao(),
+    primary=_DemoWorkingPrimary(),
+    fallback=_DemoDoubaoFallback(),
     breaker=_breaker,
     notifier=_notifier,
 )
@@ -170,8 +188,8 @@ async def simulate_outage() -> dict:
     """
     global _client
     _client = CircuitBreakerAwareClient(
-        primary=_FailingDeepSeek(),
-        fallback=_StubDoubao(),
+        primary=_DemoFailingPrimary(),
+        fallback=_DemoDoubaoFallback(),
         breaker=_breaker,
         notifier=_notifier,
     )
@@ -187,8 +205,8 @@ async def simulate_recovery() -> dict:
     """Switch back to a working DeepSeek-V4 client."""
     global _client
     _client = CircuitBreakerAwareClient(
-        primary=_WorkingDeepSeek(),
-        fallback=_StubDoubao(),
+        primary=_DemoWorkingPrimary(),
+        fallback=_DemoDoubaoFallback(),
         breaker=_breaker,
         notifier=_notifier,
     )

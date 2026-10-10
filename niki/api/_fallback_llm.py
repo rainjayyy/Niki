@@ -1,4 +1,4 @@
-"""Shared stub LLM for development + tests.
+"""Shared fallback LLM for development + tests.
 
 ISS-11: replaces 4 duplicate StubLLM classes scattered across the API
 modules. The shared stub is deterministic and safe — it never returns
@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 
-class _StubLLM:
+class FallbackLLM:
     """Deterministic stub LLM used by the API modules.
 
     Returns canned content that mimics the LLM's output for testing
@@ -36,10 +36,16 @@ class _StubLLM:
         }
 
 
-class _EncyclopediaStub(_StubLLM):
+class FallbackEncyclopediaLLM(FallbackLLM):
     """Stub for encyclopedia: returns the first KB hit content."""
 
-    async def chat(self, messages, temperature=0.7, max_tokens=512, **kwargs):
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+        **kwargs: object,
+    ) -> dict[str, Any]:
         user_msg = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"),
             "",
@@ -55,26 +61,6 @@ class _EncyclopediaStub(_StubLLM):
         return {
             "content": "嗯，Niki对这个也不太确定呢~",
             "model": "stub-encyclopedia",
-            "usage": {},
-            "finish_reason": "stop",
-        }
-
-
-class _TutoringStub(_StubLLM):
-    """Stub for tutoring: returns the guided-discovery prompt as-is."""
-
-    async def chat(self, messages, temperature=0.6, max_tokens=256, **kwargs):
-        user_msg = next(
-            (m["content"] for m in reversed(messages) if m["role"] == "user"),
-            "",
-        )
-        if "「" in user_msg and "」" in user_msg:
-            prompt = user_msg.split("「", 1)[1].split("」", 1)[0]
-        else:
-            prompt = "我们一起看看这道题~"
-        return {
-            "content": prompt,
-            "model": "stub-tutoring",
             "usage": {},
             "finish_reason": "stop",
         }

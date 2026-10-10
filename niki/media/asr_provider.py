@@ -7,7 +7,7 @@ The contract:
       or cloud (Alibaba / Tencent one-shot recognition).
 
 Two implementations ship:
-    - `MockASRProvider`  — default; deterministic, hash-based text for
+    - `FallbackASRProvider`  — default; deterministic, hash-based text for
                            testing and dev demos without external deps.
     - `ASRProvider`      — abstract base; production implementations
                            plug in here (BE-MEDIA-002-real).
@@ -99,7 +99,7 @@ _MOCK_PHRASES_ZH = [
 ]
 
 
-class MockASRProvider(ASRProvider):
+class FallbackASRProvider(ASRProvider):
     """Deterministic, no-deps ASR for PoC and tests."""
 
     async def transcribe(
@@ -210,7 +210,7 @@ def get_asr_provider() -> ASRProvider:
                 model=os.environ.get("ASR_MODEL", "whisper-1"),
             )
         else:
-            _provider = MockASRProvider()
+            _provider = FallbackASRProvider()
     return _provider
 
 

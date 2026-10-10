@@ -14,7 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from niki.agents.encyclopedia import EncyclopediaAgent
-from niki.api._stub_llm import _EncyclopediaStub
+from niki.api._fallback_llm import FallbackEncyclopediaLLM
 from niki.knowledge.fact_checker import FactChecker
 from niki.knowledge.knowledge_base import (
     DEFAULT_L1_ENTRIES,
@@ -26,17 +26,16 @@ from niki.tools import ToolAccessChecker, ToolMatrix
 
 router = APIRouter(
     prefix="/encyclopedia",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "encyclopedia",
             "description": ("Encyclopedia Agent API endpoints — child-facing knowledge Q&A."),
         },
-    ],
+    ]
 )
 
 # Module-level singletons
 _kb = KnowledgeBase()
-_fact_checker = FactChecker(_kb)
 # ISS-02: a shared input gateway so self-harm / blacklisted topics
 # trigger parent alert even when calling the agent directly (not via /chat).
 _input_gateway = InputSafetyGateway()
@@ -54,10 +53,19 @@ _tool_checker = ToolAccessChecker(ToolMatrix())
 # agent pipeline end-to-end without network access.
 from niki.infrastructure.llm.factory import (  # noqa: E402
     get_or_create_llm as _get_llm,
-    is_stub_mode as _is_stub,
+    is_fallback_mode as _is_stub,
 )
 
-_llm = _EncyclopediaStub() if _is_stub() else _get_llm()
+_llm = FallbackEncyclopediaLLM() if _is_stub() else _get_llm()
+# BE-FACT-LLM-JUDGE: in non-stub mode, hand the real LLM to
+# FactChecker so production uses the LLM judge by default. In
+# stub mode we leave ``llm_judge=None`` and the heuristic
+# overlap fallback is the only path — that keeps the dev
+# environment deterministic and matches the test contract.
+_fact_checker = FactChecker(
+    _kb,
+    llm_judge=_llm if not _is_stub() else None,
+)
 
 
 _agent = EncyclopediaAgent(
@@ -137,7 +145,7 @@ async def ask_question(payload: dict) -> dict:
     # ISS-08: use per-child_age cache to avoid concurrent requests
     # with different ages stepping on each other.
     agent = _get_agent(child_age)
-    child_input = ChildInput(text=question, session_id="encyclopedia")
+    child_input = ChildInput(text=question, session_id="encyclopedia")  # type: ignore[call-arg]
     output = await agent.invoke(child_input)
 
     return {

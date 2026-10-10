@@ -30,13 +30,12 @@ from niki.memory.short_term import (
 )
 from niki.metrics import get_registry
 from niki.middleware.rate_limit import limiter
-from typing import Annotated
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
 router = APIRouter(
     prefix="/chat",
-    tags=[{"name": "chat", "description": "SSE chat streaming endpoint (BE-RT-001)."}],
+    tags=[{"name": "chat", "description": "SSE chat streaming endpoint (BE-RT-001)."}]  # type: ignore[list-item]
 )
 
 

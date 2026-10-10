@@ -7,7 +7,7 @@ The contract:
       iFlytek), or mock.
 
 Two implementations ship:
-    - `MockTTSProvider`  — default; emits a syntactically-valid but
+    - `FallbackTTSProvider`  — default; emits a syntactically-valid but
                            silent WAV file. Deterministic on
                            (text, voice) so tests are reproducible.
     - `TTSProvider`      — abstract base; production implementations
@@ -19,7 +19,6 @@ to §6.3-style structured 503 responses.
 
 from __future__ import annotations
 
-import hashlib
 import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -130,7 +129,7 @@ def _make_silent_wav(text: str, speed: float) -> tuple[bytes, int]:
     return header + pcm, duration_ms
 
 
-class MockTTSProvider(TTSProvider):
+class FallbackTTSProvider(TTSProvider):
     """Deterministic TTS producing silent but structurally-valid WAV."""
 
     async def synthesize(
@@ -157,15 +156,102 @@ class MockTTSProvider(TTSProvider):
 # ---------------------------------------------------------------------------
 
 
-_provider: TTSProvider = MockTTSProvider()
+# ---------------------------------------------------------------------------
+# Edge TTS — Microsoft Edge neural voices (free, no API key)
+# ---------------------------------------------------------------------------
+
+_EDGE_TTS_VOICES = {
+    "gentle": "zh-CN-XiaoxiaoNeural",
+    "lively": "zh-CN-YunxiNeural",
+    "rigorous": "zh-CN-YunyangNeural",
+}
+_EDGE_TTS_DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
 
 
-def get_tts_provider() -> TTSProvider:
-    """Return the process-wide TTS provider (default: mock)."""
+class EdgeTTSProvider(TTSProvider):
+    """Real neural TTS via Microsoft Edge read-aloud.
+
+    Free, no API key required. Six child-friendly Mandarin voices.
+    Picks voice per persona. Streams MP3 bytes; mime_type=audio/mpeg.
+    Caches per (text, voice, speed, language).
+    """
+
+    def __init__(self, cache_size=64):
+        self._cache_size = cache_size
+        self._cache = {}
+
+    async def synthesize(
+        self,
+        text,
+        *,
+        voice="child_friendly",
+        speed=1.0,
+        language="zh-CN",
+    ):
+        if not text or not text.strip():
+            raise TTSError("EMPTY_TEXT", "Input text is empty")
+
+        edge_voice = _EDGE_TTS_VOICES.get(voice) or _EDGE_TTS_DEFAULT_VOICE
+        cache_key = (text, edge_voice, speed, language)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        rate_percent = int(round((speed - 1.0) * 100))
+        rate_str = f"{rate_percent:+d}%"
+        pitch_str = "+5Hz" if voice == "lively" else "+0Hz"
+
+        try:
+            import edge_tts
+            communicate = edge_tts.Communicate(
+                text,
+                voice=edge_voice,
+                rate=rate_str,
+                pitch=pitch_str,
+            )
+            chunks = []
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.append(chunk["data"])
+            if not chunks:
+                raise TTSError("EDGE_TTS_EMPTY", "edge-tts produced no audio")
+            audio = b"".join(chunks)
+        except TTSError:
+            raise
+        except Exception as exc:
+            raise TTSError("EDGE_TTS_FAILED", f"edge-tts error: {exc}") from exc
+
+        # zh-CN neural voices ~15 chars/sec at rate=+0%.
+        duration_ms = max(500, int(len(text) / max(0.1, 15.0 * speed) * 1000))
+
+        result = TTSResult(
+            audio=audio,
+            mime_type="audio/mpeg",
+            duration_ms=duration_ms,
+        )
+        if len(self._cache) >= self._cache_size:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[cache_key] = result
+        return result
+
+
+def _default_provider():
+    """Return EdgeTTSProvider when edge-tts is installed, else mock."""
+    try:
+        import edge_tts  # noqa: F401
+        return EdgeTTSProvider()
+    except Exception:
+        return FallbackTTSProvider()
+
+
+_provider = _default_provider()
+
+
+def get_tts_provider():
+    """Return the process-wide TTS provider."""
     return _provider
 
 
-def set_tts_provider(provider: TTSProvider) -> None:
+def set_tts_provider(provider):
     """Override the process-wide TTS provider (for tests / real swap)."""
     global _provider
     _provider = provider

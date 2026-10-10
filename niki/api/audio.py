@@ -17,7 +17,7 @@ from __future__ import annotations
 import base64
 import hashlib
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 
 from niki.media.asr_provider import (
     ASRError,
@@ -28,12 +28,11 @@ from niki.media.tts_provider import (
     get_tts_provider,
 )
 from niki.middleware.rate_limit import limiter
-from typing import Annotated
 from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 
 router = APIRouter(
-    prefix="/audio", tags=[{"name": "audio", "description": "Audio API endpoints (BE-MEDIA-002)."}]
+    prefix="/audio", tags=[{"name": "audio", "description": "Audio API endpoints (BE-MEDIA-002)."}]  # type: ignore[list-item]
 )
 
 # 5 MB hard cap — covers ~30s of wav@8kHz mono, ~1m of opus.

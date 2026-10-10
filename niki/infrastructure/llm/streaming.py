@@ -5,8 +5,8 @@ The contract:
     successive text tokens. Callers wrap the stream in SSE or
     WebSocket responses.
 
-Two implementations ship:
-    - `MockStreamingProvider` — default; deterministic word-by-word
+Implementations:
+    - `FallbackStreamingProvider` — default; deterministic word-by-word
       emission so tests are reproducible and demos feel real.
     - `StreamingLLMProvider`  — abstract base; production plug-in
                                 point for DeepSeek-V4 / doubao
@@ -14,6 +14,7 @@ Two implementations ship:
 """
 
 from __future__ import annotations
+from typing import Any
 
 import asyncio
 from abc import ABC, abstractmethod
@@ -57,7 +58,7 @@ class StreamingLLMProvider(ABC):
 # ---------------------------------------------------------------------------
 
 
-_MOCK_REPLIES = [
+_FALLBACK_REPLIES = [
     "嗯……这个问题很有意思呢。",
     "因为很久以前有一颗很大的小行星撞到了地球上。",
     "扬起的尘土挡住了阳光，植物枯死了。",
@@ -67,11 +68,11 @@ _MOCK_REPLIES = [
 ]
 
 
-class MockStreamingProvider(StreamingLLMProvider):
+class FallbackStreamingProvider(StreamingLLMProvider):
     """Deterministic mock that yields a fixed reply word by word.
 
     Defaults:
-      - reply: cycles through _MOCK_REPLIES (deterministic by session_id)
+      - reply: cycles through _FALLBACK_REPLIES (deterministic by session_id)
       - delay: 50 ms between chunks
       - words_per_chunk: 2
     """
@@ -96,8 +97,8 @@ class MockStreamingProvider(StreamingLLMProvider):
     ) -> AsyncIterator[str]:
         # Pick a reply deterministically by prompt length so the same
         # input always yields the same stream.
-        idx = (len(prompt) + (child_age or 0)) % len(_MOCK_REPLIES)
-        reply = _MOCK_REPLIES[idx]
+        idx = (len(prompt) + (child_age or 0)) % len(_FALLBACK_REPLIES)
+        reply = _FALLBACK_REPLIES[idx]
         # Character-level chunking — Chinese text lacks whitespace so
         # splitting on " " would yield a single chunk. We respect
         # words_per_chunk by slicing the unicode codepoints.
@@ -128,12 +129,12 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
     introduces itself as "MiniMax-M3" instead of Niki.
     """
 
-    def __init__(self, client=None) -> None:
+    def __init__(self, client: Any = None) -> None:
         # Lazy: resolve the factory singleton once, so tests can inject
         # their own client and so we share the connection pool.
         self._client = client
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         if self._client is not None:
             return self._client
         from niki.infrastructure.llm.factory import get_or_create_llm
@@ -153,7 +154,7 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
         # If the factory is in stub mode, fall back to the deterministic
         # mock so the SSE contract stays exercisable without a key.
         if getattr(client, "provider_name", "") == "stub":
-            async for chunk in MockStreamingProvider().stream(
+            async for chunk in FallbackStreamingProvider().stream(
                 prompt,
                 child_age=child_age,
                 persona=persona,
@@ -166,7 +167,16 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
             *(history or []),
             {"role": "user", "content": prompt},
         ]
-        async for chunk in client.stream(
+        # ISS-XX: MinimaxClient exposes streaming via chat_stream which
+        # returns the raw httpx response (NOT an async iterator).
+        # Adapter: iterate response.iter_lines() and extract text chunks.
+        chat_stream = getattr(client, "chat_stream", None) or getattr(client, "stream", None)
+        if chat_stream is None:
+            raise RuntimeError(
+                f"{type(client).__name__} has no streaming method "
+                "(expected .chat_stream() or .stream())"
+            )
+        response = await chat_stream(
             messages,
             temperature=0.7,
             max_tokens=1024,
@@ -174,8 +184,24 @@ class MinimaxStreamingProvider(StreamingLLMProvider):
                 persona=persona,
                 child_age=child_age,
             ),
-        ):
-            yield chunk
+        )
+        # response is an httpx.Response with iter_lines()
+        async for line in response.aiter_lines():
+            line = line.strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                import json as _json
+                obj = _json.loads(data)
+                delta = obj.get("choices", [{}])[0].get("delta", {})
+                content = delta.get("content")
+                if content:
+                    yield content
+            except Exception:
+                continue
 
 
 # Shared system-prompt builder for the raw streaming endpoint.
@@ -260,10 +286,10 @@ def _default_provider() -> StreamingLLMProvider:
     llm = get_or_create_llm()
     if getattr(llm, "provider_name", "") != "stub":
         return MinimaxStreamingProvider(client=llm)
-    return MockStreamingProvider()
+    return FallbackStreamingProvider()
 
 
-_DEFAULT_MOCK: StreamingLLMProvider = MockStreamingProvider()
+_DEFAULT_MOCK: StreamingLLMProvider = FallbackStreamingProvider()
 _provider: StreamingLLMProvider = _DEFAULT_MOCK
 
 
@@ -279,7 +305,7 @@ def get_streaming_provider() -> StreamingLLMProvider:
     if _provider is _DEFAULT_MOCK:
         # First access — decide real vs mock once, then cache.
         candidate = _default_provider()
-        if not isinstance(candidate, MockStreamingProvider):
+        if not isinstance(candidate, FallbackStreamingProvider):
             _provider = candidate
     return _provider
 
