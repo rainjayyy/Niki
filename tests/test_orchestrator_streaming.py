@@ -37,7 +37,7 @@ from niki.tools import ToolAccessChecker, ToolMatrix
 # ---------------------------------------------------------------------------
 
 
-class _StubLLMForStream:
+class FallbackLLMForStream:
     """Replies with KB tool_calls then a content answer. Records all calls."""
 
     def __init__(self, canned: list[dict[str, Any]]) -> None:
@@ -53,9 +53,9 @@ class _StubLLMForStream:
 
 def _make_orchestrator(
     llm_canned: list[dict[str, Any]],
-) -> tuple[ChatOrchestrator, _StubLLMForStream]:
+) -> tuple[ChatOrchestrator, FallbackLLMForStream]:
     """Build an orchestrator wired to the streaming stub LLM."""
-    llm = _StubLLMForStream(llm_canned)
+    llm = FallbackLLMForStream(llm_canned)
     orch = ChatOrchestrator(child_age=7, persona="gentle", llm=llm)
     return orch, llm
 
@@ -86,9 +86,7 @@ def _kb_tool_call(call_id: str, query: str, top_k: int = 1) -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": "knowledge_base.search",
-            "arguments": json.dumps(
-                {"query": query, "top_k": top_k}, ensure_ascii=False
-            ),
+            "arguments": json.dumps({"query": query, "top_k": top_k}, ensure_ascii=False),
         },
     }
 
@@ -102,9 +100,7 @@ class TestStreamHappyPath:
     """Happy path — input ok, intent routed, encyclopedia agent runs KB loop."""
 
     @pytest.mark.asyncio
-    async def test_stream_happy_path_phases(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_stream_happy_path_phases(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _enable_tool_use(monkeypatch)
         kb = KnowledgeBase()
         hits = kb.search("天空", top_k=1)
@@ -118,17 +114,11 @@ class TestStreamHappyPath:
         orch, _llm = _make_orchestrator(canned)
 
         events = await _collect(
-            orch.stream_chat(
-                "天空为什么蓝", session_id="i23_happy", child_age=7
-            )
+            orch.stream_chat("天空为什么蓝", session_id="i23_happy", child_age=7)
         )
 
         # Phase events present in expected order.
-        phase_names = [
-            e["name"]
-            for e in events
-            if e.get("kind") == "phase"
-        ]
+        phase_names = [e["name"] for e in events if e.get("kind") == "phase"]
         assert "input_safety_ok" in phase_names
         assert "routed" in phase_names
         assert "agent_start" in phase_names
@@ -156,9 +146,7 @@ class TestStreamToolCallPayloadShape:
     """tool_call / tool_result payloads carry the closed-enum shape."""
 
     @pytest.mark.asyncio
-    async def test_tool_call_event_payload_shape(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_tool_call_event_payload_shape(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _enable_tool_use(monkeypatch)
         kb = KnowledgeBase()
         hits = kb.search("天空", top_k=1)
@@ -171,9 +159,7 @@ class TestStreamToolCallPayloadShape:
         orch, _llm = _make_orchestrator(canned)
 
         events = await _collect(
-            orch.stream_chat(
-                "天空为什么蓝", session_id="i23_shape", child_age=7
-            )
+            orch.stream_chat("天空为什么蓝", session_id="i23_shape", child_age=7)
         )
 
         tool_call_evts = [e for e in events if e.get("kind") == "tool_call"]
@@ -184,9 +170,7 @@ class TestStreamToolCallPayloadShape:
         assert isinstance(tc["args"], dict)
         assert "query" in tc["args"]
 
-        tool_result_evts = [
-            e for e in events if e.get("kind") == "tool_result"
-        ]
+        tool_result_evts = [e for e in events if e.get("kind") == "tool_result"]
         assert tool_result_evts
         tr = tool_result_evts[0]
         assert tr["agent"] == "encyclopedia"
@@ -199,9 +183,7 @@ class TestStreamTokenIndexMonotonic:
     """All chunk token_index values strictly increase."""
 
     @pytest.mark.asyncio
-    async def test_stream_token_index_monotonic(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_stream_token_index_monotonic(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _enable_tool_use(monkeypatch)
         kb = KnowledgeBase()
         hits = kb.search("天空", top_k=1)
@@ -214,9 +196,7 @@ class TestStreamTokenIndexMonotonic:
         orch, _llm = _make_orchestrator(canned)
 
         events = await _collect(
-            orch.stream_chat(
-                "天空为什么蓝", session_id="i23_mono", child_age=7
-            )
+            orch.stream_chat("天空为什么蓝", session_id="i23_mono", child_age=7)
         )
 
         chunk_evts = [e for e in events if e.get("kind") == "chunk"]
@@ -244,14 +224,11 @@ class TestStreamParallelAgentDiscriminator:
         orch, _llm = _make_orchestrator(canned)
 
         events = await _collect(
-            orch.stream_chat(
-                "天空为什么蓝", session_id="i23_disc", child_age=7
-            )
+            orch.stream_chat("天空为什么蓝", session_id="i23_disc", child_age=7)
         )
 
         agent_starts = [
-            e for e in events
-            if e.get("kind") == "phase" and e.get("name") == "agent_start"
+            e for e in events if e.get("kind") == "phase" and e.get("name") == "agent_start"
         ]
         assert agent_starts
         for a in agent_starts:
@@ -263,9 +240,7 @@ class TestStreamCallbackExceptionDoesNotCrashAgent:
     """A misbehaving on_chunk must NOT bubble up; agent returns its output."""
 
     @pytest.mark.asyncio
-    async def test_callback_exception_isolated(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_callback_exception_isolated(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _enable_tool_use(monkeypatch)
         kb = KnowledgeBase()
         hits = kb.search("天空", top_k=1)
@@ -298,11 +273,7 @@ class TestStreamCallbackExceptionDoesNotCrashAgent:
 
         monkeypatch.setattr(EncyclopediaAgent, "invoke", wrapped)
 
-        events = await _collect(
-            orch.stream_chat(
-                "天空为什么蓝", session_id="i23_cb", child_age=7
-            )
-        )
+        events = await _collect(orch.stream_chat("天空为什么蓝", session_id="i23_cb", child_age=7))
 
         # Final event still arrived — agent didn't crash.
         final = next((e for e in events if e.get("kind") == "final"), None)
@@ -317,20 +288,14 @@ class TestStreamInputBlocked:
     async def test_stream_input_blocked_short_circuit(self) -> None:
         orch, _llm = _make_orchestrator([])
 
-        events = await _collect(
-            orch.stream_chat(
-                "我想杀了他", session_id="i23_block", child_age=9
-            )
-        )
+        events = await _collect(orch.stream_chat("我想杀了他", session_id="i23_block", child_age=9))
 
         kinds = [e.get("kind") for e in events]
         # No agent events when input is blocked.
         assert "tool_call" not in kinds
         assert "tool_result" not in kinds
 
-        phase_names = [
-            e["name"] for e in events if e.get("kind") == "phase"
-        ]
+        phase_names = [e["name"] for e in events if e.get("kind") == "phase"]
         assert "input_blocked" in phase_names
 
         final = next((e for e in events if e.get("kind") == "final"), None)
@@ -346,14 +311,10 @@ class TestStreamInputEscalation:
         orch, _llm = _make_orchestrator([])
 
         events = await _collect(
-            orch.stream_chat(
-                "我不想活了", session_id="i23_escalate", child_age=9
-            )
+            orch.stream_chat("我不想活了", session_id="i23_escalate", child_age=9)
         )
 
-        phase_names = [
-            e["name"] for e in events if e.get("kind") == "phase"
-        ]
+        phase_names = [e["name"] for e in events if e.get("kind") == "phase"]
         assert "input_escalation" in phase_names
 
         chunks = [e for e in events if e.get("kind") == "chunk"]
@@ -393,11 +354,7 @@ class TestStreamFlagOffUsesRawProvider:
             {"content": kb_text},
         ]
         orch, _llm = _make_orchestrator(canned)
-        events = await _collect(
-            orch.stream_chat(
-                "天空为什么蓝", session_id="i23_raw", child_age=7
-            )
-        )
+        events = await _collect(orch.stream_chat("天空为什么蓝", session_id="i23_raw", child_age=7))
         # The orchestrator emits events regardless of the flag.
         final = next((e for e in events if e.get("kind") == "final"), None)
         assert final is not None
@@ -407,9 +364,7 @@ class TestStreamFinalPayloadShape:
     """The ``final`` event payload matches the SSE wire contract."""
 
     @pytest.mark.asyncio
-    async def test_final_payload_shape(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_final_payload_shape(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _enable_tool_use(monkeypatch)
         kb = KnowledgeBase()
         hits = kb.search("天空", top_k=1)
@@ -421,9 +376,7 @@ class TestStreamFinalPayloadShape:
         orch, _llm = _make_orchestrator(canned)
 
         events = await _collect(
-            orch.stream_chat(
-                "天空为什么蓝", session_id="i23_final", child_age=7
-            )
+            orch.stream_chat("天空为什么蓝", session_id="i23_final", child_age=7)
         )
 
         final = next((e for e in events if e.get("kind") == "final"), None)

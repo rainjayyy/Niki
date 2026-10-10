@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from niki.infrastructure.llm.streaming import (
-    MockStreamingProvider,
+    FallbackStreamingProvider,
     StreamingLLMProvider,
     set_streaming_provider,
 )
@@ -20,7 +20,8 @@ from niki.main import create_app
 @pytest.fixture
 def client_with_fast_mock() -> TestClient:
     """Per-test fast mock to keep wall-clock low."""
-    class FastMock(MockStreamingProvider):
+
+    class FastMock(FallbackStreamingProvider):
         def __init__(self):
             super().__init__(delay_seconds=0.005, words_per_chunk=2)
 
@@ -68,9 +69,7 @@ class TestStreamHappyPath:
             ct = r.headers.get("content-type", "")
             assert ct.startswith("text/event-stream")
 
-    def test_yields_multiple_chunks_then_done(
-        self, client_with_fast_mock: TestClient
-    ) -> None:
+    def test_yields_multiple_chunks_then_done(self, client_with_fast_mock: TestClient) -> None:
         with client_with_fast_mock.stream(
             "POST",
             "/api/v1/chat/stream",
@@ -86,9 +85,7 @@ class TestStreamHappyPath:
         # final total_text equals concatenation of chunks
         assert final["total_text"] == "".join(chunks)
 
-    def test_deterministic_for_same_input(
-        self, client_with_fast_mock: TestClient
-    ) -> None:
+    def test_deterministic_for_same_input(self, client_with_fast_mock: TestClient) -> None:
         def _run_once(text: str) -> str:
             with client_with_fast_mock.stream(
                 "POST",
@@ -100,9 +97,7 @@ class TestStreamHappyPath:
 
         assert _run_once("恐龙") == _run_once("恐龙")
 
-    def test_token_indexes_are_monotonic(
-        self, client_with_fast_mock: TestClient
-    ) -> None:
+    def test_token_indexes_are_monotonic(self, client_with_fast_mock: TestClient) -> None:
         with client_with_fast_mock.stream(
             "POST",
             "/api/v1/chat/stream",
@@ -124,44 +119,34 @@ class TestStreamHappyPath:
 
 class TestStreamErrors:
     def test_empty_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
-        r = client_with_fast_mock.post(
-            "/api/v1/chat/stream", json={"text": ""}
-        )
+        r = client_with_fast_mock.post("/api/v1/chat/stream", json={"text": ""})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_whitespace_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
-        r = client_with_fast_mock.post(
-            "/api/v1/chat/stream", json={"text": "   \n  "}
-        )
+        r = client_with_fast_mock.post("/api/v1/chat/stream", json={"text": "   \n  "})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_missing_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
-        r = client_with_fast_mock.post(
-            "/api/v1/chat/stream", json={}
-        )
+        r = client_with_fast_mock.post("/api/v1/chat/stream", json={})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_too_long_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
-        r = client_with_fast_mock.post(
-            "/api/v1/chat/stream", json={"text": "x" * 1001}
-        )
+        r = client_with_fast_mock.post("/api/v1/chat/stream", json={"text": "x" * 1001})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "TEXT_TOO_LONG"
 
     def test_non_string_text_returns_400(self, client_with_fast_mock: TestClient) -> None:
-        r = client_with_fast_mock.post(
-            "/api/v1/chat/stream", json={"text": 123}
-        )
+        r = client_with_fast_mock.post("/api/v1/chat/stream", json={"text": 123})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
 
 class TestProviderUnit:
     async def test_mock_emits_at_least_one_chunk(self) -> None:
-        provider = MockStreamingProvider(delay_seconds=0.001, words_per_chunk=2)
+        provider = FallbackStreamingProvider(delay_seconds=0.001, words_per_chunk=2)
         chunks: list[str] = []
         async for c in provider.stream("hello", child_age=7, session_id="x"):
             chunks.append(c)
@@ -171,7 +156,7 @@ class TestProviderUnit:
 
     async def test_mock_skips_when_persona_set(self) -> None:
         # Deterministic by len(prompt)+child_age; same input -> same chunks.
-        provider = MockStreamingProvider(delay_seconds=0.001)
+        provider = FallbackStreamingProvider(delay_seconds=0.001)
         c1: list[str] = []
         async for c in provider.stream("abc", child_age=5):
             c1.append(c)
@@ -182,8 +167,8 @@ class TestProviderUnit:
 
     async def test_higher_words_per_chunk_yields_fewer_chunks(self) -> None:
         # Same text, larger chunk size ⇒ fewer chunks; same total.
-        slow = MockStreamingProvider(delay_seconds=0.001, words_per_chunk=1)
-        fast = MockStreamingProvider(delay_seconds=0.001, words_per_chunk=5)
+        slow = FallbackStreamingProvider(delay_seconds=0.001, words_per_chunk=1)
+        fast = FallbackStreamingProvider(delay_seconds=0.001, words_per_chunk=5)
         s: list[str] = []
         async for c in slow.stream("prompt"):
             s.append(c)
