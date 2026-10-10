@@ -1,0 +1,35 @@
+Copyright (c) 2026 Niki Project Authors. All rights reserved.
+
+This software and associated documentation files are proprietary
+and confidential. Unauthorized copying, distribution, modification,
+or use of this software, via any medium, is strictly prohibited.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+This is a child-safety-critical product (target users: ages 3-12).
+Production deployments MUST satisfy the following before processing
+any real child data:
+
+  1. A signed Parental Consent record (see niki/auth/consent.py).
+  2. A region-specific Privacy Policy presented to and acknowledged
+     by the parent at sign-up.
+  3. A documented Data Deletion workflow capable of completing within
+     30 days of a verified request (PRD-v2.0 #30-day cooling).
+  4. An independent Security review of the four-tier privacy classifier
+     (niki/safety/privacy_tier.py) and the AES-256-GCM treehole
+     encryption module (niki/treehole/encryption.py).
+  5. Local regulatory compliance (COPPA, GDPR-K, etc.) signed off by
+    qualified counsel.
+
+Deployments that fail any of the above are NOT AUTHORIZED to
+process real child data and may only be used for development,
+testing, or research under controlled conditions.
