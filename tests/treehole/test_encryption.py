@@ -84,6 +84,37 @@ class TestEncryption:
         assert e.decrypt(ct) == "test"
         del os.environ["AES_ENCRYPTION_KEY"]
 
+    def test_missing_env_fails_fast_in_production(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """BE-SEC-AES-FAIL-FAST: ``TreeholeEncryption()`` (no
+        explicit key) must fail fast when ``AES_ENCRYPTION_KEY``
+        is unset and ``NIKI_TEST_DEV_KEY`` is not enabled.
+        Previously this returned 32 zero bytes — a catastrophic
+        key-confusion bug that would have let any attacker
+        decrypt treehole payloads."""
+        monkeypatch.delenv("AES_ENCRYPTION_KEY", raising=False)
+        monkeypatch.delenv("NIKI_TEST_DEV_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="AES_ENCRYPTION_KEY"):
+            TreeholeEncryption()
+
+    def test_test_dev_key_fallback_uses_nonzero_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When ``NIKI_TEST_DEV_KEY=1`` is set, the fallback key
+        must be obviously fake (all-0xFF), never zero bytes —
+        this prevents accidentally shipping a zero-byte key
+        alongside a real key rotation."""
+        monkeypatch.delenv("AES_ENCRYPTION_KEY", raising=False)
+        monkeypatch.setenv("NIKI_TEST_DEV_KEY", "1")
+        e = TreeholeEncryption()
+        assert e._key == b"\xff" * 32  # noqa: SLF001
+        # Sanity: dev key must NOT be all zeros.
+        assert e._key != b"\x00" * 32  # noqa: SLF001
+
+    def test_wrong_length_hex_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """64 hex chars = 32 bytes is required. Anything else
+        must raise with a clear error."""
+        monkeypatch.setenv("AES_ENCRYPTION_KEY", "A" * 60)  # 30 bytes
+        with pytest.raises(ValueError, match="32 bytes"):
+            TreeholeEncryption()
+
     def test_key_rotation(self, encryption: TreeholeEncryption) -> None:
         new = encryption.rotate_key(b"N" * 32)
         # New instance has different key — old ciphertexts cannot decrypt

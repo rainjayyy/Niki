@@ -25,9 +25,7 @@ def _capturing_dispatcher() -> tuple[AsyncMock, object]:
 class TestAuditLoggerAlerting:
     async def test_below_threshold_no_alert(self) -> None:
         repo = InMemoryAuthAuditLogRepository()
-        tracker = ViolationRateTracker(
-            window_seconds=300, burst_count=3
-        )
+        tracker = ViolationRateTracker(window_seconds=300, burst_count=3)
         dispatcher_mock, _ = _capturing_dispatcher()
         logger = AuthAuditLogger(
             repo=repo,
@@ -48,9 +46,7 @@ class TestAuditLoggerAlerting:
 
     async def test_at_threshold_fires_alert(self) -> None:
         repo = InMemoryAuthAuditLogRepository()
-        tracker = ViolationRateTracker(
-            window_seconds=300, burst_count=3
-        )
+        tracker = ViolationRateTracker(window_seconds=300, burst_count=3)
         dispatcher_mock, _ = _capturing_dispatcher()
         logger = AuthAuditLogger(
             repo=repo,
@@ -71,9 +67,7 @@ class TestAuditLoggerAlerting:
         # Note: AsyncMock's child attribute `.dispatch` is itself an
         # AsyncMock — that's where the await registers.
         dispatcher_mock.dispatch.assert_awaited_once()
-        alert: SecurityAlert = (
-            dispatcher_mock.dispatch.await_args.args[0]
-        )
+        alert: SecurityAlert = dispatcher_mock.dispatch.await_args.args[0]
         assert alert.alert_type == "lateral_auth_burst"
         assert alert.severity == "critical"
         assert alert.actor_parent_id == "p1"
@@ -83,9 +77,7 @@ class TestAuditLoggerAlerting:
 
     async def test_separate_actors_independent_threshold(self) -> None:
         repo = InMemoryAuthAuditLogRepository()
-        tracker = ViolationRateTracker(
-            window_seconds=300, burst_count=3
-        )
+        tracker = ViolationRateTracker(window_seconds=300, burst_count=3)
         dispatcher_mock, _ = _capturing_dispatcher()
         logger = AuthAuditLogger(
             repo=repo,
@@ -96,12 +88,18 @@ class TestAuditLoggerAlerting:
         # p1 fires 3 violations, p2 fires 1.
         for _ in range(3):
             await logger.log_violation(
-                "x", actor_parent_id="p1",
-                reason="r", endpoint="POST /x", method="POST",
+                "x",
+                actor_parent_id="p1",
+                reason="r",
+                endpoint="POST /x",
+                method="POST",
             )
         await logger.log_violation(
-            "x", actor_parent_id="p2",
-            reason="r", endpoint="POST /x", method="POST",
+            "x",
+            actor_parent_id="p2",
+            reason="r",
+            endpoint="POST /x",
+            method="POST",
         )
 
         # Exactly one alert fired, attributed to p1.
@@ -112,9 +110,7 @@ class TestAuditLoggerAlerting:
     async def test_info_event_does_not_trigger_alert(self) -> None:
         """Non-violation events must NOT feed the rate tracker."""
         repo = InMemoryAuthAuditLogRepository()
-        tracker = ViolationRateTracker(
-            window_seconds=300, burst_count=3
-        )
+        tracker = ViolationRateTracker(window_seconds=300, burst_count=3)
         dispatcher_mock, _ = _capturing_dispatcher()
         logger = AuthAuditLogger(
             repo=repo,
@@ -138,13 +134,9 @@ class TestAuditLoggerAlerting:
         """A broken dispatcher must not prevent subsequent
         audit logs from being recorded."""
         repo = InMemoryAuthAuditLogRepository()
-        tracker = ViolationRateTracker(
-            window_seconds=300, burst_count=3
-        )
+        tracker = ViolationRateTracker(window_seconds=300, burst_count=3)
 
-        broken_dispatcher = AsyncMock(
-            side_effect=RuntimeError("webhook down")
-        )
+        broken_dispatcher = AsyncMock(side_effect=RuntimeError("webhook down"))
         logger = AuthAuditLogger(
             repo=repo,
             rate_tracker=tracker,
@@ -153,8 +145,11 @@ class TestAuditLoggerAlerting:
 
         for _ in range(3):
             await logger.log_violation(
-                "x", actor_parent_id="p1",
-                reason="r", endpoint="POST /x", method="POST",
+                "x",
+                actor_parent_id="p1",
+                reason="r",
+                endpoint="POST /x",
+                method="POST",
             )
         # Repo still got the 3 events.
         rows = await repo.list_recent()
@@ -162,9 +157,7 @@ class TestAuditLoggerAlerting:
 
     async def test_alert_payload_contains_event_context(self) -> None:
         repo = InMemoryAuthAuditLogRepository()
-        tracker = ViolationRateTracker(
-            window_seconds=300, burst_count=2
-        )
+        tracker = ViolationRateTracker(window_seconds=300, burst_count=2)
         dispatcher_mock, _ = _capturing_dispatcher()
         logger = AuthAuditLogger(
             repo=repo,
@@ -194,9 +187,7 @@ class TestAuditLoggerAlerting:
         )
 
         dispatcher_mock.dispatch.assert_awaited_once()
-        alert: SecurityAlert = (
-            dispatcher_mock.dispatch.await_args.args[0]
-        )
+        alert: SecurityAlert = dispatcher_mock.dispatch.await_args.args[0]
         assert alert.actor_parent_id == "p_actor"
         assert alert.target_parent_id == "p_victim"
         assert alert.target_child_id == "c_victim"

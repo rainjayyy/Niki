@@ -30,8 +30,10 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     def fake():
         return ParentAccount(
-            id="p1", name="Test",
-            id_number_masked="****", phone_masked="****",
+            id="p1",
+            name="Test",
+            id_number_masked="****",
+            phone_masked="****",
         )
 
     app.dependency_overrides[get_current_parent] = fake
@@ -57,15 +59,15 @@ class TestRegister:
         # push_token is NEVER echoed back
         assert "push_token" not in body
 
-    def test_register_reregister_updates_token(
-        self, client: TestClient
-    ) -> None:
+    def test_register_reregister_updates_token(self, client: TestClient) -> None:
         # First registration
         r1 = client.post(
             "/api/v1/push/register",
             json={
-                "device_id": "d-2", "channel": "fcm",
-                "push_token": "old-tok", "platform": "android",
+                "device_id": "d-2",
+                "channel": "fcm",
+                "push_token": "old-tok",
+                "platform": "android",
             },
         )
         id1 = r1.json()["id"]
@@ -73,8 +75,10 @@ class TestRegister:
         r2 = client.post(
             "/api/v1/push/register",
             json={
-                "device_id": "d-2", "channel": "hms",
-                "push_token": "new-tok", "platform": "android",
+                "device_id": "d-2",
+                "channel": "hms",
+                "push_token": "new-tok",
+                "platform": "android",
             },
         )
         assert r2.status_code == 200
@@ -87,22 +91,20 @@ class TestRegister:
         assert listing["count"] == 1
         assert listing["devices"][0]["device_id"] == "d-2"
 
-    def test_register_invalid_channel_returns_400(
-        self, client: TestClient
-    ) -> None:
+    def test_register_invalid_channel_returns_400(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/push/register",
             json={
-                "device_id": "d-3", "channel": "telegram",
-                "push_token": "tok", "platform": "ios",
+                "device_id": "d-3",
+                "channel": "telegram",
+                "push_token": "tok",
+                "platform": "ios",
             },
         )
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_CHANNEL"
 
-    def test_register_invalid_device_id_returns_400(
-        self, client: TestClient
-    ) -> None:
+    def test_register_invalid_device_id_returns_400(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/push/register",
             json={
@@ -115,14 +117,14 @@ class TestRegister:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_DEVICE_ID"
 
-    def test_register_missing_token_returns_400(
-        self, client: TestClient
-    ) -> None:
+    def test_register_missing_token_returns_400(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/push/register",
             json={
-                "device_id": "d-4", "channel": "apns",
-                "push_token": "", "platform": "ios",
+                "device_id": "d-4",
+                "channel": "apns",
+                "push_token": "",
+                "platform": "ios",
             },
         )
         assert r.status_code == 400
@@ -134,13 +136,13 @@ class TestUnregister:
         client.post(
             "/api/v1/push/register",
             json={
-                "device_id": "d-u1", "channel": "apns",
-                "push_token": "tok-u1", "platform": "ios",
+                "device_id": "d-u1",
+                "channel": "apns",
+                "push_token": "tok-u1",
+                "platform": "ios",
             },
         )
-        r = client.post(
-            "/api/v1/push/unregister", json={"device_id": "d-u1"}
-        )
+        r = client.post("/api/v1/push/unregister", json={"device_id": "d-u1"})
         assert r.status_code == 200
         assert r.json()["unregistered"] is True
         assert r.json()["removed"] == 1
@@ -152,19 +154,17 @@ class TestUnregister:
         client.post(
             "/api/v1/push/register",
             json={
-                "device_id": "d-u2", "channel": "fcm",
-                "push_token": "tok-u2", "platform": "android",
+                "device_id": "d-u2",
+                "channel": "fcm",
+                "push_token": "tok-u2",
+                "platform": "android",
             },
         )
-        r = client.post(
-            "/api/v1/push/unregister", json={"push_token": "tok-u2"}
-        )
+        r = client.post("/api/v1/push/unregister", json={"push_token": "tok-u2"})
         assert r.status_code == 200
         assert r.json()["removed"] == 1
 
-    def test_unregister_unknown_device_is_idempotent(
-        self, client: TestClient
-    ) -> None:
+    def test_unregister_unknown_device_is_idempotent(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/push/unregister",
             json={"device_id": "never-registered"},
@@ -173,19 +173,13 @@ class TestUnregister:
         assert r.json()["unregistered"] is True
         assert r.json()["removed"] == 0
 
-    def test_unregister_neither_id_nor_token_returns_400(
-        self, client: TestClient
-    ) -> None:
-        r = client.post(
-            "/api/v1/push/unregister", json={}
-        )
+    def test_unregister_neither_id_nor_token_returns_400(self, client: TestClient) -> None:
+        r = client.post("/api/v1/push/unregister", json={})
         assert r.status_code == 400
 
 
 class TestListDevices:
-    def test_list_returns_only_callers_devices(
-        self, client: TestClient
-    ) -> None:
+    def test_list_returns_only_callers_devices(self, client: TestClient) -> None:
         # Register two devices
         for i in range(2):
             client.post(
@@ -203,9 +197,7 @@ class TestListDevices:
         for dev in listing["devices"]:
             assert "push_token" not in dev
 
-    def test_list_empty_when_none_registered(
-        self, client: TestClient
-    ) -> None:
+    def test_list_empty_when_none_registered(self, client: TestClient) -> None:
         listing = client.get("/api/v1/push/devices").json()
         assert listing == {"count": 0, "devices": []}
 
@@ -229,18 +221,12 @@ class TestPrefs:
         assert body["quiet_start"] == 22
         assert body["quiet_end"] == 7
 
-    def test_patch_invalid_quiet_hour_returns_400(
-        self, client: TestClient
-    ) -> None:
-        r = client.patch(
-            "/api/v1/push/prefs", json={"quiet_start": 99}
-        )
+    def test_patch_invalid_quiet_hour_returns_400(self, client: TestClient) -> None:
+        r = client.patch("/api/v1/push/prefs", json={"quiet_start": 99})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_QUIET_HOUR"
 
-    def test_patch_invalid_channels_returns_400(
-        self, client: TestClient
-    ) -> None:
+    def test_patch_invalid_channels_returns_400(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={"enabled_channels": ["apns", "wechat"]},
@@ -249,24 +235,16 @@ class TestPrefs:
         assert r.json()["error"]["code"] == "INVALID_ENABLED_CHANNELS"
 
     def test_patch_high_risk_only(self, client: TestClient) -> None:
-        r = client.patch(
-            "/api/v1/push/prefs", json={"high_risk_only": True}
-        )
+        r = client.patch("/api/v1/push/prefs", json={"high_risk_only": True})
         assert r.status_code == 200
         body = r.json()
         assert body["high_risk_only"] is True
         # Other fields preserved as defaults
         assert body["quiet_start"] is None
 
-    def test_patch_partial_preserves_other_fields(
-        self, client: TestClient
-    ) -> None:
+    def test_patch_partial_preserves_other_fields(self, client: TestClient) -> None:
         # Set quiet_start first
-        client.patch(
-            "/api/v1/push/prefs", json={"quiet_start": 22}
-        )
+        client.patch("/api/v1/push/prefs", json={"quiet_start": 22})
         # Then patch only high_risk_only — quiet_start preserved
-        r = client.patch(
-            "/api/v1/push/prefs", json={"high_risk_only": True}
-        )
+        r = client.patch("/api/v1/push/prefs", json={"high_risk_only": True})
         assert r.json()["quiet_start"] == 22

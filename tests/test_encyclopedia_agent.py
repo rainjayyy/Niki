@@ -11,7 +11,7 @@ from niki.knowledge.knowledge_base import KnowledgeBase
 from niki.schemas.common import ChildInput
 
 
-class _StubLLM:
+class FallbackLLM:
     """Deterministic LLM stub that paraphrases the top KB hit."""
 
     async def chat(
@@ -35,7 +35,7 @@ def agent() -> EncyclopediaAgent:
     kb = KnowledgeBase()
     fact_checker = FactChecker(kb)
     return EncyclopediaAgent(
-        llm=_StubLLM(),
+        llm=FallbackLLM(),
         knowledge_base=kb,
         fact_checker=fact_checker,
         persona="gentle",
@@ -112,7 +112,7 @@ class TestEncyclopediaAgentAgeAdaptation:
         kb = KnowledgeBase()
         fact_checker = FactChecker(kb)
         agent = EncyclopediaAgent(
-            llm=_StubLLM(),
+            llm=FallbackLLM(),
             knowledge_base=kb,
             fact_checker=fact_checker,
             persona="gentle",
@@ -127,7 +127,7 @@ class TestEncyclopediaAgentAgeAdaptation:
         kb = KnowledgeBase()
         fact_checker = FactChecker(kb)
         agent = EncyclopediaAgent(
-            llm=_StubLLM(),
+            llm=FallbackLLM(),
             knowledge_base=kb,
             fact_checker=fact_checker,
             persona="gentle",

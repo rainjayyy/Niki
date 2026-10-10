@@ -62,9 +62,7 @@ def service(repo: InMemoryAuditLogRepository) -> AuditLogService:
 
 
 @pytest.fixture
-def client(
-    repo: InMemoryAuditLogRepository, monkeypatch: pytest.MonkeyPatch
-) -> TestClient:
+def client(repo: InMemoryAuditLogRepository, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """TestClient bound to parent id `p_audit`.
 
     Overrides `get_current_parent` directly (rather than minting a
@@ -140,10 +138,7 @@ class TestLogEventCreatesRow:
         rows = await repo.list_events()
         by_type = {r["event_type"]: r for r in rows}
         assert by_type[EVENT_SAFETY_BLOCK]["severity"] == SEVERITY_WARNING
-        assert (
-            by_type[EVENT_HIGH_RISK_RECORDED]["severity"]
-            == SEVERITY_CRITICAL
-        )
+        assert by_type[EVENT_HIGH_RISK_RECORDED]["severity"] == SEVERITY_CRITICAL
 
     @pytest.mark.asyncio
     async def test_bad_severity_is_swallowed_not_raised(
@@ -208,18 +203,14 @@ class TestAdminAuditEndpoint:
         import asyncio
 
         async def seed() -> None:
-            await service.log_event(
-                EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR
-            )
+            await service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
             await service.log_event(
                 EVENT_SAFETY_BLOCK,
                 severity=SEVERITY_WARNING,
                 actor_parent_id=ACTOR,
             )
             # Another parent's row — must NOT leak into the response.
-            await service.log_event(
-                EVENT_CONSENT_SIGNED, actor_parent_id="p_other"
-            )
+            await service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id="p_other")
 
         asyncio.run(seed())
 
@@ -247,38 +238,28 @@ class TestAdminAuditEndpoint:
         self, client: TestClient, repo: InMemoryAuditLogRepository
     ) -> None:
         """v1 scoping: asking for someone else's history is refused."""
-        resp = client.get(
-            "/api/v1/admin/audit", params={"actor_parent_id": "p_other"}
-        )
+        resp = client.get("/api/v1/admin/audit", params={"actor_parent_id": "p_other"})
         assert resp.status_code == 403
         assert resp.json()["error"]["code"] == "FORBIDDEN"
 
     def test_own_id_is_allowed_explicitly(
         self, client: TestClient, repo: InMemoryAuditLogRepository
     ) -> None:
-        resp = client.get(
-            "/api/v1/admin/audit", params={"actor_parent_id": ACTOR}
-        )
+        resp = client.get("/api/v1/admin/audit", params={"actor_parent_id": ACTOR})
         assert resp.status_code == 200
 
-    def test_limit_is_capped(
-        self, client: TestClient, repo: InMemoryAuditLogRepository
-    ) -> None:
+    def test_limit_is_capped(self, client: TestClient, repo: InMemoryAuditLogRepository) -> None:
         resp = client.get("/api/v1/admin/audit", params={"limit": 5000})
         assert resp.status_code == 400
 
-    def test_limit_applies(
-        self, client: TestClient, repo: InMemoryAuditLogRepository
-    ) -> None:
+    def test_limit_applies(self, client: TestClient, repo: InMemoryAuditLogRepository) -> None:
         import asyncio
 
         service = get_audit_log_service()
 
         async def seed() -> None:
             for _ in range(5):
-                await service.log_event(
-                    EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR
-                )
+                await service.log_event(EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR)
 
         asyncio.run(seed())
         resp = client.get("/api/v1/admin/audit", params={"limit": 2})
@@ -294,23 +275,15 @@ class TestAdminAuditEndpoint:
 class TestEventTypeFilter:
     """`?event_type=` narrows to a single event class."""
 
-    def test_event_type_filters(
-        self, client: TestClient, repo: InMemoryAuditLogRepository
-    ) -> None:
+    def test_event_type_filters(self, client: TestClient, repo: InMemoryAuditLogRepository) -> None:
         import asyncio
 
         service = get_audit_log_service()
 
         async def seed() -> None:
-            await service.log_event(
-                EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR
-            )
-            await service.log_event(
-                EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR
-            )
-            await service.log_event(
-                EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR
-            )
+            await service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
+            await service.log_event(EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR)
+            await service.log_event(EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR)
 
         asyncio.run(seed())
 
@@ -322,9 +295,7 @@ class TestEventTypeFilter:
         body = resp.json()
         assert body["event_type_filter"] == EVENT_SAFETY_BLOCK
         assert body["count"] == 2
-        assert {e["event_type"] for e in body["events"]} == {
-            EVENT_SAFETY_BLOCK
-        }
+        assert {e["event_type"] for e in body["events"]} == {EVENT_SAFETY_BLOCK}
 
     def test_unknown_event_type_returns_empty(
         self, client: TestClient, repo: InMemoryAuditLogRepository
@@ -332,9 +303,7 @@ class TestEventTypeFilter:
         import asyncio
 
         service = get_audit_log_service()
-        asyncio.run(
-            service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
-        )
+        asyncio.run(service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR))
         resp = client.get(
             "/api/v1/admin/audit",
             params={"event_type": "no_such_event"},
@@ -357,14 +326,10 @@ class TestSinceFilter:
         import asyncio
 
         service = get_audit_log_service()
-        asyncio.run(
-            service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
-        )
+        asyncio.run(service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR))
 
         future = datetime.now(timezone.utc) + timedelta(days=1)
-        resp = client.get(
-            "/api/v1/admin/audit", params={"since": future.isoformat()}
-        )
+        resp = client.get("/api/v1/admin/audit", params={"since": future.isoformat()})
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
 
@@ -374,14 +339,10 @@ class TestSinceFilter:
         import asyncio
 
         service = get_audit_log_service()
-        asyncio.run(
-            service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
-        )
+        asyncio.run(service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR))
 
         past = datetime.now(timezone.utc) - timedelta(days=1)
-        resp = client.get(
-            "/api/v1/admin/audit", params={"since": past.isoformat()}
-        )
+        resp = client.get("/api/v1/admin/audit", params={"since": past.isoformat()})
         assert resp.status_code == 200
         body = resp.json()
         assert body["count"] == 1
@@ -394,12 +355,8 @@ class TestSinceFilter:
         import asyncio
 
         service = get_audit_log_service()
-        asyncio.run(
-            service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
-        )
-        resp = client.get(
-            "/api/v1/admin/audit", params={"since": "2020-01-01"}
-        )
+        asyncio.run(service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR))
+        resp = client.get("/api/v1/admin/audit", params={"since": "2020-01-01"})
         assert resp.status_code == 200
         assert resp.json()["count"] == 1
 
@@ -407,9 +364,7 @@ class TestSinceFilter:
     async def test_repo_since_boundary_is_inclusive(
         self, service: AuditLogService, repo: InMemoryAuditLogRepository
     ) -> None:
-        await service.log_event(
-            EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR
-        )
+        await service.log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
         row = (await repo.list_events())[0]
         # since == the row's own timestamp keeps the row.
         assert len(await repo.list_events(since=row["created_at"])) == 1
@@ -509,9 +464,7 @@ class TestCrossDomainWiring:
                 },
             ),
         ):
-            step_resp = client.post(
-                f"/api/v1/auth/signup/{step}", json=payload
-            )
+            step_resp = client.post(f"/api/v1/auth/signup/{step}", json=payload)
             assert step_resp.status_code == 200, step_resp.text
 
         consent = client.post(
@@ -528,9 +481,7 @@ class TestCrossDomainWiring:
         # directly rather than through the ACTOR-scoped endpoint.
         import asyncio
 
-        rows = asyncio.run(
-            repo.list_events(event_type=EVENT_CONSENT_SIGNED)
-        )
+        rows = asyncio.run(repo.list_events(event_type=EVENT_CONSENT_SIGNED))
         assert len(rows) == 1
         row = rows[0]
         assert row["actor_parent_id"] == parent_id
@@ -543,9 +494,7 @@ class TestCrossDomainWiring:
     ) -> None:
         import asyncio
 
-        send = client.post(
-            "/api/v1/auth/sms/send", json={"phone": "13800138222"}
-        )
+        send = client.post("/api/v1/auth/sms/send", json={"phone": "13800138222"})
         assert send.status_code == 200
 
         sms_rows = asyncio.run(repo.list_events(event_type=EVENT_SMS_SENT))
@@ -564,9 +513,7 @@ class TestCrossDomainWiring:
         )
         assert login.status_code == 200
 
-        login_rows = asyncio.run(
-            repo.list_events(event_type=EVENT_LOGIN_SUCCESS)
-        )
+        login_rows = asyncio.run(repo.list_events(event_type=EVENT_LOGIN_SUCCESS))
         assert len(login_rows) == 1
         assert login_rows[0]["actor_parent_id"] == login.json()["parent_id"]
 
@@ -606,9 +553,7 @@ class TestAuthAuditLogsUnbroken:
         assert "metadata" not in auth_rows[0]
 
         # 2. And the unified table mirrors it for the cross-domain view.
-        unified = await repo.list_events(
-            event_type="lateral_auth_violation"
-        )
+        unified = await repo.list_events(event_type="lateral_auth_violation")
         assert len(unified) == 1
         assert unified[0]["actor_parent_id"] == ACTOR
         assert unified[0]["target_child_id"] == "child-x"
@@ -621,17 +566,9 @@ class TestAuthAuditLogsUnbroken:
         import asyncio
 
         auth_repo = get_auth_audit_log_repository()
-        asyncio.run(
-            auth_repo.add(
-                AuthAuditEventFactory(actor_parent_id=ACTOR)
-            )
-        )
+        asyncio.run(auth_repo.add(AuthAuditEventFactory(actor_parent_id=ACTOR)))
         # A unified-only row must NOT show up on the legacy endpoint.
-        asyncio.run(
-            get_audit_log_service().log_event(
-                EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR
-            )
-        )
+        asyncio.run(get_audit_log_service().log_event(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR))
 
         resp = client.get("/api/v1/auth/audit/recent")
         assert resp.status_code == 200
@@ -663,28 +600,15 @@ class TestRepositoryContract:
     """Direct repo assertions the API tests can't reach."""
 
     @pytest.mark.asyncio
-    async def test_count_respects_filters(
-        self, repo: InMemoryAuditLogRepository
-    ) -> None:
-        await repo.add(
-            AuditEvent(EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR)
-        )
-        await repo.add(
-            AuditEvent(EVENT_SAFETY_BLOCK, actor_parent_id="p_other")
-        )
-        await repo.add(
-            AuditEvent(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR)
-        )
+    async def test_count_respects_filters(self, repo: InMemoryAuditLogRepository) -> None:
+        await repo.add(AuditEvent(EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR))
+        await repo.add(AuditEvent(EVENT_SAFETY_BLOCK, actor_parent_id="p_other"))
+        await repo.add(AuditEvent(EVENT_CONSENT_SIGNED, actor_parent_id=ACTOR))
 
         assert await repo.count() == 3
         assert await repo.count(event_type=EVENT_SAFETY_BLOCK) == 2
         assert await repo.count(actor_parent_id=ACTOR) == 2
-        assert (
-            await repo.count(
-                event_type=EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR
-            )
-            == 1
-        )
+        assert await repo.count(event_type=EVENT_SAFETY_BLOCK, actor_parent_id=ACTOR) == 1
 
     @pytest.mark.asyncio
     async def test_list_is_insertion_ordered_newest_first(
@@ -703,9 +627,7 @@ class TestRepositoryContract:
         assert [r["reason"] for r in rows] == ["4", "3", "2", "1", "0"]
 
     @pytest.mark.asyncio
-    async def test_internal_seq_is_not_leaked(
-        self, repo: InMemoryAuditLogRepository
-    ) -> None:
+    async def test_internal_seq_is_not_leaked(self, repo: InMemoryAuditLogRepository) -> None:
         await repo.add(AuditEvent(EVENT_SAFETY_BLOCK))
         assert "_seq" not in (await repo.list_events())[0]
 
@@ -719,9 +641,7 @@ class TestRepositoryContract:
 
     def test_singleton_default_is_in_memory(self) -> None:
         set_audit_log_repository(None)  # type: ignore[arg-type]
-        assert isinstance(
-            get_audit_log_repository(), InMemoryAuditLogRepository
-        )
+        assert isinstance(get_audit_log_repository(), InMemoryAuditLogRepository)
 
 
 # ---------------------------------------------------------------------------
@@ -754,9 +674,7 @@ class TestModelShape:
     def test_composite_indexes(self) -> None:
         from niki.db.base import Base
 
-        names = {
-            i.name for i in Base.metadata.tables["audit_logs"].indexes
-        }
+        names = {i.name for i in Base.metadata.tables["audit_logs"].indexes}
         assert "ix_audit_log_actor_time" in names
         assert "ix_audit_log_event_time" in names
 

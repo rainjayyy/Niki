@@ -74,8 +74,10 @@ def repo() -> InMemoryDashboardRepository:
 def client() -> TestClient:
     app = create_app()
     app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-        id="p-1", name="T",
-        id_number_masked="****", phone_masked="****",
+        id="p-1",
+        name="T",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 
@@ -84,8 +86,10 @@ def client() -> TestClient:
 def client_other_parent() -> TestClient:
     app = create_app()
     app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-        id="p-other", name="Other",
-        id_number_masked="****", phone_masked="****",
+        id="p-other",
+        name="Other",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 
@@ -184,7 +188,8 @@ class TestCursorPagination:
         # DESC order is deterministic.
         for i in range(10):
             _make_alert(
-                repo, "p-1",
+                repo,
+                "p-1",
                 severity="info",
                 created_offset=timedelta(seconds=i * 10),
             )
@@ -362,9 +367,7 @@ class TestMarkRead:
         # Insert an alert that belongs to p-1.
         a1 = _make_alert(repo, "p-1", severity="critical")
         # p-other tries to mark it.
-        r = client_other_parent.post(
-            f"/api/v1/notifications/{a1}/read"
-        )
+        r = client_other_parent.post(f"/api/v1/notifications/{a1}/read")
         # Lateral-auth: 404 (not 403) so the existence of the id
         # doesn't leak to other parents.
         assert r.status_code == 404
@@ -442,9 +445,7 @@ class TestOpenAPITag:
 
         tags = router.tags or []
         assert any(
-            isinstance(t, dict)
-            and t.get("name") == "notifications"
-            and t.get("description")
+            isinstance(t, dict) and t.get("name") == "notifications" and t.get("description")
             for t in tags
         ), f"notifications tag missing description: {tags!r}"
 
@@ -462,7 +463,6 @@ class TestOpenAPITag:
         # the dashboard router (it predates this ticket — we just
         # rely on it for the per-child view).
         from niki.api.dashboard import router as dash_router
-        dash_paths = [
-            r.path for r in dash_router.routes if hasattr(r, "path")
-        ]
+
+        dash_paths = [r.path for r in dash_router.routes if hasattr(r, "path")]
         assert "/dashboard/alerts/{child_id}" in dash_paths

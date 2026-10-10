@@ -46,9 +46,7 @@ def client_with_test_parent(monkeypatch):
 
 
 class TestDataExport:
-    def test_returns_zip_for_matching_parent(
-        self, client_with_test_parent
-    ) -> None:
+    def test_returns_zip_for_matching_parent(self, client_with_test_parent) -> None:
         tok = issue_access_token("test_parent", ttl_seconds=60)
         r = client_with_test_parent.get(
             "/api/v1/parents/test_parent/data-export",
@@ -59,9 +57,7 @@ class TestDataExport:
         assert "attachment" in r.headers["content-disposition"]
         assert r.headers["X-Export-Record-Count"] is not None
 
-    def test_zip_contains_required_files(
-        self, client_with_test_parent
-    ) -> None:
+    def test_zip_contains_required_files(self, client_with_test_parent) -> None:
         tok = issue_access_token("test_parent", ttl_seconds=60)
         r = client_with_test_parent.get(
             "/api/v1/parents/test_parent/data-export",
@@ -80,9 +76,7 @@ class TestDataExport:
         assert "emotion_baseline.json" in names
         assert "children.json" in names
 
-    def test_zip_manifest_contains_compliance_marker(
-        self, client_with_test_parent
-    ) -> None:
+    def test_zip_manifest_contains_compliance_marker(self, client_with_test_parent) -> None:
         tok = issue_access_token("test_parent", ttl_seconds=60)
         r = client_with_test_parent.get(
             "/api/v1/parents/test_parent/data-export",
@@ -93,9 +87,7 @@ class TestDataExport:
         assert "PIPL" in manifest["policy"] or "GDPR" in manifest["policy"]
         assert manifest["parent_id"] == "test_parent"
 
-    def test_returns_403_on_parent_mismatch(
-        self, client_with_test_parent
-    ) -> None:
+    def test_returns_403_on_parent_mismatch(self, client_with_test_parent) -> None:
         # Token says test_parent, but path says a different id.
         tok = issue_access_token("test_parent", ttl_seconds=60)
         r = client_with_test_parent.get(
@@ -109,10 +101,12 @@ class TestDataExport:
     def test_returns_401_without_token(self) -> None:
         # No dep override; expect the real JWT path to deny an anonymous request.
         import os
+
         os.environ.pop("NIKI_TEST_FAKE_AUTH", None)
         try:
             from niki.main import create_app
             from fastapi.testclient import TestClient
+
             app = create_app()
             client = TestClient(app)
             r = client.get("/api/v1/parents/test_parent/data-export")
@@ -125,24 +119,29 @@ class TestDataExport:
     ) -> None:
         # Pre-populate with 2 alerts for child-A and 1 for child-B.
         from niki.db.repositories import get_dashboard_repository
+
         repo = get_dashboard_repository()
 
         async def _seed():
             await repo.add_alert(
                 alert_type="safety_valve",
-                child_id="child-A", parent_id="test_parent",
+                child_id="child-A",
+                parent_id="test_parent",
                 payload={"x": 1},
             )
             await repo.add_alert(
                 alert_type="safety_valve",
-                child_id="child-A", parent_id="test_parent",
+                child_id="child-A",
+                parent_id="test_parent",
                 payload={"x": 2},
             )
             await repo.add_alert(
                 alert_type="safety_valve",
-                child_id="child-B", parent_id="test_parent",
+                child_id="child-B",
+                parent_id="test_parent",
                 payload={"x": 3},
             )
+
         asyncio_run = __import__("asyncio").run
         asyncio_run(_seed())
 
@@ -155,4 +154,3 @@ class TestDataExport:
         alerts = json.loads(zf.read("alerts.json"))
         assert alerts["record_count"] == 2
         assert all(a["child_id"] == "child-A" for a in alerts["items"])
-

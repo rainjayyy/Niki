@@ -51,7 +51,7 @@ class TestFeatureFlagServiceUnit:
 
     def test_non_object_json_raises(self) -> None:
         with pytest.raises(ValueError):
-            FeatureFlagService(defaults_json='[1, 2, 3]')
+            FeatureFlagService(defaults_json="[1, 2, 3]")
 
     def test_unknown_flag_defaults_to_false(self) -> None:
         svc = FeatureFlagService(defaults={"new_dashboard": True})
@@ -179,7 +179,8 @@ class TestConfigEndpointFeatureFlags:
         assert isinstance(body["feature_flags"], dict)
 
     def test_config_feature_flags_match_seeded_service(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
         r = client.get("/api/v1/config/client")
         body = r.json()

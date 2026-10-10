@@ -71,3 +71,31 @@ class TestEmptyInput:
         candidates = await hook.process("c1", "今天天气真好啊")
         # No entities or emotions expected
         assert candidates == []
+
+
+class TestHookRelationEnumISS07:
+    """ISS-07 regression: hook.process() must pass a RelationType
+    enum (not a str) to CognitiveGraph.add_relation. The original
+    code passed the literal string ``"remembers"`` which mypy
+    flagged and which could cause structural-log / Neo4j-write
+    bugs downstream when relation.value is consumed."""
+
+    async def test_relation_is_enum_type(self, hook: DaytimeMemoryHook) -> None:
+        """The relation stored in the graph must be a RelationType
+        enum member — not a plain str — so Neo4j / structured log
+        consumers see the .value discriminator uniformly."""
+        from niki.memory.graph import RelationType
+
+        await hook.process("c1", "我的小狗叫旺财")
+        rels = hook._graph.get_relations_for("旺财")
+        assert rels, "expected at least one relation for 旺财"
+        # The relation type must be a RelationType enum member, not a str.
+        rel = rels[0]
+        assert isinstance(rel.relation, RelationType), (
+            f"ISS-07 regression: relation is {type(rel.relation).__name__}, "
+            f"expected RelationType enum. Value={rel.relation!r}"
+        )
+        assert rel.relation == RelationType.REMEMBERS
+        # Belt-and-braces — the enum value still stringifies to
+        # "remembers" so persisted storage stays compatible.
+        assert rel.relation.value == "remembers"

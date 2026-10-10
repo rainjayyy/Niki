@@ -91,9 +91,7 @@ class TestImageRecognition:
     async def test_with_caption(self) -> None:
         kb = KnowledgeBase()
         call = _call("image_recognition.caption", {"image_url": "https://x/y.png"})
-        result = await dispatch_tool_call(
-            call, kb=kb, image_caption="一只橘猫在睡觉"
-        )
+        result = await dispatch_tool_call(call, kb=kb, image_caption="一只橘猫在睡觉")
         parsed = json.loads(result)
         assert parsed["caption"] == "一只橘猫在睡觉"
 

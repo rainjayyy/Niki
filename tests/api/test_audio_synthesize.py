@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from niki.main import create_app
 from niki.media.tts_provider import (
-    MockTTSProvider,
+    FallbackTTSProvider,
     TTSError,
     TTSProvider,
     set_tts_provider,
@@ -18,15 +18,13 @@ from niki.media.tts_provider import (
 
 @pytest.fixture
 def client() -> TestClient:
-    set_tts_provider(MockTTSProvider())
+    set_tts_provider(FallbackTTSProvider())
     return TestClient(create_app())
 
 
 class TestHappyPath:
     def test_returns_base64_audio_wav(self, client: TestClient) -> None:
-        r = client.post(
-            "/api/v1/audio/synthesize", json={"text": "Niki 你好"}
-        )
+        r = client.post("/api/v1/audio/synthesize", json={"text": "Niki 你好"})
         assert r.status_code == 200
         body = r.json()
         assert body["mime_type"] == "audio/wav"
@@ -39,21 +37,13 @@ class TestHappyPath:
         assert body["size_bytes"] == len(wav)
 
     def test_deterministic_for_same_text(self, client: TestClient) -> None:
-        b1 = client.post(
-            "/api/v1/audio/synthesize", json={"text": "hello"}
-        ).json()
-        b2 = client.post(
-            "/api/v1/audio/synthesize", json={"text": "hello"}
-        ).json()
+        b1 = client.post("/api/v1/audio/synthesize", json={"text": "hello"}).json()
+        b2 = client.post("/api/v1/audio/synthesize", json={"text": "hello"}).json()
         assert b1["audio_base64"] == b2["audio_base64"]
         assert b1["text_hash"] == b2["text_hash"]
 
-    def test_different_text_yields_different_audio(
-        self, client: TestClient
-    ) -> None:
-        b1 = client.post(
-            "/api/v1/audio/synthesize", json={"text": "短的"}
-        ).json()
+    def test_different_text_yields_different_audio(self, client: TestClient) -> None:
+        b1 = client.post("/api/v1/audio/synthesize", json={"text": "短的"}).json()
         b2 = client.post(
             "/api/v1/audio/synthesize",
             json={"text": "一段明显更长的文本用于触发不同时长"},
@@ -105,17 +95,13 @@ class TestInputLimits:
         assert r.json()["error"]["code"] == "EMPTY_TEXT"
 
     def test_too_long_text_returns_400(self, client: TestClient) -> None:
-        r = client.post(
-            "/api/v1/audio/synthesize", json={"text": "x" * 1001}
-        )
+        r = client.post("/api/v1/audio/synthesize", json={"text": "x" * 1001})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "TEXT_TOO_LONG"
         assert r.json()["error"]["max_chars"] == 1000
 
     def test_exactly_max_length_allowed(self, client: TestClient) -> None:
-        r = client.post(
-            "/api/v1/audio/synthesize", json={"text": "x" * 1000}
-        )
+        r = client.post("/api/v1/audio/synthesize", json={"text": "x" * 1000})
         assert r.status_code == 200
 
 
@@ -127,9 +113,7 @@ class TestProviderFailures:
 
         set_tts_provider(BadProvider())
         client = TestClient(create_app())
-        r = client.post(
-            "/api/v1/audio/synthesize", json={"text": "hi"}
-        )
+        r = client.post("/api/v1/audio/synthesize", json={"text": "hi"})
         assert r.status_code == 503
         assert r.json()["error"]["code"] == "TTS_QUOTA"
 
@@ -137,11 +121,11 @@ class TestProviderFailures:
 class TestMockProviderUnit:
     async def test_empty_text_raises(self) -> None:
         with pytest.raises(TTSError) as exc_info:
-            await MockTTSProvider().synthesize("")
+            await FallbackTTSProvider().synthesize("")
         assert exc_info.value.code == "EMPTY_TEXT"
 
     async def test_returns_valid_wav(self) -> None:
-        r = await MockTTSProvider().synthesize("hello")
+        r = await FallbackTTSProvider().synthesize("hello")
         assert r.audio.startswith(b"RIFF")
         assert b"WAVE" in r.audio[:12]
         assert b"data" in r.audio
@@ -151,5 +135,5 @@ class TestMockProviderUnit:
     async def test_zero_chars_still_produces_audio(self) -> None:
         # Non-empty after .strip() should be required, but stripped empty
         # input raises; non-empty is fine even if short.
-        r = await MockTTSProvider().synthesize("x")
+        r = await FallbackTTSProvider().synthesize("x")
         assert r.duration_ms >= 500  # min floor

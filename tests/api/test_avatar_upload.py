@@ -54,6 +54,7 @@ class TestValidateImageForAvatar:
 
     def test_text_raises_415(self) -> None:
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException) as exc_info:
             validate_image_for_avatar(TXT, "text/plain")
         assert exc_info.value.status_code == 415
@@ -61,6 +62,7 @@ class TestValidateImageForAvatar:
 
     def test_too_large_raises_413(self) -> None:
         from fastapi import HTTPException
+
         # Exactly max+1 bytes
         big = PNG + b"x" * (AVATAR_MAX_BYTES - len(PNG) + 1)
         with pytest.raises(HTTPException) as exc_info:
@@ -78,6 +80,7 @@ class TestValidateImageForAvatar:
 
     def test_webp_rejected(self) -> None:
         from fastapi import HTTPException
+
         # WebP magic bytes — even though BE-MEDIA-001 generic
         # upload accepts it, BE-MEDIA-004 rejects it for avatars.
         webp = b"RIFF\x00\x00\x00\x00WEBP" + b"x" * 50
@@ -219,8 +222,10 @@ def authed_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
     def fake():
         return ParentAccount(
-            id="p_actor", name="Actor",
-            id_number_masked="****", phone_masked="****",
+            id="p_actor",
+            name="Actor",
+            id_number_masked="****",
+            phone_masked="****",
         )
 
     app.dependency_overrides[get_current_parent] = fake
@@ -228,9 +233,7 @@ def authed_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
 
 class TestAvatarLateralAuth:
-    def test_cross_parent_child_id_returns_403(
-        self, authed_client: TestClient
-    ) -> None:
+    def test_cross_parent_child_id_returns_403(self, authed_client: TestClient) -> None:
         """Caller p_actor tries to upload an avatar for c_victim
         (owned by p_victim). Must 403."""
         r = authed_client.post(
@@ -241,9 +244,7 @@ class TestAvatarLateralAuth:
         assert r.status_code == 403
         assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
-    def test_unknown_child_id_returns_404(
-        self, authed_client: TestClient
-    ) -> None:
+    def test_unknown_child_id_returns_404(self, authed_client: TestClient) -> None:
         r = authed_client.post(
             "/api/v1/media/avatar",
             files={"file": ("avatar.png", PNG, "image/png")},
@@ -252,9 +253,7 @@ class TestAvatarLateralAuth:
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "CHILD_NOT_FOUND"
 
-    def test_owned_child_id_succeeds(
-        self, authed_client: TestClient
-    ) -> None:
+    def test_owned_child_id_succeeds(self, authed_client: TestClient) -> None:
         """Caller p_actor uploading for c_own (which they own)."""
         r = authed_client.post(
             "/api/v1/media/avatar",
@@ -274,9 +273,7 @@ class TestAvatarLateralAuth:
 
 
 class TestAvatarAccessUrlRoundTrip:
-    def test_access_url_resolves_through_retrieval_endpoint(
-        self, client: TestClient
-    ) -> None:
+    def test_access_url_resolves_through_retrieval_endpoint(self, client: TestClient) -> None:
         """The access_url returned by /avatar must round-trip through
         the same GET /media/{file_id} endpoint as a generic upload."""
         r_up = client.post(

@@ -96,23 +96,17 @@ class TestCaptchaServiceUnit:
         # The internal `_StoredCaptcha` is what holds the hash.
         assert not hasattr(ch, "answer") or ch.answer is None
 
-    async def test_correct_answer_verifies(
-        self, captcha_service: InMemoryCaptchaService
-    ) -> None:
+    async def test_correct_answer_verifies(self, captcha_service: InMemoryCaptchaService) -> None:
         ch = await captcha_service.create_challenge()
         answer = _parse_question(ch.question)
         assert await captcha_service.verify(ch.id, answer) is True
 
-    async def test_wrong_answer_rejects(
-        self, captcha_service: InMemoryCaptchaService
-    ) -> None:
+    async def test_wrong_answer_rejects(self, captcha_service: InMemoryCaptchaService) -> None:
         ch = await captcha_service.create_challenge()
         answer = _parse_question(ch.question)
         assert await captcha_service.verify(ch.id, answer + 1) is False
 
-    async def test_expired_challenge_rejects(
-        self, captcha_service: InMemoryCaptchaService
-    ) -> None:
+    async def test_expired_challenge_rejects(self, captcha_service: InMemoryCaptchaService) -> None:
         ch = await captcha_service.create_challenge()
         answer = _parse_question(ch.question)
         # Backdate expiry far enough that any clock granularity is
@@ -141,9 +135,7 @@ class TestCaptchaServiceUnit:
         assert ids[3] in svc._records
         assert ids[4] in svc._records
 
-    async def test_challenge_is_single_use(
-        self, captcha_service: InMemoryCaptchaService
-    ) -> None:
+    async def test_challenge_is_single_use(self, captcha_service: InMemoryCaptchaService) -> None:
         ch = await captcha_service.create_challenge()
         answer = _parse_question(ch.question)
         assert await captcha_service.verify(ch.id, answer) is True
@@ -208,13 +200,9 @@ class TestSmsSendWithCaptcha:
         # see the new value without rebuilding the singleton.
         monkeypatch.setattr(settings, "sms_captcha_required", True)
 
-    def test_sms_send_without_captcha_works_in_dev_mode(
-        self, client: TestClient
-    ) -> None:
+    def test_sms_send_without_captcha_works_in_dev_mode(self, client: TestClient) -> None:
         """Default flag = False: existing SMS-send tests must still pass."""
-        resp = client.post(
-            "/api/v1/auth/sms/send", json={"phone": "13800138000"}
-        )
+        resp = client.post("/api/v1/auth/sms/send", json={"phone": "13800138000"})
         assert resp.status_code == 200
         assert resp.json()["status"] == "sent"
 
@@ -232,9 +220,7 @@ class TestSmsSendWithCaptcha:
         assert resp.status_code == 200
         assert resp.json()["status"] == "sent"
 
-    def test_sms_send_with_wrong_captcha_returns_400(
-        self, client: TestClient
-    ) -> None:
+    def test_sms_send_with_wrong_captcha_returns_400(self, client: TestClient) -> None:
         ch = client.get("/api/v1/auth/captcha/challenge").json()
         resp = client.post(
             "/api/v1/auth/sms/send",
@@ -253,9 +239,7 @@ class TestSmsSendWithCaptcha:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         self._enable_required_flag(monkeypatch)
-        resp = client.post(
-            "/api/v1/auth/sms/send", json={"phone": "13800138000"}
-        )
+        resp = client.post("/api/v1/auth/sms/send", json={"phone": "13800138000"})
         assert resp.status_code == 400
         assert resp.json()["error"]["code"] == "CAPTCHA_INVALID"
 

@@ -62,13 +62,9 @@ class TestSmsSend:
     def test_cooldown_429_only_after_consume(self, client: TestClient) -> None:
         """Verify the code, then immediately re-send; cooldown should
         raise 429 because no active code is on file."""
-        first = client.post(
-            "/api/v1/auth/sms/send", json=_send_payload("13800138000")
-        )
+        first = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         code = first.json()["dev_code"]
-        client.post(
-            "/api/v1/auth/sms/login", json=_login_payload("13800138000", code)
-        )
+        client.post("/api/v1/auth/sms/login", json=_login_payload("13800138000", code))
         resp = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         assert resp.status_code == 429
         # The SMS-service cooldown (not the slowapi IP limit) fires
@@ -80,9 +76,7 @@ class TestSmsLogin:
     def test_valid_code_returns_jwt_pair(self, client: TestClient) -> None:
         send = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         code = send.json()["dev_code"]
-        resp = client.post(
-            "/api/v1/auth/sms/login", json=_login_payload("13800138000", code)
-        )
+        resp = client.post("/api/v1/auth/sms/login", json=_login_payload("13800138000", code))
         assert resp.status_code == 200
         body = resp.json()
         assert "access_token" in body
@@ -93,25 +87,19 @@ class TestSmsLogin:
 
     def test_wrong_code_returns_401(self, client: TestClient) -> None:
         client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
-        resp = client.post(
-            "/api/v1/auth/sms/login", json=_login_payload("13800138000", "000000")
-        )
+        resp = client.post("/api/v1/auth/sms/login", json=_login_payload("13800138000", "000000"))
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "SMS_CODE_INVALID"
 
     def test_unknown_phone_returns_401(self, client: TestClient) -> None:
-        resp = client.post(
-            "/api/v1/auth/sms/login", json=_login_payload("13800138000", "000000")
-        )
+        resp = client.post("/api/v1/auth/sms/login", json=_login_payload("13800138000", "000000"))
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "SMS_CODE_INVALID"
 
     def test_login_token_works_on_protected_endpoint(self, client: TestClient) -> None:
         send = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         code = send.json()["dev_code"]
-        login = client.post(
-            "/api/v1/auth/sms/login", json=_login_payload("13800138000", code)
-        )
+        login = client.post("/api/v1/auth/sms/login", json=_login_payload("13800138000", code))
         token = login.json()["access_token"]
         # The `/auth/whoami` demo endpoint proves end-to-end auth wiring.
         who = client.get(
@@ -124,29 +112,21 @@ class TestSmsLogin:
     def test_login_auto_creates_pending_account(self, client: TestClient) -> None:
         send = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         code = send.json()["dev_code"]
-        resp = client.post(
-            "/api/v1/auth/sms/login", json=_login_payload("13800138000", code)
-        )
+        resp = client.post("/api/v1/auth/sms/login", json=_login_payload("13800138000", code))
         assert resp.status_code == 200
         assert resp.json()["account_status"] == "pending"
 
     def test_login_invalid_phone_format_returns_400(self, client: TestClient) -> None:
-        resp = client.post(
-            "/api/v1/auth/sms/login", json=_login_payload("bad", "000000")
-        )
+        resp = client.post("/api/v1/auth/sms/login", json=_login_payload("bad", "000000"))
         assert resp.status_code == 400
         assert resp.json()["error"]["code"] == "INVALID_PHONE_FORMAT"
 
     def test_login_missing_code_returns_400(self, client: TestClient) -> None:
-        resp = client.post(
-            "/api/v1/auth/sms/login", json={"phone": "13800138000"}
-        )
+        resp = client.post("/api/v1/auth/sms/login", json={"phone": "13800138000"})
         assert resp.status_code == 400
         assert resp.json()["error"]["code"] == "SMS_CODE_INVALID"
 
-    def test_login_two_distinct_phones_get_distinct_accounts(
-        self, client: TestClient
-    ) -> None:
+    def test_login_two_distinct_phones_get_distinct_accounts(self, client: TestClient) -> None:
         s1 = client.post("/api/v1/auth/sms/send", json=_send_payload("13800138000"))
         s2 = client.post("/api/v1/auth/sms/send", json=_send_payload("13900139000"))
         l1 = client.post(

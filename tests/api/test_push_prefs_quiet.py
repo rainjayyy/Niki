@@ -38,8 +38,10 @@ def client() -> TestClient:
 
     def fake():
         return ParentAccount(
-            id="p-quiet", name="Quiet",
-            id_number_masked="****", phone_masked="****",
+            id="p-quiet",
+            name="Quiet",
+            id_number_masked="****",
+            phone_masked="****",
         )
 
     app.dependency_overrides[get_current_parent] = fake
@@ -52,9 +54,7 @@ def client() -> TestClient:
 
 
 class TestDefaultsSurface:
-    def test_get_prefs_returns_all_eight_fields(
-        self, client: TestClient
-    ) -> None:
+    def test_get_prefs_returns_all_eight_fields(self, client: TestClient) -> None:
         r = client.get("/api/v1/push/prefs")
         assert r.status_code == 200
         body = r.json()
@@ -71,14 +71,18 @@ class TestDefaultsSurface:
         # Default event-type mute is empty
         assert body["muted_event_types"] == []
 
-    def test_get_prefs_returns_eight_keys(
-        self, client: TestClient
-    ) -> None:
+    def test_get_prefs_returns_eight_keys(self, client: TestClient) -> None:
         body = client.get("/api/v1/push/prefs").json()
         expected = {
-            "quiet_start", "quiet_end", "enabled_channels",
-            "high_risk_only", "dnd_enabled", "dnd_until",
-            "severities", "muted_event_types", "updated_at",
+            "quiet_start",
+            "quiet_end",
+            "enabled_channels",
+            "high_risk_only",
+            "dnd_enabled",
+            "dnd_until",
+            "severities",
+            "muted_event_types",
+            "updated_at",
         }
         assert expected.issubset(body.keys())
 
@@ -90,26 +94,18 @@ class TestDefaultsSurface:
 
 class TestPatchRoundTrip:
     def test_patch_dnd_enabled(self, client: TestClient) -> None:
-        r = client.patch(
-            "/api/v1/push/prefs", json={"dnd_enabled": True}
-        )
+        r = client.patch("/api/v1/push/prefs", json={"dnd_enabled": True})
         assert r.status_code == 200
         assert r.json()["dnd_enabled"] is True
 
-    def test_patch_dnd_until_iso_string(
-        self, client: TestClient
-    ) -> None:
+    def test_patch_dnd_until_iso_string(self, client: TestClient) -> None:
         iso = "2027-01-01T00:00:00+00:00"
-        r = client.patch(
-            "/api/v1/push/prefs", json={"dnd_until": iso}
-        )
+        r = client.patch("/api/v1/push/prefs", json={"dnd_until": iso})
         assert r.status_code == 200
         # Server normalises to ISO; the string round-trips.
         assert r.json()["dnd_until"].startswith("2027-01-01")
 
-    def test_patch_dnd_until_null_is_noop(
-        self, client: TestClient
-    ) -> None:
+    def test_patch_dnd_until_null_is_noop(self, client: TestClient) -> None:
         # First set dnd_until to something concrete.
         client.patch(
             "/api/v1/push/prefs",
@@ -118,9 +114,7 @@ class TestPatchRoundTrip:
         # `null` follows the partial-update convention: "leave
         # unchanged". Clearing isn't a use case BE-PUSH-004 ships
         # for (the dnd_until is self-clearing once expired).
-        r = client.patch(
-            "/api/v1/push/prefs", json={"dnd_until": None}
-        )
+        r = client.patch("/api/v1/push/prefs", json={"dnd_until": None})
         assert r.status_code == 200
         assert r.json()["dnd_until"] is not None
 
@@ -131,7 +125,9 @@ class TestPatchRoundTrip:
         )
         assert r.status_code == 200
         assert r.json()["severities"] == [
-            "info", "warning", "critical",
+            "info",
+            "warning",
+            "critical",
         ]
 
     def test_patch_muted_event_types(self, client: TestClient) -> None:
@@ -141,12 +137,11 @@ class TestPatchRoundTrip:
         )
         assert r.status_code == 200
         assert r.json()["muted_event_types"] == [
-            "safety_block", "session_pause",
+            "safety_block",
+            "session_pause",
         ]
 
-    def test_patch_all_eight_fields_at_once(
-        self, client: TestClient
-    ) -> None:
+    def test_patch_all_eight_fields_at_once(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={
@@ -171,22 +166,20 @@ class TestPatchRoundTrip:
         assert body["severities"] == ["warning", "critical"]
         assert body["muted_event_types"] == ["safety_block"]
 
-    def test_patch_partial_preserves_unrelated_fields(
-        self, client: TestClient
-    ) -> None:
+    def test_patch_partial_preserves_unrelated_fields(self, client: TestClient) -> None:
         # Set severity whitelist first
         client.patch(
             "/api/v1/push/prefs",
             json={"severities": ["info", "warning", "critical"]},
         )
         # Now patch only dnd_enabled — severity should survive.
-        r = client.patch(
-            "/api/v1/push/prefs", json={"dnd_enabled": True}
-        )
+        r = client.patch("/api/v1/push/prefs", json={"dnd_enabled": True})
         body = r.json()
         assert body["dnd_enabled"] is True
         assert body["severities"] == [
-            "info", "warning", "critical",
+            "info",
+            "warning",
+            "critical",
         ]
 
 
@@ -196,9 +189,7 @@ class TestPatchRoundTrip:
 
 
 class TestValidation:
-    def test_invalid_severity_returns_400(
-        self, client: TestClient
-    ) -> None:
+    def test_invalid_severity_returns_400(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={"severities": ["info", "panic"]},
@@ -206,9 +197,7 @@ class TestValidation:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_SEVERITY"
 
-    def test_invalid_event_type_returns_400(
-        self, client: TestClient
-    ) -> None:
+    def test_invalid_event_type_returns_400(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={"muted_event_types": [""]},
@@ -216,9 +205,7 @@ class TestValidation:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_EVENT_TYPE"
 
-    def test_event_type_must_be_list(
-        self, client: TestClient
-    ) -> None:
+    def test_event_type_must_be_list(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={"muted_event_types": "safety_block"},
@@ -226,18 +213,12 @@ class TestValidation:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_EVENT_TYPE"
 
-    def test_severities_must_be_list(
-        self, client: TestClient
-    ) -> None:
-        r = client.patch(
-            "/api/v1/push/prefs", json={"severities": "critical"}
-        )
+    def test_severities_must_be_list(self, client: TestClient) -> None:
+        r = client.patch("/api/v1/push/prefs", json={"severities": "critical"})
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_SEVERITY"
 
-    def test_quiet_start_equal_quiet_end_rejected(
-        self, client: TestClient
-    ) -> None:
+    def test_quiet_start_equal_quiet_end_rejected(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={"quiet_start": 8, "quiet_end": 8},
@@ -245,9 +226,7 @@ class TestValidation:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_QUIET_HOUR"
 
-    def test_dnd_until_naive_iso_rejected(
-        self, client: TestClient
-    ) -> None:
+    def test_dnd_until_naive_iso_rejected(self, client: TestClient) -> None:
         # No timezone offset → ambiguous → reject.
         r = client.patch(
             "/api/v1/push/prefs",
@@ -270,9 +249,7 @@ class TestIsQuietNow:
         # Same-day window, hour 13 → 14. NOW is 14:30.
         prefs = {"quiet_start": 13, "quiet_end": 14}
         at_noon = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
-        at_thirteen_thirty = datetime(
-            2026, 7, 31, 13, 30, tzinfo=timezone.utc
-        )
+        at_thirteen_thirty = datetime(2026, 7, 31, 13, 30, tzinfo=timezone.utc)
         assert is_quiet_now(prefs, now=at_noon) is False
         assert is_quiet_now(prefs, now=at_thirteen_thirty) is True
 
@@ -341,12 +318,8 @@ class TestShouldDeliver:
 
     def test_event_type_in_muted_blocks(self) -> None:
         prefs = {"muted_event_types": ["safety_block"]}
-        assert should_deliver(
-            prefs, "warning", "safety_block", now=NOW
-        ) is False
-        assert should_deliver(
-            prefs, "warning", "session_pause", now=NOW
-        ) is True
+        assert should_deliver(prefs, "warning", "safety_block", now=NOW) is False
+        assert should_deliver(prefs, "warning", "session_pause", now=NOW) is True
 
     def test_quiet_window_blocks(self) -> None:
         prefs = {
@@ -354,9 +327,7 @@ class TestShouldDeliver:
             "quiet_end": 15,
         }
         # NOW is 14:30 → inside window.
-        assert should_deliver(
-            prefs, "critical", "x", now=NOW
-        ) is False
+        assert should_deliver(prefs, "critical", "x", now=NOW) is False
         # Move outside the window.
         at_noon = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
         assert should_deliver(prefs, "critical", "x", now=at_noon) is True
@@ -372,9 +343,7 @@ class TestShouldDeliver:
             "severities": ["info", "warning", "critical"],
             "muted_event_types": [],
         }
-        assert should_deliver(
-            prefs, "critical", "anything", now=NOW
-        ) is False
+        assert should_deliver(prefs, "critical", "anything", now=NOW) is False
 
     def test_all_three_gates_combined(self) -> None:
         # severity NOT in whitelist AND event_type muted AND in
@@ -388,23 +357,15 @@ class TestShouldDeliver:
             "muted_event_types": ["session_pause"],
         }
         # Inside window, info severity → blocked by severity.
-        assert should_deliver(
-            prefs, "info", "session_pause", now=NOW
-        ) is False
+        assert should_deliver(prefs, "info", "session_pause", now=NOW) is False
         # Inside window, warning event_type — but warning not in
         # whitelist either, so still False.
-        assert should_deliver(
-            prefs, "warning", "session_pause", now=NOW
-        ) is False
+        assert should_deliver(prefs, "warning", "session_pause", now=NOW) is False
         # Move outside the window; warning still not allowed → False.
         at_noon = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
-        assert should_deliver(
-            prefs, "warning", "session_pause", now=at_noon
-        ) is False
+        assert should_deliver(prefs, "warning", "session_pause", now=at_noon) is False
         # critical + non-muted + outside window → True.
-        assert should_deliver(
-            prefs, "critical", "session_start", now=at_noon
-        ) is True
+        assert should_deliver(prefs, "critical", "session_start", now=at_noon) is True
 
 
 # ---------------------------------------------------------------------------
@@ -425,9 +386,7 @@ class TestI18nKeys:
     def test_invalid_event_type_in_en(self) -> None:
         assert "media.invalid_event_type" in MESSAGES_EN
 
-    def test_error_response_translates_in_zh(
-        self, client: TestClient
-    ) -> None:
+    def test_error_response_translates_in_zh(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={"severities": ["panic"]},
@@ -440,9 +399,7 @@ class TestI18nKeys:
         assert "panic" not in msg
         assert msg != "media.invalid_severity"
 
-    def test_error_response_translates_in_en(
-        self, client: TestClient
-    ) -> None:
+    def test_error_response_translates_in_en(self, client: TestClient) -> None:
         r = client.patch(
             "/api/v1/push/prefs",
             json={"severities": ["panic"]},

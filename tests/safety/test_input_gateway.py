@@ -68,14 +68,14 @@ class TestInputGatewayEscalate:
     @pytest.mark.parametrize(
         "phrase",
         [
-            "我好想死啊",       # 想死 (gap fix: previously missed)
+            "我好想死啊",  # 想死 (gap fix: previously missed)
             "我不想活了",
-            "我今天不想活",     # 不想活
-            "我活不下去了",     # 活不下去
-            "我想轻生",         # 想轻生
-            "我想一了百了",     # 一了百了
+            "我今天不想活",  # 不想活
+            "我活不下去了",  # 活不下去
+            "我想轻生",  # 想轻生
+            "我想一了百了",  # 一了百了
             "我已经决定自杀了",  # 自杀 (was already covered but re-asserted)
-            "I want to die",    # English equivalent
+            "I want to die",  # English equivalent
         ],
     )
     async def test_self_harm_phrases_escalate(
@@ -92,9 +92,7 @@ class TestInputGatewayEscalate:
         self-harm expressions.
         """
         v = await gateway.check(phrase)
-        assert v.is_escalation, (
-            f"phrase {phrase!r} should escalate but got action={v.action.value}"
-        )
+        assert v.is_escalation, f"phrase {phrase!r} should escalate but got action={v.action.value}"
         assert v.matched_category == "self_harm"
 
 

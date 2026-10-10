@@ -92,9 +92,8 @@ class TestEndpointMetadata:
             for m, p, info in api_paths
             if not (info.get("summary") or "").strip()
         ]
-        assert not missing, (
-            f"Endpoints missing summary= (count={len(missing)}):\n  "
-            + "\n  ".join(missing[:20])
+        assert not missing, f"Endpoints missing summary= (count={len(missing)}):\n  " + "\n  ".join(
+            missing[:20]
         )
 
     def test_description_present(self, api_paths: list) -> None:
@@ -109,26 +108,18 @@ class TestEndpointMetadata:
         )
 
     def test_tags_present(self, api_paths: list) -> None:
-        missing = [
-            f"{m.upper()} {p}"
-            for m, p, info in api_paths
-            if not info.get("tags")
-        ]
-        assert not missing, (
-            f"Endpoints missing tags= (count={len(missing)}):\n  "
-            + "\n  ".join(missing[:20])
+        missing = [f"{m.upper()} {p}" for m, p, info in api_paths if not info.get("tags")]
+        assert not missing, f"Endpoints missing tags= (count={len(missing)}):\n  " + "\n  ".join(
+            missing[:20]
         )
 
 
 class TestGlobalTagMetadata:
     """Each unique tag in any endpoint also has a global description."""
 
-    def test_all_tags_have_global_description(
-        self, openapi_schema: dict, api_paths: list
-    ) -> None:
+    def test_all_tags_have_global_description(self, openapi_schema: dict, api_paths: list) -> None:
         global_tags = {
-            t["name"]: (t.get("description") or "")
-            for t in openapi_schema.get("tags", [])
+            t["name"]: (t.get("description") or "") for t in openapi_schema.get("tags", [])
         }
         # Collect every tag referenced by any endpoint.
         referenced: set[str] = set()
@@ -149,10 +140,7 @@ class TestGlobalTagMetadata:
         for tag in openapi_schema.get("tags", []):
             if not (tag.get("description") or "").strip():
                 bare.append(tag.get("name", "<unnamed>"))
-        assert not bare, (
-            "Tags with empty descriptions: "
-            f"{bare}"
-        )
+        assert not bare, f"Tags with empty descriptions: {bare}"
 
 
 class TestResponseSchemas:
@@ -181,24 +169,15 @@ class TestResponseSchemas:
             if (m, p) in binary_response_paths:
                 continue
             responses = info.get("responses", {}) or {}
-            two_hundred = responses.get("200") or responses.get(
-                "201"
-            )
+            two_hundred = responses.get("200") or responses.get("201")
             if two_hundred is None:
                 missing.append(f"{m.upper()} {p} (no 200/201)")
                 continue
-            content = (
-                (two_hundred.get("content") or {}).get(
-                    "application/json"
-                )
-            )
+            content = (two_hundred.get("content") or {}).get("application/json")
             if not content or not content.get("schema"):
-                missing.append(
-                    f"{m.upper()} {p} (no application/json.schema)"
-                )
+                missing.append(f"{m.upper()} {p} (no application/json.schema)")
         assert not missing, (
-            "Endpoints without a 200/201 application/json schema:\n  "
-            + "\n  ".join(missing[:20])
+            "Endpoints without a 200/201 application/json schema:\n  " + "\n  ".join(missing[:20])
         )
 
 
@@ -244,9 +223,7 @@ class TestRequestBodySchemas:
             if (m, p) in empty_body_paths:
                 continue
             body = info.get("requestBody") or {}
-            content = (body.get("content") or {}).get(
-                "application/json"
-            )
+            content = (body.get("content") or {}).get("application/json")
             if not content or not content.get("schema"):
                 missing.append(f"{m.upper()} {p}")
         assert not missing, (
@@ -271,6 +248,4 @@ class TestCoverageSummary:
                 if (info.get("summary") or "").strip():
                     with_summary += 1
         assert total > 0, "Sanity check: no /api/v1 endpoints?"
-        assert with_summary == total, (
-            f"{total - with_summary}/{total} endpoints missing summary"
-        )
+        assert with_summary == total, f"{total - with_summary}/{total} endpoints missing summary"

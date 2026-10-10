@@ -40,8 +40,10 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     def fake():
         return ParentAccount(
-            id="p_actor", name="Test",
-            id_number_masked="****", phone_masked="****",
+            id="p_actor",
+            name="Test",
+            id_number_masked="****",
+            phone_masked="****",
         )
 
     app.dependency_overrides[get_current_parent] = fake
@@ -56,9 +58,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 class TestLateralCheckHooks:
     """Verify that lateral-auth rejections are captured as audit events."""
 
-    def test_parent_child_mismatch_returns_403(
-        self, client: TestClient
-    ) -> None:
+    def test_parent_child_mismatch_returns_403(self, client: TestClient) -> None:
         """Try to access a child owned by another parent."""
         registry = InMemoryChildRegistry()
         registry.register("c_victim", "p_victim")
@@ -70,9 +70,7 @@ class TestLateralCheckHooks:
         assert r.status_code == 403
         assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
-    async def test_parent_mismatch_records_audit(
-        self, client: TestClient
-    ) -> None:
+    async def test_parent_mismatch_records_audit(self, client: TestClient) -> None:
         """register_child with mismatched parent_id must log audit."""
         r = client.post(
             "/api/v1/children/register/p_someone_else",
@@ -93,9 +91,7 @@ class TestLateralCheckHooks:
         assert ev["method"] == "POST"
         assert "register" in ev["endpoint"]
 
-    async def test_parent_mismatch_records_audit_on_list(
-        self, client: TestClient
-    ) -> None:
+    async def test_parent_mismatch_records_audit_on_list(self, client: TestClient) -> None:
         """list_children with mismatched parent_id must also log."""
         r = client.get(
             "/api/v1/children/list/p_someone_else",
@@ -130,24 +126,24 @@ class TestAuthAuditRecentEndpoint:
         assert body["count"] == 0
         assert body["actor_parent_id"] == "p_actor"
 
-    async def test_default_scoping_is_self_only(
-        self, client: TestClient
-    ) -> None:
+    async def test_default_scoping_is_self_only(self, client: TestClient) -> None:
         """Caller should NOT see other parents' events by default."""
-        await _seed_repo([
-            AuthAuditEvent(
-                event_type="parent_mismatch",
-                actor_parent_id="p_actor",
-            ),
-            AuthAuditEvent(
-                event_type="child_not_found",
-                actor_parent_id="p_actor",
-            ),
-            AuthAuditEvent(
-                event_type="parent_mismatch",
-                actor_parent_id="p_someone_else",
-            ),
-        ])
+        await _seed_repo(
+            [
+                AuthAuditEvent(
+                    event_type="parent_mismatch",
+                    actor_parent_id="p_actor",
+                ),
+                AuthAuditEvent(
+                    event_type="child_not_found",
+                    actor_parent_id="p_actor",
+                ),
+                AuthAuditEvent(
+                    event_type="parent_mismatch",
+                    actor_parent_id="p_someone_else",
+                ),
+            ]
+        )
 
         r = client.get("/api/v1/auth/audit/recent")
         assert r.status_code == 200
@@ -158,16 +154,18 @@ class TestAuthAuditRecentEndpoint:
         assert body["count"] == 2
 
     async def test_event_type_filter(self, client: TestClient) -> None:
-        await _seed_repo([
-            AuthAuditEvent(
-                event_type="parent_mismatch",
-                actor_parent_id="p_actor",
-            ),
-            AuthAuditEvent(
-                event_type="child_not_found",
-                actor_parent_id="p_actor",
-            ),
-        ])
+        await _seed_repo(
+            [
+                AuthAuditEvent(
+                    event_type="parent_mismatch",
+                    actor_parent_id="p_actor",
+                ),
+                AuthAuditEvent(
+                    event_type="child_not_found",
+                    actor_parent_id="p_actor",
+                ),
+            ]
+        )
 
         r = client.get(
             "/api/v1/auth/audit/recent",
@@ -188,31 +186,27 @@ class TestAuthAuditRecentEndpoint:
         ]
         await _seed_repo(rows)
 
-        r = client.get(
-            "/api/v1/auth/audit/recent", params={"limit": 3}
-        )
+        r = client.get("/api/v1/auth/audit/recent", params={"limit": 3})
         assert r.json()["count"] == 3
 
     def test_limit_cap_200(self, client: TestClient) -> None:
-        r = client.get(
-            "/api/v1/auth/audit/recent", params={"limit": 500}
-        )
+        r = client.get("/api/v1/auth/audit/recent", params={"limit": 500})
         # Query(le=200) rejects before our explicit check.
         assert r.status_code == 400
 
     def test_limit_one_minimum(self, client: TestClient) -> None:
-        r = client.get(
-            "/api/v1/auth/audit/recent", params={"limit": 0}
-        )
+        r = client.get("/api/v1/auth/audit/recent", params={"limit": 0})
         assert r.status_code == 400
 
     async def test_response_serialises_datetime(self, client: TestClient) -> None:
-        await _seed_repo([
-            AuthAuditEvent(
-                event_type="parent_mismatch",
-                actor_parent_id="p_actor",
-            ),
-        ])
+        await _seed_repo(
+            [
+                AuthAuditEvent(
+                    event_type="parent_mismatch",
+                    actor_parent_id="p_actor",
+                ),
+            ]
+        )
         r = client.get("/api/v1/auth/audit/recent")
         body = r.json()
         assert body["count"] == 1

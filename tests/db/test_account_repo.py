@@ -37,12 +37,16 @@ class TestCreate:
 
         # 3 verification rows
         verifs = (
-            await session.execute(
-                select(AccountVerification).where(
-                    AccountVerification.parent_id == "abc123def456ab78"
+            (
+                await session.execute(
+                    select(AccountVerification).where(
+                        AccountVerification.parent_id == "abc123def456ab78"
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(verifs) == 3
         names = {v.step_name for v in verifs}
         assert names == {"real_name", "face", "consent"}
@@ -104,9 +108,7 @@ class TestVerification:
         )
         await session.commit()
 
-        await repo.mark_verification(
-            "abc123def456ab78", "real_name", completed=True
-        )
+        await repo.mark_verification("abc123def456ab78", "real_name", completed=True)
         await session.commit()
 
         progress = await repo.get_progress("abc123def456ab78")
@@ -206,12 +208,16 @@ class TestDelete:
         await session.commit()
 
         verifs = (
-            await session.execute(
-                select(AccountVerification).where(
-                    AccountVerification.parent_id == "abc123def456ab78"
+            (
+                await session.execute(
+                    select(AccountVerification).where(
+                        AccountVerification.parent_id == "abc123def456ab78"
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert verifs == []
         assert await repo.get("abc123def456ab78") is None
 

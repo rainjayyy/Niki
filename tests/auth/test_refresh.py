@@ -41,9 +41,7 @@ def client() -> TestClient:
 class TestRefresh:
     def test_valid_refresh_returns_new_pair(self, client: TestClient) -> None:
         refresh = issue_refresh_token("parent_demo")
-        resp = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh}
-        )
+        resp = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
         assert resp.status_code == 200
         body = resp.json()
         assert body["token_type"] == "Bearer"
@@ -52,9 +50,7 @@ class TestRefresh:
 
     def test_new_access_is_access_type(self, client: TestClient) -> None:
         refresh = issue_refresh_token("parent_demo")
-        resp = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh}
-        )
+        resp = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
         new_access = resp.json()["access_token"]
         claims = verify_token(new_access, TokenType.ACCESS)
         assert claims["sub"] == "parent_demo"
@@ -62,9 +58,7 @@ class TestRefresh:
 
     def test_new_refresh_is_refresh_type(self, client: TestClient) -> None:
         refresh = issue_refresh_token("parent_demo")
-        resp = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh}
-        )
+        resp = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
         new_refresh = resp.json()["refresh_token"]
         claims = verify_token(new_refresh, TokenType.REFRESH)
         assert claims["typ"] == "refresh"
@@ -75,9 +69,7 @@ class TestRefresh:
         # Trigger rotation
         client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
         # Re-using the OLD refresh must now be rejected.
-        resp = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh}
-        )
+        resp = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "TOKEN_REVOKED"
         # Reset the shared singleton for downstream test isolation.
@@ -89,16 +81,12 @@ class TestRefresh:
 class TestRefreshErrors:
     def test_access_as_refresh_rejected(self, client: TestClient) -> None:
         access = issue_access_token("parent_demo")
-        resp = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": access}
-        )
+        resp = client.post("/api/v1/auth/refresh", json={"refresh_token": access})
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "WRONG_TOKEN_TYPE"
 
     def test_garbage_refresh_rejected(self, client: TestClient) -> None:
-        resp = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": "not-a-jwt"}
-        )
+        resp = client.post("/api/v1/auth/refresh", json={"refresh_token": "not-a-jwt"})
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "MALFORMED_TOKEN"
 
@@ -117,8 +105,6 @@ class TestRefreshErrors:
 
         refresh = issue_refresh_token("parent_demo", ttl_seconds=1)
         time.sleep(1.5)
-        resp = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh}
-        )
+        resp = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "TOKEN_EXPIRED"

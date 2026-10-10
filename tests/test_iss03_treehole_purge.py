@@ -71,9 +71,7 @@ class TestTreeholePurgeEncryption:
         # Backdate the first 2 (oldest by created_at) so they look
         # expired. list_all filters by expires_at > now, so we check
         # _rows directly to assert pre-purge state.
-        all_rows = sorted(
-            [r for r in repo._rows.values()], key=lambda r: r["created_at"]
-        )
+        all_rows = sorted([r for r in repo._rows.values()], key=lambda r: r["created_at"])
         for r in all_rows[:2]:
             _backdate_row(r["id"], repo, days_ago=10)
 

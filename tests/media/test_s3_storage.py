@@ -94,19 +94,16 @@ class TestInMemoryS3Storage:
         assert store.get(b.file_id) == PNG
 
     def test_access_url_uses_public_cdn_base(self) -> None:
-        store = InMemoryS3Storage(
-            public_url_base="https://my-cdn.example/media"
-        )
+        store = InMemoryS3Storage(public_url_base="https://my-cdn.example/media")
         stored = store.put(PNG, mime_type="image/png")
-        assert stored.access_url.startswith(
-            "https://my-cdn.example/media/"
-        )
+        assert stored.access_url.startswith("https://my-cdn.example/media/")
         assert stored.access_url.endswith(".png")
 
     def test_fake_abc_compatible(self) -> None:
         """The fake must satisfy the MediaStorage ABC so
         `get_media_storage()` can return it polymorphically."""
         from niki.media.storage import MediaStorage
+
         store = InMemoryS3Storage()
         assert isinstance(store, MediaStorage)
 
@@ -117,12 +114,11 @@ class TestInMemoryS3Storage:
 
 
 class TestS3CompatibleStorageInit:
-    def test_missing_boto3_raises_runtime_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_boto3_raises_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Hide boto3 from the import system so the lazy import
         # in __init__ raises ImportError → RuntimeError.
         import sys
+
         monkeypatch.setitem(sys.modules, "boto3", None)
         with pytest.raises(RuntimeError) as exc:
             S3CompatibleStorage(
@@ -158,10 +154,9 @@ class TestS3CompatibleStorageInit:
 
 
 class TestGetMediaStorageFactory:
-    def test_local_backend_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_local_backend_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from niki.config import settings as settings_mod
+
         settings_mod.get_settings.cache_clear()
         monkeypatch.delenv("MEDIA_STORAGE_BACKEND", raising=False)
         from niki.media.storage import (
@@ -169,6 +164,7 @@ class TestGetMediaStorageFactory:
             set_media_storage,
             LocalDiskStorage,
         )
+
         set_media_storage(None)  # type: ignore[arg-type]
         # Force the cache to be cleared so settings re-evaluate.
         store = get_media_storage()
@@ -176,16 +172,16 @@ class TestGetMediaStorageFactory:
         # Clean up
         set_media_storage(None)  # type: ignore[arg-type]
 
-    def test_s3_backend_returns_in_memory_when_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_s3_backend_returns_in_memory_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """S3 backend init requires real credentials; we just
         verify the factory calls S3CompatibleStorage when the
         setting is on. The fake is injected via set_media_storage
         so we don't need real boto3 calls."""
         from niki.media.storage import set_media_storage
+
         fake = InMemoryS3Storage(bucket="b")
         set_media_storage(fake)
         from niki.media.storage import get_media_storage
+
         assert get_media_storage() is fake
         set_media_storage(None)  # type: ignore[arg-type]

@@ -201,8 +201,7 @@ class TestDeletionFlow:
         # Postcondition: NO consent records for the deleted parent.
         consent_after = lifecycle.get_consent_manager().records_for_parent(account.id)
         assert consent_after == [], (
-            f"ISS-04: consent records leaked after account deletion: "
-            f"{consent_after!r}"
+            f"ISS-04: consent records leaked after account deletion: {consent_after!r}"
         )
 
     async def test_complete_deletion_without_request_raises(

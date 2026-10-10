@@ -29,12 +29,11 @@ class TestBackendDetection:
         assert get_settings().rate_limit_storage_uri == "memory://"
         assert get_rate_limit_backend() == "memory"
 
-    def test_redis_uri_detected(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_redis_uri_detected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A redis:// URI is detected as the redis backend."""
         # Settings is cached via lru_cache, so clear it before mutating.
         from niki.config import settings as settings_mod
+
         settings_mod.get_settings.cache_clear()
         monkeypatch.setenv(
             "RATE_LIMIT_STORAGE_URI",
@@ -45,11 +44,10 @@ class TestBackendDetection:
         finally:
             settings_mod.get_settings.cache_clear()
 
-    def test_rediss_uri_detected(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_rediss_uri_detected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Rediss (TLS) is also recognised."""
         from niki.config import settings as settings_mod
+
         settings_mod.get_settings.cache_clear()
         monkeypatch.setenv(
             "RATE_LIMIT_STORAGE_URI",
@@ -65,6 +63,7 @@ class TestBackendDetection:
     ) -> None:
         """Unknown schemes don't crash — they're reported as memory."""
         from niki.config import settings as settings_mod
+
         settings_mod.get_settings.cache_clear()
         monkeypatch.setenv(
             "RATE_LIMIT_STORAGE_URI",
@@ -91,26 +90,22 @@ class TestLimiterConfiguration:
         # it normalises to 'memory'.
         assert lim._storage_uri in ("memory", settings.rate_limit_storage_uri)
 
-    def test_in_fallback_false_when_memory(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_in_fallback_false_when_memory(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Default (memory://) never reports fallback."""
         from niki.config import settings as settings_mod
+
         settings_mod.get_settings.cache_clear()
-        monkeypatch.delenv(
-            "RATE_LIMIT_STORAGE_URI", raising=False
-        )
+        monkeypatch.delenv("RATE_LIMIT_STORAGE_URI", raising=False)
         try:
             assert is_rate_limit_in_fallback() is False
         finally:
             settings_mod.get_settings.cache_clear()
 
-    def test_in_fallback_false_when_redis_healthy(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_in_fallback_false_when_redis_healthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When Redis is healthy, slowapi uses Redis storage,
         not the in-memory fallback."""
         from niki.config import settings as settings_mod
+
         settings_mod.get_settings.cache_clear()
         monkeypatch.setenv(
             "RATE_LIMIT_STORAGE_URI",
@@ -129,14 +124,11 @@ class TestLimiterConfiguration:
 
 
 class TestHealthEndpointReportsBackend:
-    def test_health_includes_rate_limit_backend(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_health_includes_rate_limit_backend(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from niki.config import settings as settings_mod
+
         settings_mod.get_settings.cache_clear()
-        monkeypatch.delenv(
-            "RATE_LIMIT_STORAGE_URI", raising=False
-        )
+        monkeypatch.delenv("RATE_LIMIT_STORAGE_URI", raising=False)
         client = TestClient(create_app())
         try:
             r = client.get("/api/v1/health")
@@ -159,6 +151,7 @@ class TestRateLimitStillEnforced:
         from fastapi.testclient import TestClient
         from niki.media.storage import LocalDiskStorage, set_media_storage
         import os
+
         tmp = os.environ.get("TMP") or "/tmp"
         set_media_storage(LocalDiskStorage(tmp))
 

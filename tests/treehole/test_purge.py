@@ -33,6 +33,7 @@ def _make_manager_with_records(
     # InMemoryTreeholeRepository holds rows in self._rows; we
     # synthesize UUIDs and call utcnow() synchronously.
     import uuid as _uuid
+
     now = datetime.now(timezone.utc)
     for created_at, child_id, enc in records or []:
         repo._rows[str(_uuid.uuid4())] = {
@@ -62,17 +63,9 @@ class TestTreeholePurger:
         # created_at = T-1  → expires_at = T+6 (valid).
         # Purging at now=2026-07-22 → exactly 3 removed, 2 remain.
         now = datetime(2026, 7, 22)
-        old_records = [
-            (now - timedelta(days=10), f"old-{i}", f"ct-old-{i}")
-            for i in range(3)
-        ]
-        new_records = [
-            (now - timedelta(days=1), f"new-{i}", f"ct-new-{i}")
-            for i in range(2)
-        ]
-        mgr = _make_manager_with_records(
-            records=old_records + new_records
-        )
+        old_records = [(now - timedelta(days=10), f"old-{i}", f"ct-old-{i}") for i in range(3)]
+        new_records = [(now - timedelta(days=1), f"new-{i}", f"ct-new-{i}") for i in range(2)]
+        mgr = _make_manager_with_records(records=old_records + new_records)
         purger = TreeholePurger(repo=mgr.repo)
         count = await purger.purge_expired(now=now)
         assert count == 3
@@ -89,10 +82,7 @@ class TestTreeholePurger:
 
     async def test_purge_all_clears_repo(self) -> None:
         now = datetime(2026, 7, 22)
-        records = [
-            (now - timedelta(days=i + 1), f"c-{i}", f"ct-{i}")
-            for i in range(5)
-        ]
+        records = [(now - timedelta(days=i + 1), f"c-{i}", f"ct-{i}") for i in range(5)]
         mgr = _make_manager_with_records(records=records)
         purger = TreeholePurger(repo=mgr.repo)
         count = await purger.purge_all()
@@ -114,9 +104,7 @@ class TestTreeholePurger:
             (now - timedelta(days=2), "c-new", "ct-new"),
             (now - timedelta(days=4), "c-old", "ct-old"),
         ]
-        mgr = _make_manager_with_records(
-            retention_days=3, records=records
-        )
+        mgr = _make_manager_with_records(retention_days=3, records=records)
         purger = TreeholePurger(repo=mgr.repo, retention_days=3)
         count = await purger.purge_expired(now=now)
         assert count == 1
@@ -150,12 +138,16 @@ class TestTreeholePurger:
 
         repo = InMemoryTreeholeRepository()
         import uuid as _uuid
+
         for created_at, child_id, _ct in old_records + new_records:
             payload = (
-                sentinel_a if child_id == "c-A" else
-                sentinel_b if child_id == "c-B" else
-                sentinel_c if child_id == "c-C" else
-                valid_sentinel
+                sentinel_a
+                if child_id == "c-A"
+                else sentinel_b
+                if child_id == "c-B"
+                else sentinel_c
+                if child_id == "c-C"
+                else valid_sentinel
             )
             repo._rows[str(_uuid.uuid4())] = {
                 "id": str(_uuid.uuid4()),
@@ -195,6 +187,7 @@ class TestTreeholePurgerAcceptsRepo:
         # If we explicitly pass repo_a, even after set_treehole_repository
         # swaps the default, purger_a still uses repo_a.
         from niki.db.repositories import set_treehole_repository
+
         set_treehole_repository(repo_b)
         # Insert via repo_a
         await repo_a.add(

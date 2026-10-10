@@ -26,26 +26,24 @@ EXPECTED_TABLES = {
     "knowledge_queries",
     "emotion_baseline_records",
     "auth_audit_logs",  # BE-AUTH-001-rollout-audit
-    "audit_logs",        # BE-COMP-004 (unified cross-domain trail)
-    "push_devices",      # BE-PUSH-001
-    "push_prefs",        # BE-PUSH-001
+    "audit_logs",  # BE-COMP-004 (unified cross-domain trail)
+    "push_devices",  # BE-PUSH-001
+    "push_prefs",  # BE-PUSH-001
     "two_factor_configs",  # BE-AUTH-007 (parent 2FA / TOTP)
     "webhook_subscriptions",  # BE-API-008
-    "webhook_deliveries",     # BE-API-008
+    "webhook_deliveries",  # BE-API-008
     "phone_change_requests",  # BE-AUTH-006 (phone / email change with cooling)
-    "child_achievements",     # persistent achievements
-    "chat_sessions",          # persistent chat history
+    "child_achievements",  # persistent achievements
+    "chat_sessions",  # persistent chat history
     "weekly_report_history",  # persistent weekly report history
-    "letters",                # persistent parent-to-child letters
+    "letters",  # persistent parent-to-child letters
 }
 
 
 class TestMetadataShape:
     def test_has_expected_tables(self) -> None:
         actual = set(Base.metadata.tables.keys())
-        assert actual == EXPECTED_TABLES, (
-            f"schema drift: expected {EXPECTED_TABLES}, got {actual}"
-        )
+        assert actual == EXPECTED_TABLES, f"schema drift: expected {EXPECTED_TABLES}, got {actual}"
 
     def test_parents_has_status_index(self) -> None:
         idx_names = {i.name for i in Base.metadata.tables["parents"].indexes}
@@ -59,22 +57,31 @@ class TestMetadataShape:
         assert "parents" in fk_targets
 
     def test_verifications_unique_per_step(self) -> None:
-        uqs = [c for c in Base.metadata.tables["account_verifications"].constraints
-               if hasattr(c, "name") and c.name == "uq_verification_step"]
+        uqs = [
+            c
+            for c in Base.metadata.tables["account_verifications"].constraints
+            if hasattr(c, "name") and c.name == "uq_verification_step"
+        ]
         assert len(uqs) == 1
 
     def test_treehole_summary_unique_scope(self) -> None:
-        uqs = [c for c in Base.metadata.tables["treehole_summaries"].constraints
-               if hasattr(c, "name") and c.name == "uq_treehole_summary_scope"]
+        uqs = [
+            c
+            for c in Base.metadata.tables["treehole_summaries"].constraints
+            if hasattr(c, "name") and c.name == "uq_treehole_summary_scope"
+        ]
         assert len(uqs) == 1
 
     @pytest.mark.parametrize(
         "table",
-        sorted(EXPECTED_TABLES - {
-            "treehole_engagements",
-            "treehole_aggregations",  # uses first/last_engagement_at
-            "push_prefs",              # uses updated_at only
-        }),
+        sorted(
+            EXPECTED_TABLES
+            - {
+                "treehole_engagements",
+                "treehole_aggregations",  # uses first/last_engagement_at
+                "push_prefs",  # uses updated_at only
+            }
+        ),
     )
     def test_all_tables_have_audit_timestamp(self, table: str) -> None:
         cols = {c.name for c in Base.metadata.tables[table].columns}
@@ -83,8 +90,6 @@ class TestMetadataShape:
             "created_at",
             "requested_at",  # deletion_requests
             "generated_at",  # weekly_reports
-            "recorded_at",   # emotion_baselines
+            "recorded_at",  # emotion_baselines
         }
-        assert cols & accepted, (
-            f"{table} missing any audit timestamp; got: {cols}"
-        )
+        assert cols & accepted, f"{table} missing any audit timestamp; got: {cols}"

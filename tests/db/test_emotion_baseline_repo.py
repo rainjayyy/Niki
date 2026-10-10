@@ -20,17 +20,13 @@ pytestmark = pytest.mark.asyncio
 class TestInMemoryRepo:
     async def test_add_returns_id(self) -> None:
         repo = InMemoryEmotionBaselineRepository()
-        row_id = await repo.add(
-            date="2026-07-22", valence=0.5, intensity=3, source="normal"
-        )
+        row_id = await repo.add(date="2026-07-22", valence=0.5, intensity=3, source="normal")
         assert isinstance(row_id, int)
         assert row_id >= 1
 
     async def test_list_in_window_returns_added_records(self) -> None:
         repo = InMemoryEmotionBaselineRepository()
-        await repo.add(
-            date="2026-07-22", valence=0.5, intensity=3, source="normal"
-        )
+        await repo.add(date="2026-07-22", valence=0.5, intensity=3, source="normal")
         rows = await repo.list_in_window(window_days=7)
         assert len(rows) == 1
         assert rows[0]["date"] == "2026-07-22"
@@ -40,12 +36,8 @@ class TestInMemoryRepo:
 
         repo = InMemoryEmotionBaselineRepository()
         # Insert 2 records; list_in_window(7) keeps both.
-        await repo.add(
-            date="2026-07-22", valence=0.5, intensity=3, source="normal"
-        )
-        await repo.add(
-            date="2026-07-21", valence=0.3, intensity=3, source="treehole"
-        )
+        await repo.add(date="2026-07-22", valence=0.5, intensity=3, source="normal")
+        await repo.add(date="2026-07-21", valence=0.3, intensity=3, source="treehole")
         rows = await repo.list_in_window(window_days=7)
         assert len(rows) == 2
         # Validate both dates present
@@ -67,9 +59,7 @@ class TestInMemoryRepo:
     async def test_len_counts_records(self) -> None:
         repo = InMemoryEmotionBaselineRepository()
         for _ in range(4):
-            await repo.add(
-                date="2026-07-22", valence=0.5, intensity=3, source="normal"
-            )
+            await repo.add(date="2026-07-22", valence=0.5, intensity=3, source="normal")
         assert len(repo) == 4
 
 
@@ -77,9 +67,7 @@ class TestPostgresRepoSqlite:
     async def test_round_trip(self, async_session_factory) -> None:
         async with async_session_factory() as session:
             repo = PostgresEmotionBaselineRepository(session)
-            await repo.add(
-                date="2026-07-22", valence=0.5, intensity=3, source="normal"
-            )
+            await repo.add(date="2026-07-22", valence=0.5, intensity=3, source="normal")
             await session.commit()
 
         async with async_session_factory() as session:

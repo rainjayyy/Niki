@@ -1,6 +1,65 @@
-"""End-to-end API tests for the encyclopedia endpoints."""
+"""End-to-end API tests for the encyclopedia endpoints.
 
+These tests cover the API contract (request shape, response shape,
+error handling) — NOT the LLM's content quality. The actual LLM
+output is non-deterministic across model versions, so the tests
+force stub mode to get deterministic, faithful-paraphrase
+responses.
+"""
+
+import pytest
 from fastapi.testclient import TestClient
+
+from niki.api import encyclopedia as api_encyclopedia
+from niki.api._fallback_llm import FallbackEncyclopediaLLM
+
+
+@pytest.fixture(autouse=True)
+def _stub_encyclopedia_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force the encyclopedia endpoint to use the deterministic
+    ``FallbackEncyclopediaLLM`` rather than the real MiniMax / DeepSeek
+    LLM. The tests assert on specific response keywords that the
+    stub faithfully produces but the real LLM is free to
+    paraphrase.
+
+    We patch the agent cache so all per-child_age agents are
+    rebuilt with the stub, and the ``_fact_checker`` so its
+    LLM-judge path doesn't try to ping the real LLM either.
+
+    We also clear the ``get_settings()`` LRU cache so the
+    ``agent_tool_use_enabled`` flag (set by the orchestrator
+    streaming tests via monkeypatch + cache_clear()) doesn't
+    leak into the encyclopedia tests — with the tool loop
+    enabled, the agent would try to drive the stub through
+    tool calls and fail.
+    """
+    from niki.config.settings import get_settings
+
+    get_settings.cache_clear()
+    stub = FallbackEncyclopediaLLM()
+    monkeypatch.setattr(api_encyclopedia, "_llm", stub)
+    # Rebuild the default + per-child-age agent cache with the
+    # stub LLM. The fact_checker keeps ``llm_judge=None`` because
+    # the stub doesn't speak the JSON fact-checker protocol.
+    from niki.agents.encyclopedia import EncyclopediaAgent
+
+    api_encyclopedia._agent_cache.clear()  # noqa: SLF001
+    from niki.knowledge.fact_checker import FactChecker
+
+    monkeypatch.setattr(
+        api_encyclopedia,
+        "_fact_checker",
+        FactChecker(api_encyclopedia._kb, llm_judge=None),  # noqa: SLF001
+    )
+    # Re-seed the cache for the default child_age=7 agent
+    api_encyclopedia._agent_cache[7] = EncyclopediaAgent(  # noqa: SLF001
+        llm=stub,
+        knowledge_base=api_encyclopedia._kb,  # noqa: SLF001
+        fact_checker=api_encyclopedia._fact_checker,  # noqa: SLF001
+        persona="gentle",
+        child_age=7,
+        tool_checker=api_encyclopedia._tool_checker,  # noqa: SLF001
+    )
 
 
 def test_ask_known_topic(client: TestClient) -> None:

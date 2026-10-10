@@ -81,8 +81,10 @@ class TestHashDeterminism:
 def client() -> TestClient:
     app = create_app()
     app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-        id="p-1", name="T",
-        id_number_masked="****", phone_masked="****",
+        id="p-1",
+        name="T",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 
@@ -101,11 +103,10 @@ class TestReceiptEndpoint:
         r = client.get("/api/v1/deletion/req-1/receipt")
         assert "no-store" in r.headers["cache-control"]
 
-    def test_requires_auth(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_requires_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from niki.main import create_app
         from fastapi.testclient import TestClient
+
         # Disable the conftest fake-auth so get_current_parent
         # actually runs and rejects the unauthenticated request.
         monkeypatch.delenv("NIKI_TEST_FAKE_AUTH", raising=False)

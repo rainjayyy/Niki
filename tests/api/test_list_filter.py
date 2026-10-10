@@ -73,11 +73,11 @@ class TestListQueryParamsHelper:
 class TestListQueryParamsDependency:
     def _build_app_with_route(self) -> TestClient:
         app = create_app()
-        app.dependency_overrides[get_current_parent] = lambda: (
-            ParentAccount(
-                id="p1", name="T",
-                id_number_masked="****", phone_masked="****",
-            )
+        app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
+            id="p1",
+            name="T",
+            id_number_masked="****",
+            phone_masked="****",
         )
         return TestClient(app)
 
@@ -105,8 +105,7 @@ class TestListQueryParamsDependency:
             return {"page": params.page}
 
         r = client.get(
-            "/__test/q_range?since=2026-07-31T00:00:00Z"
-            "&until=2026-07-01T00:00:00Z",
+            "/__test/q_range?since=2026-07-31T00:00:00Z&until=2026-07-01T00:00:00Z",
         )
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_RANGE"
@@ -162,11 +161,11 @@ def _audit_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv("NIKI_TEST_FAKE_AUTH", raising=False)
     set_child_registry(InMemoryChildRegistry())
     app = create_app()
-    app.dependency_overrides[get_current_parent] = lambda: (
-        ParentAccount(
-            id="p_actor", name="T",
-            id_number_masked="****", phone_masked="****",
-        )
+    app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
+        id="p_actor",
+        name="T",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 
@@ -201,22 +200,25 @@ class TestAuthAuditFilter:
         from niki.db.repositories.auth_audit_repo import (
             get_auth_audit_log_repository,
         )
+
         original = get_auth_audit_log_repository()
         set_auth_audit_log_repository(InMemoryAuthAuditLogRepository())
         yield
         set_auth_audit_log_repository(original)
 
-    def test_default_no_filter_returns_self_only(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_default_no_filter_returns_self_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = _audit_client(monkeypatch)
-        asyncio.run(_seed_audit([
-            AuthAuditEvent(
-                event_type="parent_mismatch",
-                actor_parent_id="p_actor",
-                endpoint="/api/v1/foo",
-            ),
-        ]))
+        asyncio.run(
+            _seed_audit(
+                [
+                    AuthAuditEvent(
+                        event_type="parent_mismatch",
+                        actor_parent_id="p_actor",
+                        endpoint="/api/v1/foo",
+                    ),
+                ]
+            )
+        )
         r = client.get("/api/v1/auth/audit/recent")
         assert r.status_code == 200
         body = r.json()
@@ -224,49 +226,45 @@ class TestAuthAuditFilter:
         for ev in body["events"]:
             assert ev["actor_parent_id"] == "p_actor"
 
-    def test_invalid_order_returns_400(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_invalid_order_returns_400(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = _audit_client(monkeypatch)
         r = client.get("/api/v1/auth/audit/recent?order=foo")
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_ORDER"
 
-    def test_invalid_sort_returns_400(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_invalid_sort_returns_400(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = _audit_client(monkeypatch)
         r = client.get("/api/v1/auth/audit/recent?sort=evil")
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_SORT"
 
-    def test_since_until_filter(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_since_until_filter(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = _audit_client(monkeypatch)
         # Insert 3 rows in order; offset each by 10/5/0 seconds
         # in the past so we can confirm the time window cuts them.
         now = datetime.now(timezone.utc)
-        asyncio.run(_seed_audit(
-            [
-                AuthAuditEvent(
-                    event_type="parent_mismatch",
-                    actor_parent_id="p_actor",
-                    endpoint="/api/v1/old",
-                ),
-                AuthAuditEvent(
-                    event_type="parent_mismatch",
-                    actor_parent_id="p_actor",
-                    endpoint="/api/v1/middle",
-                ),
-                AuthAuditEvent(
-                    event_type="parent_mismatch",
-                    actor_parent_id="p_actor",
-                    endpoint="/api/v1/new",
-                ),
-            ],
-            offset_seconds=[10, 5, 0],
-        ))
+        asyncio.run(
+            _seed_audit(
+                [
+                    AuthAuditEvent(
+                        event_type="parent_mismatch",
+                        actor_parent_id="p_actor",
+                        endpoint="/api/v1/old",
+                    ),
+                    AuthAuditEvent(
+                        event_type="parent_mismatch",
+                        actor_parent_id="p_actor",
+                        endpoint="/api/v1/middle",
+                    ),
+                    AuthAuditEvent(
+                        event_type="parent_mismatch",
+                        actor_parent_id="p_actor",
+                        endpoint="/api/v1/new",
+                    ),
+                ],
+                offset_seconds=[10, 5, 0],
+            )
+        )
 
         r = client.get(
             "/api/v1/auth/audit/recent",
@@ -281,22 +279,24 @@ class TestAuthAuditFilter:
         assert any("new" in e for e in endpoints)
         assert not any("old" in e for e in endpoints)
 
-    def test_keyword_substring_is_case_insensitive(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_keyword_substring_is_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = _audit_client(monkeypatch)
-        asyncio.run(_seed_audit([
-            AuthAuditEvent(
-                event_type="parent_mismatch",
-                actor_parent_id="p_actor",
-                endpoint="/api/v1/USERS/p_probe",
-            ),
-            AuthAuditEvent(
-                event_type="child_not_found",
-                actor_parent_id="p_actor",
-                endpoint="/api/v1/other",
-            ),
-        ]))
+        asyncio.run(
+            _seed_audit(
+                [
+                    AuthAuditEvent(
+                        event_type="parent_mismatch",
+                        actor_parent_id="p_actor",
+                        endpoint="/api/v1/USERS/p_probe",
+                    ),
+                    AuthAuditEvent(
+                        event_type="child_not_found",
+                        actor_parent_id="p_actor",
+                        endpoint="/api/v1/other",
+                    ),
+                ]
+            )
+        )
         r = client.get(
             "/api/v1/auth/audit/recent?keyword=USERS",
         )
@@ -305,21 +305,21 @@ class TestAuthAuditFilter:
         assert len(endpoints) == 1
         assert "users" in endpoints[0].lower()
 
-    def test_sort_order_asc_reverses(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_sort_order_asc_reverses(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = _audit_client(monkeypatch)
-        asyncio.run(_seed_audit(
-            [
-                AuthAuditEvent(
-                    event_type=f"e{i}",
-                    actor_parent_id="p_actor",
-                    endpoint=f"/a/{i}",
-                )
-                for i in range(3)
-            ],
-            offset_seconds=[3600, 1800, 0],
-        ))
+        asyncio.run(
+            _seed_audit(
+                [
+                    AuthAuditEvent(
+                        event_type=f"e{i}",
+                        actor_parent_id="p_actor",
+                        endpoint=f"/a/{i}",
+                    )
+                    for i in range(3)
+                ],
+                offset_seconds=[3600, 1800, 0],
+            )
+        )
         r = client.get(
             "/api/v1/auth/audit/recent?sort=created_at&order=asc",
         )
@@ -336,23 +336,23 @@ class TestAuthAuditFilter:
 @pytest.fixture
 def memory_client() -> TestClient:
     from niki.api.memory import _graph
+
     _graph._entities.clear()
     _graph._edges.clear()
     app = create_app()
-    app.dependency_overrides[get_current_parent] = lambda: (
-        ParentAccount(
-            id="p1", name="T",
-            id_number_masked="****", phone_masked="****",
-        )
+    app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
+        id="p1",
+        name="T",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 
 
 class TestMemoryGraphEntitiesFilter:
-    def test_keyword_matches_name_case_insensitive(
-        self, memory_client: TestClient
-    ) -> None:
+    def test_keyword_matches_name_case_insensitive(self, memory_client: TestClient) -> None:
         from niki.api.memory import _graph
+
         _graph.add_entity(name="Dinosaur", entity_type="concept")
         _graph.add_entity(name="T-Rex", entity_type="concept")
         _graph.add_entity(name="unicorn", entity_type="concept")
@@ -366,10 +366,9 @@ class TestMemoryGraphEntitiesFilter:
         assert "T-Rex" not in names
         assert "unicorn" not in names
 
-    def test_keyword_matches_aliases(
-        self, memory_client: TestClient
-    ) -> None:
+    def test_keyword_matches_aliases(self, memory_client: TestClient) -> None:
         from niki.api.memory import _graph
+
         _graph.add_entity(
             name="霸王龙",
             entity_type="concept",
@@ -385,10 +384,9 @@ class TestMemoryGraphEntitiesFilter:
         assert "霸王龙" in names
         assert "unicorn" not in names
 
-    def test_sort_name_orders_alphabetically(
-        self, memory_client: TestClient
-    ) -> None:
+    def test_sort_name_orders_alphabetically(self, memory_client: TestClient) -> None:
         from niki.api.memory import _graph
+
         for n in ["charlie", "alpha", "bravo"]:
             _graph.add_entity(name=n, entity_type="concept")
 
@@ -399,18 +397,16 @@ class TestMemoryGraphEntitiesFilter:
         names = [e["name"] for e in body["entities"]]
         assert names == sorted(names)
 
-    def test_filter_composes_with_pagination(
-        self, memory_client: TestClient
-    ) -> None:
+    def test_filter_composes_with_pagination(self, memory_client: TestClient) -> None:
         from niki.api.memory import _graph
+
         for i in range(30):
             _graph.add_entity(name=f"target{i}", entity_type="concept")
         for i in range(20):
             _graph.add_entity(name=f"other{i}", entity_type="concept")
 
         r = memory_client.get(
-            "/api/v1/memory/graph/entities"
-            "?keyword=target&page=2&page_size=10",
+            "/api/v1/memory/graph/entities?keyword=target&page=2&page_size=10",
         )
         body = r.json()
         assert body["total"] == 30
@@ -431,13 +427,14 @@ def treehole_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv("NIKI_TEST_FAKE_AUTH", raising=False)
     set_child_registry(InMemoryChildRegistry())
     from niki.services.child_registry import get_child_registry
+
     get_child_registry().register("c-flt", "p_flt")
     app = create_app()
-    app.dependency_overrides[get_current_parent] = lambda: (
-        ParentAccount(
-            id="p_flt", name="T",
-            id_number_masked="****", phone_masked="****",
-        )
+    app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
+        id="p_flt",
+        name="T",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 
@@ -455,6 +452,7 @@ def _seed_treehole_manager(
     """
     from niki.treehole.manager import TreeholeManager
     from niki.treehole.encryption import TreeholeEncryption
+
     mgr = TreeholeManager(
         encryption=TreeholeEncryption(key=b"T" * 32),
     )
@@ -505,14 +503,14 @@ class TestTreeholeSummariesFilter:
         it onto `niki.api.treehole._manager`; without restoring,
         subsequent tests in the suite see the seeded rows."""
         import niki.api.treehole as api_tree
+
         original = api_tree._manager
         yield
         api_tree._manager = original
 
-    def test_keyword_filter_category(
-        self, treehole_client: TestClient
-    ) -> None:
+    def test_keyword_filter_category(self, treehole_client: TestClient) -> None:
         import niki.api.treehole as api_tree
+
         mgr = _seed_treehole_manager(family=10, school=10)
         api_tree._manager = mgr
 
@@ -524,19 +522,16 @@ class TestTreeholeSummariesFilter:
         for s in body["summaries"]:
             assert s["emotion_category"] == "family"
 
-    def test_invalid_order_returns_400(
-        self, treehole_client: TestClient
-    ) -> None:
+    def test_invalid_order_returns_400(self, treehole_client: TestClient) -> None:
         r = treehole_client.get(
             "/api/v1/treehole/summaries/c-flt?order=foo",
         )
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_ORDER"
 
-    def test_sort_order_asc(
-        self, treehole_client: TestClient
-    ) -> None:
+    def test_sort_order_asc(self, treehole_client: TestClient) -> None:
         import niki.api.treehole as api_tree
+
         mgr = _seed_treehole_manager(other=3)
         api_tree._manager = mgr
 
@@ -550,23 +545,17 @@ class TestTreeholeSummariesFilter:
         ).json()
         assert desc["summaries"]
         assert asc["summaries"]
-        assert desc["summaries"][0]["timestamp"] >= (
-            desc["summaries"][-1]["timestamp"]
-        )
-        assert asc["summaries"][0]["timestamp"] <= (
-            asc["summaries"][-1]["timestamp"]
-        )
+        assert desc["summaries"][0]["timestamp"] >= (desc["summaries"][-1]["timestamp"])
+        assert asc["summaries"][0]["timestamp"] <= (asc["summaries"][-1]["timestamp"])
 
-    def test_pagination_composes_with_keyword(
-        self, treehole_client: TestClient
-    ) -> None:
+    def test_pagination_composes_with_keyword(self, treehole_client: TestClient) -> None:
         import niki.api.treehole as api_tree
+
         mgr = _seed_treehole_manager(other=25)
         api_tree._manager = mgr
 
         r = treehole_client.get(
-            "/api/v1/treehole/summaries/c-flt"
-            "?keyword=other&page=2&page_size=10",
+            "/api/v1/treehole/summaries/c-flt?keyword=other&page=2&page_size=10",
         )
         body = r.json()
         assert body["total"] == 25

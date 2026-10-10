@@ -68,9 +68,7 @@ class TestConsoleAlertDispatcher:
 
 
 class TestWebhookAlertDispatcher:
-    async def test_post_to_configured_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_post_to_configured_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mock_client = AsyncMock()
         mock_response = AsyncMock(status_code=200)
         mock_response.status_code = 200
@@ -79,14 +77,14 @@ class TestWebhookAlertDispatcher:
 
         # Override httpx.AsyncClient construction.
         import niki.security.alerts as alerts_mod
+
         monkeypatch.setattr(
-            alerts_mod.httpx, "AsyncClient",
+            alerts_mod.httpx,
+            "AsyncClient",
             lambda *a, **kw: mock_client,
         )
 
-        d = WebhookAlertDispatcher(
-            url="https://example.com/hook", timeout_seconds=1.0
-        )
+        d = WebhookAlertDispatcher(url="https://example.com/hook", timeout_seconds=1.0)
         await d.dispatch(_sample_alert())
 
         mock_client.post.assert_awaited_once()
@@ -99,38 +97,38 @@ class TestWebhookAlertDispatcher:
         with pytest.raises(ValueError):
             WebhookAlertDispatcher(url="")
 
-    async def test_post_failure_does_not_raise(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_post_failure_does_not_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A webhook failure must never propagate to the caller."""
 
         class BoomClient:
-            def __init__(self, *a, **kw) -> None: pass
+            def __init__(self, *a, **kw) -> None:
+                pass
+
             async def post(self, *a, **kw):
                 raise httpx.ConnectError("boom")
+
             async def aclose(self):
                 pass
 
         import niki.security.alerts as alerts_mod
-        monkeypatch.setattr(
-            alerts_mod.httpx, "AsyncClient", BoomClient
-        )
+
+        monkeypatch.setattr(alerts_mod.httpx, "AsyncClient", BoomClient)
 
         d = WebhookAlertDispatcher(url="https://example.com/hook")
         # Must NOT raise.
         await d.dispatch(_sample_alert())
 
-    async def test_non_2xx_does_not_raise(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_non_2xx_does_not_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mock_response = AsyncMock(status_code=500)
         mock_client = AsyncMock()
         mock_client.post.return_value = mock_response
         mock_client.aclose = AsyncMock()
 
         import niki.security.alerts as alerts_mod
+
         monkeypatch.setattr(
-            alerts_mod.httpx, "AsyncClient",
+            alerts_mod.httpx,
+            "AsyncClient",
             lambda *a, **kw: mock_client,
         )
 

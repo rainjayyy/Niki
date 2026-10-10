@@ -1,12 +1,11 @@
 """Tests for ISS-07: daytime hook uses RelationType enum, not string."""
 
-
 from niki.memory.graph import RelationType
 from niki.memory.hook import DaytimeMemoryHook
 from niki.memory.long_term import LongTermMemory
 
 
-class _StubLLM:
+class FallbackLLM:
     async def chat(self, *args, **kwargs):  # noqa: ANN002, ANN003
         return {"content": "stub"}
 

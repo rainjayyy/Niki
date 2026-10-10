@@ -117,9 +117,7 @@ class TestDeletionDB:
             await lifecycle.request_deletion(account.id)
         assert exc_info.value.code == "ALREADY_PENDING"
 
-    async def test_complete_without_request_raises(
-        self, lifecycle: AccountLifecycle
-    ) -> None:
+    async def test_complete_without_request_raises(self, lifecycle: AccountLifecycle) -> None:
         account, _ = await lifecycle.start_signup(
             name="张三",
             id_number="110101199003078811",

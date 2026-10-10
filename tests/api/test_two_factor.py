@@ -71,9 +71,7 @@ def _reset_two_factor_state() -> AsyncGenerator[None, None]:
     # Use a deterministic Fernet key so encryption-at-rest can
     # be inspected.
     fernet_key = Fernet.generate_key()
-    svc = InMemoryTwoFactorService(
-        repo=repo, fernet_key=fernet_key
-    )
+    svc = InMemoryTwoFactorService(repo=repo, fernet_key=fernet_key)
     set_two_factor_service(svc)
     yield
     set_two_factor_service(None)  # type: ignore[arg-type]
@@ -84,12 +82,14 @@ def _reset_two_factor_state() -> AsyncGenerator[None, None]:
 def svc() -> InMemoryTwoFactorService:
     """Convenience accessor for the autouse service fixture."""
     from niki.services.two_factor import get_two_factor_service
+
     return get_two_factor_service()  # type: ignore[return-value]
 
 
 @pytest.fixture
 def audit_repo() -> InMemoryAuditLogRepository:
     from niki.db.repositories import get_audit_log_repository
+
     return get_audit_log_repository()  # type: ignore[return-value]
 
 
@@ -124,6 +124,7 @@ def _send_sms_code(phone: str) -> str:
         get_sms_service,
         set_sms_service,
     )
+
     # Reset to a fresh service so the per-phone cooldown doesn't
     # block re-sends within the same test.
     fresh = InMemorySMSCodeService()
@@ -220,11 +221,7 @@ class TestTwoFactorService:
             assert len(c) == 8
             # All characters from BACKUP_CODE_ALPHABET
             for ch in c:
-                assert ch in (
-                    "23456789"
-                    "ABCDEFGHJKMNPQRSTUVWXYZ"
-                    "abcdefghjkmnpqrstuvwxyz"
-                )
+                assert ch in ("23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz")
         assert await svc.is_enabled("p1") is True
 
     @pytest.mark.asyncio
@@ -234,25 +231,17 @@ class TestTwoFactorService:
         # AC-2: valid TOTP within window passes.
         payload = await svc.begin_enrollment("p1")
         # Complete enrollment to flip is_enabled=True.
-        await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         # Advance past the step verify_enrollment consumed.
         future_ts = int(time.time()) + 31  # +1 window
-        future_code = pyotp.TOTP(
-            payload.secret_plaintext
-        ).at(for_time=future_ts)
+        future_code = pyotp.TOTP(payload.secret_plaintext).at(for_time=future_ts)
         assert await svc.verify_code("p1", future_code) is True
 
     @pytest.mark.asyncio
-    async def test_verify_code_with_wrong_totp_fails(
-        self, svc: InMemoryTwoFactorService
-    ) -> None:
+    async def test_verify_code_with_wrong_totp_fails(self, svc: InMemoryTwoFactorService) -> None:
         # AC-2: wrong code raises TwoFactorInvalidCode.
         payload = await svc.begin_enrollment("p1")
-        await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         with pytest.raises(TwoFactorInvalidCode):
             await svc.verify_code("p1", "000000")
 
@@ -262,13 +251,9 @@ class TestTwoFactorService:
     ) -> None:
         # AC-5: same code can't be reused within the same 30-s window.
         payload = await svc.begin_enrollment("p1")
-        await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         future_ts = int(time.time()) + 31
-        code = pyotp.TOTP(payload.secret_plaintext).at(
-            for_time=future_ts
-        )
+        code = pyotp.TOTP(payload.secret_plaintext).at(for_time=future_ts)
         assert await svc.verify_code("p1", code) is True
         # Same code again — must fail.
         with pytest.raises(TwoFactorInvalidCode):
@@ -280,35 +265,25 @@ class TestTwoFactorService:
     ) -> None:
         # AC-3: backup code works, then is consumed.
         payload = await svc.begin_enrollment("p1")
-        codes = await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        codes = await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         assert await svc.verify_backup_code("p1", codes[0]) is True
         status = await svc.status("p1")
         assert status["backup_codes_remaining"] == BACKUP_CODE_COUNT - 1
 
     @pytest.mark.asyncio
-    async def test_backup_code_cannot_be_replayed(
-        self, svc: InMemoryTwoFactorService
-    ) -> None:
+    async def test_backup_code_cannot_be_replayed(self, svc: InMemoryTwoFactorService) -> None:
         # AC-3: replaying a consumed backup code fails.
         payload = await svc.begin_enrollment("p1")
-        codes = await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        codes = await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         await svc.verify_backup_code("p1", codes[0])
         with pytest.raises(TwoFactorBackupCodeInvalid):
             await svc.verify_backup_code("p1", codes[0])
 
     @pytest.mark.asyncio
-    async def test_disable_requires_password_reauth(
-        self, svc: InMemoryTwoFactorService
-    ) -> None:
+    async def test_disable_requires_password_reauth(self, svc: InMemoryTwoFactorService) -> None:
         # AC-1: disable requires re-auth (empty token → fail).
         payload = await svc.begin_enrollment("p1")
-        await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         with pytest.raises(TwoFactorReauthRequired):
             await svc.disable("p1", "")
         # Non-empty reauth passes
@@ -321,25 +296,17 @@ class TestTwoFactorService:
     ) -> None:
         # AC-3: regenerating invalidates the old set.
         payload = await svc.begin_enrollment("p1")
-        old_codes = await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
-        new_codes = await svc.regenerate_backup_codes(
-            "p1", "any-non-empty"
-        )
+        old_codes = await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
+        new_codes = await svc.regenerate_backup_codes("p1", "any-non-empty")
         assert new_codes != old_codes
         # Old code no longer works.
         with pytest.raises(TwoFactorBackupCodeInvalid):
             await svc.verify_backup_code("p1", old_codes[0])
         # New code does.
-        assert (
-            await svc.verify_backup_code("p1", new_codes[0]) is True
-        )
+        assert await svc.verify_backup_code("p1", new_codes[0]) is True
 
     @pytest.mark.asyncio
-    async def test_secret_encrypted_at_rest(
-        self, svc: InMemoryTwoFactorService
-    ) -> None:
+    async def test_secret_encrypted_at_rest(self, svc: InMemoryTwoFactorService) -> None:
         # AC-4: stored secret is NOT the plaintext.
         payload = await svc.begin_enrollment("p_secret_test")
         repo = await _get_repo()
@@ -351,14 +318,10 @@ class TestTwoFactorService:
         assert row.secret_encrypted.startswith("gAAAAA")
 
     @pytest.mark.asyncio
-    async def test_status_reflects_enrollment(
-        self, svc: InMemoryTwoFactorService
-    ) -> None:
+    async def test_status_reflects_enrollment(self, svc: InMemoryTwoFactorService) -> None:
         # AC-1: GET /2fa/status shows enrollment state.
         payload = await svc.begin_enrollment("p1")
-        await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         status = await svc.status("p1")
         assert status["is_enabled"] is True
         assert status["enrolled_at"] is not None
@@ -366,14 +329,10 @@ class TestTwoFactorService:
         assert status["last_used_at"] is None  # not used yet
 
     @pytest.mark.asyncio
-    async def test_double_enrollment_rejected(
-        self, svc: InMemoryTwoFactorService
-    ) -> None:
+    async def test_double_enrollment_rejected(self, svc: InMemoryTwoFactorService) -> None:
         # AC: a second begin_enrollment on an enabled account fails.
         payload = await svc.begin_enrollment("p1")
-        await svc.verify_enrollment(
-            "p1", pyotp.TOTP(payload.secret_plaintext).now()
-        )
+        await svc.verify_enrollment("p1", pyotp.TOTP(payload.secret_plaintext).now())
         with pytest.raises(TwoFactorAlreadyEnrolled):
             await svc.begin_enrollment("p1")
 
@@ -388,6 +347,7 @@ class TestTwoFactorService:
 
 async def _get_repo():
     from niki.db.repositories import get_two_factor_repository
+
     return get_two_factor_repository()  # type: ignore[return-value]
 
 
@@ -399,9 +359,7 @@ async def _get_repo():
 class TestTwoFactorEndpoints:
     """Drive the FastAPI router through the TestClient."""
 
-    def test_status_endpoint_disabled_by_default(
-        self, client: TestClient
-    ) -> None:
+    def test_status_endpoint_disabled_by_default(self, client: TestClient) -> None:
         # GET /2fa/status returns is_enabled=False for a parent
         # that hasn't enrolled.
         # Bypass the fake-auth override by directly using a real
@@ -422,9 +380,7 @@ class TestTwoFactorEndpoints:
         assert body["enrolled_at"] is None
         assert body["backup_codes_remaining"] == 0
 
-    def test_enroll_then_verify_enables_2fa(
-        self, client: TestClient
-    ) -> None:
+    def test_enroll_then_verify_enables_2fa(self, client: TestClient) -> None:
         # AC-1 + AC-2: enroll → verify → status reports enabled.
         token = issue_access_token("p_enroll_test", scope=SCOPE_FULL)
         # Enroll
@@ -457,9 +413,7 @@ class TestTwoFactorEndpoints:
         )
         assert r.json()["is_enabled"] is True
 
-    def test_enroll_verify_wrong_code_returns_401(
-        self, client: TestClient
-    ) -> None:
+    def test_enroll_verify_wrong_code_returns_401(self, client: TestClient) -> None:
         # AC: invalid TOTP at enrollment → 401.
         token = issue_access_token("p_enroll_wrong", scope=SCOPE_FULL)
         r = client.post(
@@ -475,13 +429,9 @@ class TestTwoFactorEndpoints:
         assert r.status_code == 401
         assert r.json()["error"]["code"] == "TWO_FA_INVALID_CODE"
 
-    def test_verify_endpoint_returns_scope_token(
-        self, client: TestClient
-    ) -> None:
+    def test_verify_endpoint_returns_scope_token(self, client: TestClient) -> None:
         # AC-1: POST /2fa/verify returns a full-scope scope_token.
-        token = issue_access_token(
-            "p_verify_test", scope=SCOPE_FULL
-        )
+        token = issue_access_token("p_verify_test", scope=SCOPE_FULL)
         r = client.post(
             "/api/v1/auth/2fa/enroll",
             headers={"Authorization": f"Bearer {token}"},
@@ -507,11 +457,10 @@ class TestTwoFactorEndpoints:
         # trusts this scope; `full` does NOT satisfy the gate).
         claims = decode_unverified(body["scope_token"])
         from niki.auth.jwt_service import SCOPE_FULL_REAUTH
+
         assert claims["scope"] == SCOPE_FULL_REAUTH
 
-    def test_login_with_2fa_enabled_returns_partial_token(
-        self, client: TestClient
-    ) -> None:
+    def test_login_with_2fa_enabled_returns_partial_token(self, client: TestClient) -> None:
         # AC-1: when 2FA is enabled, sms/login returns 2fa_required.
         phone = "13800138001"
         # Step 1: SMS login to create the account.
@@ -545,9 +494,7 @@ class TestTwoFactorEndpoints:
         claims = decode_unverified(body["partial_token"])
         assert claims["scope"] == SCOPE_2FA_PENDING
 
-    def test_login_with_2fa_disabled_returns_full_tokens(
-        self, client: TestClient
-    ) -> None:
+    def test_login_with_2fa_disabled_returns_full_tokens(self, client: TestClient) -> None:
         # AC: existing behaviour preserved when 2FA is not enrolled.
         phone = "13800138002"
         code = _send_sms_code(phone)
@@ -562,9 +509,7 @@ class TestTwoFactorEndpoints:
         # No `status: 2fa_required` field — full tokens issued.
         assert body.get("status") != "2fa_required"
 
-    def test_two_factor_login_with_valid_totp_returns_full_tokens(
-        self, client: TestClient
-    ) -> None:
+    def test_two_factor_login_with_valid_totp_returns_full_tokens(self, client: TestClient) -> None:
         # AC-1: POST /2fa/login with valid TOTP returns full tokens.
         phone = "13800138003"
         parent_id = _send_and_login(client, phone)
@@ -600,9 +545,7 @@ class TestTwoFactorEndpoints:
         assert "refresh_token" in body
         assert body["scope"] == SCOPE_FULL
 
-    def test_two_factor_login_with_invalid_totp_returns_401(
-        self, client: TestClient
-    ) -> None:
+    def test_two_factor_login_with_invalid_totp_returns_401(self, client: TestClient) -> None:
         # AC: invalid TOTP at /2fa/login → 401.
         phone = "13800138004"
         parent_id = _send_and_login(client, phone)
@@ -658,9 +601,7 @@ class TestTwoFactorEndpoints:
         assert r.status_code == 401, r.text
         assert r.json()["error"]["code"] == "TWO_FA_REQUIRED"
 
-    def test_deletion_request_with_totp_header_succeeds(
-        self, client: TestClient
-    ) -> None:
+    def test_deletion_request_with_totp_header_succeeds(self, client: TestClient) -> None:
         # AC-6: X-2FA-Code header admits the caller.
         phone = "13800138006"
         parent_id = _send_and_login(client, phone)
@@ -685,22 +626,23 @@ class TestTwoFactorEndpoints:
             TwoFactorConfigData,
         )
         from datetime import datetime, timezone
+
         repo = get_two_factor_repository()
         from niki.services.two_factor import (
             InMemoryTwoFactorService,
             get_two_factor_service,
         )
+
         svc = get_two_factor_service()  # type: ignore[assignment]
         # Encrypt secret with the live Fernet key (the test
         # fixture installed a known key; we reuse it here).
         from cryptography.fernet import Fernet
+
         key = Fernet.generate_key()
         # Use the service's actual key (which is a Fernet key
         # established by the autouse fixture).
         live_key = svc._fernet_key  # type: ignore[attr-defined]
-        ciphertext = Fernet(live_key).encrypt(
-            secret.encode("ascii")
-        ).decode("ascii")
+        ciphertext = Fernet(live_key).encrypt(secret.encode("ascii")).decode("ascii")
         await_run(
             repo.upsert(
                 parent_id=parent_id,
@@ -724,13 +666,9 @@ class TestTwoFactorEndpoints:
             },
         )
         assert r.status_code == 200, r.text
-        assert (
-            r.json()["account"]["status"] == "deletion_pending"
-        )
+        assert r.json()["account"]["status"] == "deletion_pending"
 
-    def test_deletion_request_with_backup_code_header_succeeds(
-        self, client: TestClient
-    ) -> None:
+    def test_deletion_request_with_backup_code_header_succeeds(self, client: TestClient) -> None:
         # AC-6: X-2FA-Backup-Code header admits the caller.
         phone = "13800138007"
         parent_id = _send_and_login(client, phone)
@@ -756,17 +694,13 @@ class TestTwoFactorEndpoints:
             },
         )
         assert r.status_code == 200, r.text
-        assert (
-            r.json()["account"]["status"] == "deletion_pending"
-        )
+        assert r.json()["account"]["status"] == "deletion_pending"
 
     def test_audit_log_records_2fa_events(
         self, client: TestClient, audit_repo: InMemoryAuditLogRepository
     ) -> None:
         # AC-7: enrollment writes audit rows.
-        token = issue_access_token(
-            "p_audit_test", scope=SCOPE_FULL
-        )
+        token = issue_access_token("p_audit_test", scope=SCOPE_FULL)
         r = client.post(
             "/api/v1/auth/2fa/enroll",
             headers={"Authorization": f"Bearer {token}"},
@@ -791,9 +725,7 @@ class TestTwoFactorEndpoints:
         self, client: TestClient, audit_repo: InMemoryAuditLogRepository
     ) -> None:
         # AC-7: failed verification writes a warning row.
-        token = issue_access_token(
-            "p_audit_fail", scope=SCOPE_FULL
-        )
+        token = issue_access_token("p_audit_fail", scope=SCOPE_FULL)
         r = client.post(
             "/api/v1/auth/2fa/enroll",
             headers={"Authorization": f"Bearer {token}"},
@@ -819,19 +751,12 @@ class TestTwoFactorEndpoints:
         )
         event_types = {row["event_type"] for row in rows}
         assert "2fa_verification_failure" in event_types
-        failure = [
-            r for r in rows
-            if r["event_type"] == "2fa_verification_failure"
-        ][0]
+        failure = [r for r in rows if r["event_type"] == "2fa_verification_failure"][0]
         assert failure["severity"] == "warning"
 
-    def test_rate_limit_on_verify_endpoint(
-        self, client: TestClient
-    ) -> None:
+    def test_rate_limit_on_verify_endpoint(self, client: TestClient) -> None:
         # AC-8: 6th verify call within 60s → 429.
-        token = issue_access_token(
-            "p_rate_test", scope=SCOPE_FULL
-        )
+        token = issue_access_token("p_rate_test", scope=SCOPE_FULL)
         r = client.post(
             "/api/v1/auth/2fa/enroll",
             headers={"Authorization": f"Bearer {token}"},
@@ -867,4 +792,5 @@ class TestTwoFactorEndpoints:
 def await_run(coro):
     """Run an async coroutine synchronously in tests."""
     import asyncio
+
     return asyncio.run(coro)

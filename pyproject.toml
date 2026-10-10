@@ -60,6 +60,7 @@ dependencies = [
     "boto3>=1.34.0",             # BE-MEDIA-001-real S3-compatible storage
     "prometheus-client>=0.20.0", # BE-API-009 Prometheus /metrics endpoint
     "pywebpush>=2.0.0",          # BE-PUSH-003 Web Push (VAPID / RFC 8292)
+    "edge-tts>=6.1.9",          # BE-MEDIA-003-real neural TTS (Microsoft Edge)
 ]
 
 [project.optional-dependencies]

@@ -60,6 +60,7 @@ class TestMemoryGraphEntitiesPagination:
         """Clear the in-process cognitive graph before each test
         so cross-test state doesn't leak into `test_graph_add_*`."""
         from niki.api.memory import _graph
+
         _graph._entities.clear()
         _graph._edges.clear()
         yield
@@ -71,15 +72,19 @@ class TestMemoryGraphEntitiesPagination:
         from niki.auth.account import ParentAccount
         from niki.auth.dependencies import get_current_parent
         from niki.main import create_app
+
         app = create_app()
         app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-            id="p1", name="T",
-            id_number_masked="****", phone_masked="****",
+            id="p1",
+            name="T",
+            id_number_masked="****",
+            phone_masked="****",
         )
         return TestClient(app)
 
     def test_default_page_size(self, client: TestClient) -> None:
         from niki.api.memory import _graph
+
         for i in range(25):
             _graph.add_entity(
                 name=f"e{i}",
@@ -99,11 +104,10 @@ class TestMemoryGraphEntitiesPagination:
 
     def test_explicit_pagination(self, client: TestClient) -> None:
         from niki.api.memory import _graph
+
         for i in range(25):
             _graph.add_entity(name=f"e{i}", entity_type="concept")
-        r = client.get(
-            "/api/v1/memory/graph/entities?page=2&page_size=10"
-        )
+        r = client.get("/api/v1/memory/graph/entities?page=2&page_size=10")
         body = r.json()
         assert body["page"] == 2
         assert body["page_size"] == 10
@@ -112,12 +116,8 @@ class TestMemoryGraphEntitiesPagination:
         # First entity on page 2 should be the 11th overall
         assert body["entities"][0]["name"] == "e10"
 
-    def test_invalid_page_size_returns_422(
-        self, client: TestClient
-    ) -> None:
-        r = client.get(
-            "/api/v1/memory/graph/entities?page_size=500"
-        )
+    def test_invalid_page_size_returns_422(self, client: TestClient) -> None:
+        r = client.get("/api/v1/memory/graph/entities?page_size=500")
         assert r.status_code == 400
 
     def test_invalid_page_returns_422(self, client: TestClient) -> None:
@@ -131,6 +131,7 @@ class TestTreeholeSummariesPagination:
         """Each test uses its own manager so cross-test state
         is contained; restore the module-level _manager after."""
         import niki.api.treehole as api_tree
+
         original = api_tree._manager
         yield
         api_tree._manager = original
@@ -144,21 +145,27 @@ class TestTreeholeSummariesPagination:
             InMemoryChildRegistry,
             set_child_registry,
         )
+
         set_child_registry(InMemoryChildRegistry())
         from niki.services.child_registry import get_child_registry
+
         get_child_registry().register("c-pag", "p_pag")
         app = create_app()
         app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-            id="p_pag", name="T",
-            id_number_masked="****", phone_masked="****",
+            id="p_pag",
+            name="T",
+            id_number_masked="****",
+            phone_masked="****",
         )
         return TestClient(app)
 
     def test_default_pagination(self, client: TestClient) -> None:
         from niki.treehole.manager import TreeholeManager
         from niki.treehole.encryption import TreeholeEncryption
+
         mgr = TreeholeManager(encryption=TreeholeEncryption(key=b"T" * 32))
         import asyncio
+
         loop = asyncio.new_event_loop()
         try:
             for i in range(30):
@@ -176,6 +183,7 @@ class TestTreeholeSummariesPagination:
         # Patch the module-level _manager so the endpoint reads
         # from our seeded manager.
         import niki.api.treehole as api_tree
+
         api_tree._manager = mgr
 
         r = client.get("/api/v1/treehole/summaries/c-pag")
@@ -190,8 +198,10 @@ class TestTreeholeSummariesPagination:
     def test_explicit_page(self, client: TestClient) -> None:
         from niki.treehole.manager import TreeholeManager
         from niki.treehole.encryption import TreeholeEncryption
+
         mgr = TreeholeManager(encryption=TreeholeEncryption(key=b"T" * 32))
         import asyncio
+
         loop = asyncio.new_event_loop()
         try:
             for i in range(30):
@@ -207,11 +217,10 @@ class TestTreeholeSummariesPagination:
         finally:
             loop.close()
         import niki.api.treehole as api_tree
+
         api_tree._manager = mgr
 
-        r = client.get(
-            "/api/v1/treehole/summaries/c-pag?page=2&page_size=10"
-        )
+        r = client.get("/api/v1/treehole/summaries/c-pag?page=2&page_size=10")
         body = r.json()
         assert body["page"] == 2
         assert body["page_size"] == 10

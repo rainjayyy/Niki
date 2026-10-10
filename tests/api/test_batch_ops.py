@@ -55,7 +55,7 @@ class TestAddEntitiesBatchHelper:
         graph.add_entity("B")  # Pre-existing < collision.
         items = [
             {"name": "A", "entity_type": "concept"},
-            {"name": "B", "entity_type": "concept"},   # dup
+            {"name": "B", "entity_type": "concept"},  # dup
             {"name": "C", "entity_type": "concept"},
             {"name": "D", "entity_type": "concept"},
             {"name": "E", "entity_type": "concept"},
@@ -71,9 +71,9 @@ class TestAddEntitiesBatchHelper:
         graph = CognitiveGraph()
         items = [
             {"name": "ok"},
-            {"name": ""},            # empty -> invalid
-            {"name": None},          # null  -> invalid
-            {},                      # missing -> invalid
+            {"name": ""},  # empty -> invalid
+            {"name": None},  # null  -> invalid
+            {},  # missing -> invalid
         ]
         out = graph.add_entities_batch([{"name": "ok"}] + items[1:])
         assert len(out["created"]) == 1
@@ -193,11 +193,16 @@ class TestBatchEndpoints:
         assert len(data["created"]) == 5
         assert data["skipped"] == []
         assert {e["name"] for e in data["created"]} == {
-            "ba-A", "ba-B", "ba-C", "ba-D", "ba-E",
+            "ba-A",
+            "ba-B",
+            "ba-C",
+            "ba-D",
+            "ba-E",
         }
 
     def test_entities_batch_with_duplicate(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
         """Pre-call singular endpoint to seed, then batch with a dup."""
         # Seed
@@ -211,7 +216,7 @@ class TestBatchEndpoints:
                 "items": [
                     {"name": "eb-1"},
                     {"name": "eb-2"},
-                    {"name": "dup-target"},   # dup
+                    {"name": "dup-target"},  # dup
                     {"name": "eb-3"},
                     {"name": "eb-4"},
                 ],
@@ -229,14 +234,10 @@ class TestBatchEndpoints:
             "/api/v1/memory/graph/relations/batch",
             json={
                 "items": [
-                    {"source": "rb-A", "target": "rb-B",
-                     "relation": "related_to"},
-                    {"source": "rb-B", "target": "rb-C",
-                     "relation": "related_to"},
-                    {"source": "rb-C", "target": "rb-D",
-                     "relation": "related_to"},
-                    {"source": "rb-D", "target": "rb-E",
-                     "relation": "related_to"},
+                    {"source": "rb-A", "target": "rb-B", "relation": "related_to"},
+                    {"source": "rb-B", "target": "rb-C", "relation": "related_to"},
+                    {"source": "rb-C", "target": "rb-D", "relation": "related_to"},
+                    {"source": "rb-D", "target": "rb-E", "relation": "related_to"},
                 ],
             },
         )
@@ -246,7 +247,8 @@ class TestBatchEndpoints:
         assert data["skipped"] == []
 
     def test_alerts_batch_dismiss_happy_path(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
         # Create 3 alerts via the existing record endpoints.
         ids: list[str] = []
@@ -268,7 +270,8 @@ class TestBatchEndpoints:
         assert data["skipped"] == []
 
     def test_alerts_batch_dismiss_with_missing(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
         """2 dismissed + 1 skipped[reason='not_found']."""
         # Create 2 real alerts.
@@ -295,11 +298,10 @@ class TestBatchEndpoints:
     # ---- 100-item cap ----
 
     def test_entities_batch_over_cap_returns_400(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
-        too_many = [
-            {"name": f"cap-e-{i}"} for i in range(BATCH_MAX_ITEMS + 1)
-        ]
+        too_many = [{"name": f"cap-e-{i}"} for i in range(BATCH_MAX_ITEMS + 1)]
         resp = client.post(
             "/api/v1/memory/graph/entities/batch",
             json={"items": too_many},
@@ -313,7 +315,8 @@ class TestBatchEndpoints:
         assert body["error"]["field"] == "items"
 
     def test_relations_batch_over_cap_returns_400(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
         too_many = [
             {"source": "x", "target": "y", "relation": "related_to"}
@@ -327,11 +330,10 @@ class TestBatchEndpoints:
         assert resp.json()["error"]["code"] == "BATCH_TOO_LARGE"
 
     def test_alerts_batch_dismiss_over_cap_returns_400(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
-        too_many = [
-            f"alert-{i}" for i in range(BATCH_MAX_ITEMS + 1)
-        ]
+        too_many = [f"alert-{i}" for i in range(BATCH_MAX_ITEMS + 1)]
         resp = client.post(
             "/api/v1/dashboard/alerts/batch/dismiss",
             json={"alert_ids": too_many},
@@ -342,12 +344,11 @@ class TestBatchEndpoints:
         assert body["error"]["field"] == "alert_ids"
 
     def test_entities_batch_at_cap_is_accepted(
-        self, client: TestClient,
+        self,
+        client: TestClient,
     ) -> None:
         """Boundary: exactly 100 items must succeed (not 400)."""
-        boundary = [
-            {"name": f"cap-ok-{i}"} for i in range(BATCH_MAX_ITEMS)
-        ]
+        boundary = [{"name": f"cap-ok-{i}"} for i in range(BATCH_MAX_ITEMS)]
         resp = client.post(
             "/api/v1/memory/graph/entities/batch",
             json={"items": boundary},

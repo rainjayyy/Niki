@@ -85,8 +85,11 @@ class TestAuthAuditLogger:
         logger = AuthAuditLogger()  # no repo injected
         # First call should resolve via get_auth_audit_log_repository()
         await logger.log_event(
-            "e", actor_parent_id="p1", reason="r",
-            endpoint="GET /x", method="GET",
+            "e",
+            actor_parent_id="p1",
+            reason="r",
+            endpoint="GET /x",
+            method="GET",
         )
         assert logger.repo is not None
         rows = await logger.repo.list_recent()

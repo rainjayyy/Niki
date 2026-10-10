@@ -117,17 +117,15 @@ def test_metrics_body_lists_core_counters(client: TestClient) -> None:
 def test_chat_total_increments_per_request(client: TestClient) -> None:
     """Hitting /chat/stream bumps niki_chat_total by 1 per request."""
     from niki.infrastructure.llm.streaming import (
-        MockStreamingProvider,
+        FallbackStreamingProvider,
         set_streaming_provider,
     )
 
     # Override the streaming provider to a fast mock so we don't time out.
-    set_streaming_provider(MockStreamingProvider(delay_seconds=0.0))
+    set_streaming_provider(FallbackStreamingProvider(delay_seconds=0.0))
 
     # Send a request (streamed body — we consume it to completion).
-    with client.stream(
-        "POST", "/api/v1/chat/stream", json={"text": "你好"}
-    ) as r:
+    with client.stream("POST", "/api/v1/chat/stream", json={"text": "你好"}) as r:
         assert r.status_code == 200
         for _ in r.iter_lines():
             pass  # drain the SSE stream
@@ -193,9 +191,7 @@ def test_safety_block_total_increments_on_profanity() -> None:
                 reason=cat,
                 severity="block",
             )
-            assert val2 >= 1.0, (
-                f"Expected SAFETY_BLOCK_TOTAL{{reason={cat}}} >= 1, got {val2}"
-            )
+            assert val2 >= 1.0, f"Expected SAFETY_BLOCK_TOTAL{{reason={cat}}} >= 1, got {val2}"
 
 
 def test_safety_block_total_fires_on_escalate() -> None:
@@ -435,9 +431,7 @@ def test_registry_isolation_between_tests_part2(client: TestClient) -> None:
     """After the reset_for_tests fixture in conftest, SMS_SENT must be 0
     even though part1 just incremented it."""
     body = client.get("/api/v1/metrics").text
-    val = _counter_value(
-        body, "niki_sms_sent", provider="aliyun", status="success"
-    )
+    val = _counter_value(body, "niki_sms_sent", provider="aliyun", status="success")
     assert val == 0.0, f"Expected 0 after reset, got {val}"
 
 

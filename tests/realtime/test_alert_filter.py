@@ -105,9 +105,7 @@ class TestRecentAlertsFilters:
         assert len(out) == 2
         assert all(a.detected_at >= base for a in out)
         # Chronological order preserved.
-        assert [a.detected_at for a in out] == sorted(
-            [a.detected_at for a in out]
-        )
+        assert [a.detected_at for a in out] == sorted([a.detected_at for a in out])
 
     def test_filters_combine_with_and(self) -> None:
         broker = AlertBroker()
@@ -175,13 +173,7 @@ class TestBufferCap:
         cap = 10  # use a small cap for the test
         broker = AlertBroker(buffer_cap=cap)
         for i in range(cap + 5):
-            broker.publish(
-                _sample(
-                    detected_at=datetime(
-                        2026, 7, 30, 12, 0, i, tzinfo=UTC
-                    )
-                )
-            )
+            broker.publish(_sample(detected_at=datetime(2026, 7, 30, 12, 0, i, tzinfo=UTC)))
         # Buffer holds exactly `cap` entries.
         assert broker.buffer_size("p-actor") == cap
         out = broker.recent_alerts("p-actor")
@@ -289,9 +281,7 @@ def _run_endpoint_in_thread(
         "scheme": "http",
         "path": path.split("?")[0],
         "raw_path": path.split("?")[0].encode("latin-1"),
-        "query_string": path.split("?", 1)[1].encode("latin-1")
-        if "?" in path
-        else b"",
+        "query_string": path.split("?", 1)[1].encode("latin-1") if "?" in path else b"",
         "headers": [(b"host", b"testserver")],
         "client": ("testclient", 5000),
         "server": ("testserver", 80),
@@ -351,12 +341,8 @@ class TestSseReplay:
     ) -> None:
         """Buffered alerts are emitted as `event: replay`, NOT
         as `event: alert`, when a client connects."""
-        fresh_broker.publish(
-            _parent_alert(alert_type="lateral_auth_burst")
-        )
-        fresh_broker.publish(
-            _parent_alert(alert_type="lateral_auth_burst")
-        )
+        fresh_broker.publish(_parent_alert(alert_type="lateral_auth_burst"))
+        fresh_broker.publish(_parent_alert(alert_type="lateral_auth_burst"))
         body = _run_endpoint_in_thread(
             sse_app,
             "/api/v1/alerts/stream/test-child-1",
@@ -368,17 +354,13 @@ class TestSseReplay:
         assert "replay" in kinds
         # No `alert` event yet — these are buffered history.
         assert "alert" not in kinds
-        replay_payloads = [
-            d for k, d in events if k == "replay"
-        ]
+        replay_payloads = [d for k, d in events if k == "replay"]
         assert len(replay_payloads) == 2
         for p in replay_payloads:
             assert p["alert_type"] == "lateral_auth_burst"
             assert p["actor_parent_id"] == _PARENT
 
-    def test_no_replay_when_buffer_empty(
-        self, fresh_broker: AlertBroker, sse_app: Any
-    ) -> None:
+    def test_no_replay_when_buffer_empty(self, fresh_broker: AlertBroker, sse_app: Any) -> None:
         body = _run_endpoint_in_thread(
             sse_app,
             "/api/v1/alerts/stream/test-child-1",
@@ -390,9 +372,7 @@ class TestSseReplay:
         assert "replay" not in kinds
         assert "alert" not in kinds
 
-    def test_query_param_filters_replay(
-        self, fresh_broker: AlertBroker, sse_app: Any
-    ) -> None:
+    def test_query_param_filters_replay(self, fresh_broker: AlertBroker, sse_app: Any) -> None:
         """?severity=critical filters the replay buffer to only
         matching alerts."""
         fresh_broker.publish(_parent_alert(severity="critical"))
@@ -408,9 +388,7 @@ class TestSseReplay:
         assert len(replay_payloads) == 2
         assert all(p["severity"] == "critical" for p in replay_payloads)
 
-    def test_query_param_filters_live_alert(
-        self, fresh_broker: AlertBroker, sse_app: Any
-    ) -> None:
+    def test_query_param_filters_live_alert(self, fresh_broker: AlertBroker, sse_app: Any) -> None:
         """A live alert that does NOT match the subscribed
         filter is NOT pushed to the client."""
         from anyio.from_thread import start_blocking_portal
@@ -475,9 +453,7 @@ class TestSseReplay:
         assert len(alerts) == 1
         assert alerts[0]["severity"] == "critical"
 
-    def test_ready_event_includes_filters(
-        self, fresh_broker: AlertBroker, sse_app: Any
-    ) -> None:
+    def test_ready_event_includes_filters(self, fresh_broker: AlertBroker, sse_app: Any) -> None:
         body = _run_endpoint_in_thread(
             sse_app,
             "/api/v1/alerts/stream/test-child-1"

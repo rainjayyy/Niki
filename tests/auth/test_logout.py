@@ -65,9 +65,7 @@ def client_with_fake_auth(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 class TestLogoutHappyPath:
-    def test_logout_returns_revoked_jti(
-        self, client_with_real_auth: TestClient
-    ) -> None:
+    def test_logout_returns_revoked_jti(self, client_with_real_auth: TestClient) -> None:
         token = issue_access_token("parent_demo")
         resp = client_with_real_auth.post(
             "/api/v1/auth/logout",
@@ -79,9 +77,7 @@ class TestLogoutHappyPath:
         assert body["parent_id"] == "parent_demo"
         assert body["revoked_jti"]
 
-    def test_logout_revokes_token_immediately(
-        self, client_with_real_auth: TestClient
-    ) -> None:
+    def test_logout_revokes_token_immediately(self, client_with_real_auth: TestClient) -> None:
         token = issue_access_token("parent_demo")
         client_with_real_auth.post(
             "/api/v1/auth/logout",
@@ -100,9 +96,7 @@ class TestLogoutHappyPath:
 
 
 class TestLogoutErrors:
-    def test_missing_token_returns_401(
-        self, client_with_fake_auth: TestClient
-    ) -> None:
+    def test_missing_token_returns_401(self, client_with_fake_auth: TestClient) -> None:
         # Note: we use the fake-auth client because the real dep would
         # already reject with MISSING_TOKEN. The fake dep lets us
         # verify the handler's own behavior when Authorization is
@@ -111,9 +105,7 @@ class TestLogoutErrors:
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "MISSING_TOKEN"
 
-    def test_wrong_scheme_returns_401(
-        self, client_with_fake_auth: TestClient
-    ) -> None:
+    def test_wrong_scheme_returns_401(self, client_with_fake_auth: TestClient) -> None:
         resp = client_with_fake_auth.post(
             "/api/v1/auth/logout",
             headers={"Authorization": "Basic abc"},
@@ -121,9 +113,7 @@ class TestLogoutErrors:
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "MISSING_TOKEN"
 
-    def test_unparseable_token_returns_401_via_dep(
-        self, client_with_real_auth: TestClient
-    ) -> None:
+    def test_unparseable_token_returns_401_via_dep(self, client_with_real_auth: TestClient) -> None:
         resp = client_with_real_auth.post(
             "/api/v1/auth/logout",
             headers={"Authorization": "Bearer not-a-jwt"},
@@ -133,18 +123,14 @@ class TestLogoutErrors:
 
 
 class TestFullJwtLifecycle:
-    def test_login_refresh_logout_chain(
-        self, client_with_real_auth: TestClient
-    ) -> None:
+    def test_login_refresh_logout_chain(self, client_with_real_auth: TestClient) -> None:
         """End-to-end: SMS login -> refresh once -> logout invalidates the
         LAST issued access token."""
         set_sms_service(InMemorySMSCodeService())
         set_blacklist(InMemoryTokenBlacklist())
 
         # 1) SMS login
-        send = client_with_real_auth.post(
-            "/api/v1/auth/sms/send", json={"phone": "13800138000"}
-        )
+        send = client_with_real_auth.post("/api/v1/auth/sms/send", json={"phone": "13800138000"})
         code = send.json()["dev_code"]
         login = client_with_real_auth.post(
             "/api/v1/auth/sms/login", json={"phone": "13800138000", "code": code}
@@ -163,9 +149,7 @@ class TestFullJwtLifecycle:
         assert r.json()["parent_id"] == parent_id
 
         # 3) Rotate refresh v1 -> access v2 + refresh v2
-        rr = client_with_real_auth.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh_v1}
-        )
+        rr = client_with_real_auth.post("/api/v1/auth/refresh", json={"refresh_token": refresh_v1})
         assert rr.status_code == 200
         rotated = rr.json()
         access_v2 = rotated["access_token"]

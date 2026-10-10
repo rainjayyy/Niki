@@ -36,11 +36,15 @@ class TestInMemoryRepo:
     async def test_list_alerts_filters_by_type(self) -> None:
         repo = InMemoryDashboardRepository()
         await repo.add_alert(
-            alert_type="safety_valve", child_id="c1", parent_id="p1",
+            alert_type="safety_valve",
+            child_id="c1",
+            parent_id="p1",
             payload={"problem_summary": "x"},
         )
         await repo.add_alert(
-            alert_type="high_risk", child_id="c1", parent_id="p1",
+            alert_type="high_risk",
+            child_id="c1",
+            parent_id="p1",
             payload={"original_text": "y"},
         )
         sv = await repo.list_alerts(alert_type="safety_valve", child_id="c1")
@@ -54,7 +58,9 @@ class TestInMemoryRepo:
         repo = InMemoryDashboardRepository()
         for c in ("c1", "c2", "c1"):
             await repo.add_alert(
-                alert_type="safety_valve", child_id=c, parent_id="p",
+                alert_type="safety_valve",
+                child_id=c,
+                parent_id="p",
                 payload={"x": 1},
             )
         assert len(await repo.list_alerts(alert_type="safety_valve", child_id="c1")) == 2
@@ -63,7 +69,9 @@ class TestInMemoryRepo:
     async def test_mark_alert_delivered(self) -> None:
         repo = InMemoryDashboardRepository()
         row_id = await repo.add_alert(
-            alert_type="high_risk", child_id="c1", parent_id="p",
+            alert_type="high_risk",
+            child_id="c1",
+            parent_id="p",
             payload={"x": 1},
         )
         ok = await repo.mark_alert_delivered(row_id)
@@ -78,7 +86,8 @@ class TestInMemoryRepo:
     async def test_tutoring_event_round_trip(self) -> None:
         repo = InMemoryDashboardRepository()
         row_id = await repo.add_tutoring_event(
-            child_id="c1", parent_id="p",
+            child_id="c1",
+            parent_id="p",
             payload={"problem": "q1", "solved": True},
         )
         rows = await repo.list_tutoring_events("c1")
@@ -88,19 +97,16 @@ class TestInMemoryRepo:
 
     async def test_tutoring_event_isolates_per_child(self) -> None:
         repo = InMemoryDashboardRepository()
-        await repo.add_tutoring_event(
-            child_id="c1", parent_id="p", payload={"p": 1}
-        )
-        await repo.add_tutoring_event(
-            child_id="c2", parent_id="p", payload={"p": 2}
-        )
+        await repo.add_tutoring_event(child_id="c1", parent_id="p", payload={"p": 1})
+        await repo.add_tutoring_event(child_id="c2", parent_id="p", payload={"p": 2})
         assert len(await repo.list_tutoring_events("c1")) == 1
         assert len(await repo.list_tutoring_events("c2")) == 1
 
     async def test_knowledge_query_round_trip(self) -> None:
         repo = InMemoryDashboardRepository()
         await repo.add_knowledge_query(
-            child_id="c1", parent_id="p",
+            child_id="c1",
+            parent_id="p",
             payload={"question": "why?", "topic": "physics"},
         )
         rows = await repo.list_knowledge_queries("c1")
@@ -111,15 +117,10 @@ class TestInMemoryRepo:
         repo = InMemoryDashboardRepository()
         for i in range(2):
             await repo.add_alert(
-                alert_type="safety_valve", child_id=f"c{i}", parent_id="p",
-                payload={}
+                alert_type="safety_valve", child_id=f"c{i}", parent_id="p", payload={}
             )
-            await repo.add_tutoring_event(
-                child_id=f"c{i}", parent_id="p", payload={}
-            )
-            await repo.add_knowledge_query(
-                child_id=f"c{i}", parent_id="p", payload={}
-            )
+            await repo.add_tutoring_event(child_id=f"c{i}", parent_id="p", payload={})
+            await repo.add_knowledge_query(child_id=f"c{i}", parent_id="p", payload={})
         # 2 alerts + 2 events + 2 queries = 6
         assert len(repo) == 6
 
@@ -136,14 +137,13 @@ class TestPostgresRepoSqlite:
     these operations (insert / select / delete by predicate).
     """
 
-    async def test_round_trip_alert(
-        self, async_session_factory
-    ) -> None:
+    async def test_round_trip_alert(self, async_session_factory) -> None:
         async with async_session_factory() as session:
             repo = PostgresDashboardRepository(session)
             await repo.add_alert(
                 alert_type="safety_valve",
-                child_id="c1", parent_id="p1",
+                child_id="c1",
+                parent_id="p1",
                 payload={"problem_summary": "fractions"},
             )
             await session.commit()
@@ -156,13 +156,13 @@ class TestPostgresRepoSqlite:
         assert rows[0]["payload"]["problem_summary"] == "fractions"
         assert rows[0]["delivered_at"] is None
 
-    async def test_mark_alert_delivered_via_postgres(
-        self, async_session_factory
-    ) -> None:
+    async def test_mark_alert_delivered_via_postgres(self, async_session_factory) -> None:
         async with async_session_factory() as session:
             repo = PostgresDashboardRepository(session)
             row_id = await repo.add_alert(
-                alert_type="high_risk", child_id="c1", parent_id="p1",
+                alert_type="high_risk",
+                child_id="c1",
+                parent_id="p1",
                 payload={"x": 1},
             )
             await session.commit()

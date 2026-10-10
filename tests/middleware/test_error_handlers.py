@@ -123,9 +123,7 @@ class TestNikiException:
         assert r.status_code == 400
         _assert_new_shape(r.json(), expected_code="NIKIEXCEPTION")
 
-    def test_niki_exception_with_custom_code(
-        self, client: TestClient
-    ) -> None:
+    def test_niki_exception_with_custom_code(self, client: TestClient) -> None:
         r = client.get("/raise/niki-with-code")
         assert r.status_code == 400
         body = r.json()
@@ -172,9 +170,7 @@ class TestSubExceptions:
 
 
 class TestUnhandledAndValidation:
-    def test_pydantic_validation_returns_new_shape(
-        self, client: TestClient
-    ) -> None:
+    def test_pydantic_validation_returns_new_shape(self, client: TestClient) -> None:
         # POST /validate-body with non-dict body triggers RequestValidationError.
         r = client.post(
             "/validate-body",

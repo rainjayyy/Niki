@@ -68,9 +68,7 @@ class TestVerify:
         with pytest.raises(SMSCodeInvalid):
             await sms.verify("13800138000", "000000")
 
-    async def test_consumed_code_cannot_be_reused(
-        self, sms: InMemorySMSCodeService
-    ) -> None:
+    async def test_consumed_code_cannot_be_reused(self, sms: InMemorySMSCodeService) -> None:
         code = await sms.send("13800138000")
         await sms.verify("13800138000", code)
         with pytest.raises(SMSCodeInvalid):

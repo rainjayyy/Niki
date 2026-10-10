@@ -55,8 +55,10 @@ def client() -> TestClient:
     set_push_device_repository(storage)
     app = create_app()
     app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-        id="p-1", name="T",
-        id_number_masked="****", phone_masked="****",
+        id="p-1",
+        name="T",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 

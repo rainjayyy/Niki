@@ -10,14 +10,14 @@ from niki.media.asr_provider import (
     ASRError,
     ASRProvider,
     ASRResult,
-    MockASRProvider,
+    FallbackASRProvider,
     set_asr_provider,
 )
 
 
 @pytest.fixture
 def client() -> TestClient:
-    set_asr_provider(MockASRProvider())
+    set_asr_provider(FallbackASRProvider())
     return TestClient(create_app())
 
 
@@ -49,9 +49,7 @@ class TestHappyPath:
         assert r1.json()["text"] == r2.json()["text"]
         assert r1.json()["audio_hash"] == r2.json()["audio_hash"]
 
-    def test_different_audio_yields_different_text(
-        self, client: TestClient
-    ) -> None:
+    def test_different_audio_yields_different_text(self, client: TestClient) -> None:
         r1 = client.post(
             "/api/v1/audio/transcribe",
             files={"audio": ("a.wav", b"AAAAAAAA", "audio/wav")},
@@ -122,15 +120,15 @@ class TestProviderFailures:
 
 
 class TestMockProviderUnit:
-    """Direct unit tests of MockASRProvider (no FastAPI)."""
+    """Direct unit tests of FallbackASRProvider (no FastAPI)."""
 
     async def test_empty_audio_raises(self) -> None:
         with pytest.raises(ASRError) as exc_info:
-            await MockASRProvider().transcribe(b"")
+            await FallbackASRProvider().transcribe(b"")
         assert exc_info.value.code == "EMPTY_AUDIO"
 
     async def test_returns_result_shape(self) -> None:
-        r = await MockASRProvider().transcribe(b"abc")
+        r = await FallbackASRProvider().transcribe(b"abc")
         assert isinstance(r, ASRResult)
         assert 0.0 <= r.confidence <= 1.0
         assert r.duration_ms > 0
@@ -138,5 +136,5 @@ class TestMockProviderUnit:
 
     async def test_child_age_parameter_accepted(self) -> None:
         # Mock ignores child_age but the call must not raise.
-        r = await MockASRProvider().transcribe(b"abc", child_age=7)
+        r = await FallbackASRProvider().transcribe(b"abc", child_age=7)
         assert r.text

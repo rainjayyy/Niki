@@ -159,9 +159,7 @@ class TestUploadHappyPath:
         assert body["category"] == "audio"
         assert body["access_url"].endswith(".wav")
 
-    def test_dedup_friendly_sha1_identical_for_same_bytes(
-        self, client: TestClient
-    ) -> None:
+    def test_dedup_friendly_sha1_identical_for_same_bytes(self, client: TestClient) -> None:
         r1 = client.post(
             "/api/v1/media/upload",
             files={"file": ("a.png", PNG, "image/png")},
@@ -267,9 +265,7 @@ def _upload_via_client(client: TestClient, mime: str = "image/png") -> str:
 
 
 class TestMediaRetrievalHappyPath:
-    def test_get_returns_uploaded_bytes_with_correct_mime(
-        self, client: TestClient
-    ) -> None:
+    def test_get_returns_uploaded_bytes_with_correct_mime(self, client: TestClient) -> None:
         file_id = _upload_via_client(client)
         r = client.get(f"/api/v1/media/{file_id}")
         assert r.status_code == 200
@@ -337,9 +333,7 @@ class TestMediaRetrievalErrors:
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "FILE_NOT_FOUND"
 
-    def test_get_path_traversal_returns_404_not_500(
-        self, client: TestClient
-    ) -> None:
+    def test_get_path_traversal_returns_404_not_500(self, client: TestClient) -> None:
         # URL parser strips /, but `..` segments are sanitised away
         # by TestClient. The storage regex further rejects them. We
         # expect 404, never 500.

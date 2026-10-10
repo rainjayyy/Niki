@@ -1,6 +1,16 @@
 """Shared pytest fixtures for Niki tests."""
 
 import asyncio
+import os
+
+# Set BEFORE any application module is imported. Some modules
+# (e.g. ``niki.api.treehole``) instantiate ``TreeholeManager()``
+# at import time, which then constructs ``TreeholeEncryption()``
+# with no explicit key — that path now requires either a real
+# ``AES_ENCRYPTION_KEY`` or ``NIKI_TEST_DEV_KEY=1`` (see
+# ``niki/treehole/encryption.py::_load_key_from_env``).
+os.environ.setdefault("NIKI_TEST_DEV_KEY", "1")
+
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -20,7 +30,15 @@ COMMON_TEST_CHILDREN = {
     "test_parent": ["test-child-1", "test-child-2", "child-A", "child-B", "child-001", "child-X"],
     "parent_demo": ["child-demo-1"],
     "parent-1": ["child-1", "child-2", "child-A", "child-B", "child-001"],
-    "test_parent": ["test-child-1", "test-child-2", "child-A", "child-B", "child-001", "child-X", "child-2"],
+    "test_parent": [
+        "test-child-1",
+        "test-child-2",
+        "child-A",
+        "child-B",
+        "child-001",
+        "child-X",
+        "child-2",
+    ],
     "parent-A": ["child-A1", "child-A2"],
     "parent-B": ["child-B1"],
 }
@@ -36,6 +54,7 @@ async def _instant_sleep(_seconds: float) -> None:
     """
     return None
 
+
 @pytest.fixture(autouse=True)
 def _reset_session_store():
     """BE-SESSION-redis: reset the session store singleton
@@ -44,6 +63,7 @@ def _reset_session_store():
         InMemorySessionStore,
         set_session_store,
     )
+
     set_session_store(InMemorySessionStore())
     yield
     set_session_store(None)  # type: ignore[arg-type]
@@ -56,6 +76,7 @@ def _register_common_test_children():
     set_child_registry(InMemoryChildRegistry()) and register_child()
     manually for custom scenarios."""
     from niki.services.child_registry import InMemoryChildRegistry, set_child_registry
+
     registry = InMemoryChildRegistry()
     for parent, children in COMMON_TEST_CHILDREN.items():
         for child in children:
@@ -83,10 +104,9 @@ def _register_common_test_children():
         WebhookDispatcherService,
         set_webhook_dispatcher,
     )
+
     set_treehole_repository(InMemoryTreeholeRepository())
-    set_treehole_aggregation_repository(
-        InMemoryTreeholeAggregationRepository()
-    )
+    set_treehole_aggregation_repository(InMemoryTreeholeAggregationRepository())
     # BE-PUSH-001: reset push device + prefs repos too
     set_push_device_repository(InMemoryPushDeviceRepository())
     set_push_prefs_repository(InMemoryPushPrefsRepository())
@@ -128,9 +148,7 @@ def _reset_auth_audit():
 
     repo = InMemoryAuthAuditLogRepository()
     set_auth_audit_log_repository(repo)
-    tracker = ViolationRateTracker(
-        window_seconds=300, burst_count=3
-    )
+    tracker = ViolationRateTracker(window_seconds=300, burst_count=3)
     set_alert_dispatcher(ConsoleAlertDispatcher())
     set_auth_audit_logger(
         AuthAuditLogger(
@@ -139,7 +157,6 @@ def _reset_auth_audit():
             dispatcher=ConsoleAlertDispatcher(),
         )
     )
-
 
 
 @pytest.fixture(autouse=True)

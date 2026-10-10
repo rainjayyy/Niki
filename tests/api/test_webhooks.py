@@ -117,9 +117,7 @@ def other_owner_id() -> str:
 
 
 @pytest.fixture
-def client(
-    monkeypatch: pytest.MonkeyPatch, owner_id: str
-) -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch, owner_id: str) -> TestClient:
     """TestClient with a single deterministic parent id.
 
     The push-style fake-auth bypass is fine here because we
@@ -129,8 +127,10 @@ def client(
 
     def fake():
         return ParentAccount(
-            id=owner_id, name="Alpha",
-            id_number_masked="****", phone_masked="****",
+            id=owner_id,
+            name="Alpha",
+            id_number_masked="****",
+            phone_masked="****",
         )
 
     app.dependency_overrides[get_current_parent] = fake
@@ -138,16 +138,16 @@ def client(
 
 
 @pytest.fixture
-def other_client(
-    monkeypatch: pytest.MonkeyPatch, other_owner_id: str
-) -> TestClient:
+def other_client(monkeypatch: pytest.MonkeyPatch, other_owner_id: str) -> TestClient:
     """Second TestClient for a different parent (lateral-auth tests)."""
     app = create_app()
 
     def fake():
         return ParentAccount(
-            id=other_owner_id, name="Beta",
-            id_number_masked="****", phone_masked="****",
+            id=other_owner_id,
+            name="Beta",
+            id_number_masked="****",
+            phone_masked="****",
         )
 
     app.dependency_overrides[get_current_parent] = fake
@@ -176,9 +176,7 @@ def _register(client: TestClient, target: str = "https://hook.example.com/p") ->
 
 
 class TestRegister:
-    def test_register_creates_subscription_and_returns_secret(
-        self, client: TestClient
-    ) -> None:
+    def test_register_creates_subscription_and_returns_secret(self, client: TestClient) -> None:
         r = client.post("/api/v1/webhooks/", json=_payload())
         assert r.status_code == 201
         body = r.json()
@@ -187,7 +185,8 @@ class TestRegister:
         assert len(body["secret"]) > 20  # secrets.token_urlsafe(32) → 43 chars
         assert body["target_url"].rstrip("/") == "https://hook.example.com/path"
         assert sorted(body["event_types"]) == [
-            "account.deleted", "deletion.completed",
+            "account.deleted",
+            "deletion.completed",
         ]
         assert body["is_active"] is True
         assert body["failure_count"] == 0
@@ -195,9 +194,7 @@ class TestRegister:
 
 
 class TestList:
-    def test_list_returns_owners_subscriptions(
-        self, client: TestClient
-    ) -> None:
+    def test_list_returns_owners_subscriptions(self, client: TestClient) -> None:
         s1 = _register(client, "https://h1.example.com")
         s2 = _register(client, "https://h2.example.com")
         r = client.get("/api/v1/webhooks/")
@@ -207,9 +204,7 @@ class TestList:
         ids = {s["id"] for s in body["subscriptions"]}
         assert ids == {s1["id"], s2["id"]}
 
-    def test_list_excludes_secrets(
-        self, client: TestClient
-    ) -> None:
+    def test_list_excludes_secrets(self, client: TestClient) -> None:
         _register(client)
         r = client.get("/api/v1/webhooks/")
         body = r.json()
@@ -220,9 +215,7 @@ class TestList:
 
 
 class TestGet:
-    def test_get_returns_subscription_without_secret(
-        self, client: TestClient
-    ) -> None:
+    def test_get_returns_subscription_without_secret(self, client: TestClient) -> None:
         sub = _register(client)
         r = client.get(f"/api/v1/webhooks/{sub['id']}")
         assert r.status_code == 200
@@ -230,18 +223,14 @@ class TestGet:
         assert body["id"] == sub["id"]
         assert "secret" not in body
 
-    def test_get_unknown_returns_404(
-        self, client: TestClient
-    ) -> None:
+    def test_get_unknown_returns_404(self, client: TestClient) -> None:
         r = client.get("/api/v1/webhooks/does-not-exist")
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "WEBHOOK_NOT_FOUND"
 
 
 class TestUpdate:
-    def test_update_changes_target_url(
-        self, client: TestClient
-    ) -> None:
+    def test_update_changes_target_url(self, client: TestClient) -> None:
         sub = _register(client)
         r = client.patch(
             f"/api/v1/webhooks/{sub['id']}",
@@ -252,9 +241,7 @@ class TestUpdate:
         assert body["target_url"].rstrip("/") == "https://other.example.com/x"
         assert "secret" not in body
 
-    def test_update_changes_event_types(
-        self, client: TestClient
-    ) -> None:
+    def test_update_changes_event_types(self, client: TestClient) -> None:
         sub = _register(client)
         r = client.patch(
             f"/api/v1/webhooks/{sub['id']}",
@@ -263,14 +250,13 @@ class TestUpdate:
         assert r.status_code == 200
         body = r.json()
         assert sorted(body["event_types"]) == [
-            "audit.high_risk", "safety.escalated",
+            "audit.high_risk",
+            "safety.escalated",
         ]
 
 
 class TestDisable:
-    def test_disable_sets_inactive(
-        self, client: TestClient
-    ) -> None:
+    def test_disable_sets_inactive(self, client: TestClient) -> None:
         sub = _register(client)
         r = client.delete(f"/api/v1/webhooks/{sub['id']}")
         assert r.status_code == 200
@@ -283,15 +269,14 @@ class TestDisable:
 
 
 class TestDeliveries:
-    def test_deliveries_lists_attempts(
-        self, client: TestClient
-    ) -> None:
+    def test_deliveries_lists_attempts(self, client: TestClient) -> None:
         sub = _register(client)
         # Trigger a dispatch via the service.
         dispatcher = get_webhook_dispatcher()
         # We don't have a target that responds; just use the
         # in-memory repo to plant a delivery row directly.
         from niki.db.repositories import get_webhook_repository
+
         repo = get_webhook_repository()
         httpx_to_async(
             repo.create_delivery(
@@ -302,9 +287,7 @@ class TestDeliveries:
                 target_url=sub["target_url"],
             )
         )
-        r = client.get(
-            f"/api/v1/webhooks/{sub['id']}/deliveries"
-        )
+        r = client.get(f"/api/v1/webhooks/{sub['id']}/deliveries")
         assert r.status_code == 200
         body = r.json()
         assert body["count"] == 1
@@ -353,9 +336,7 @@ class TestLateralAuth:
         self, client: TestClient, other_client: TestClient
     ) -> None:
         sub = _register(client)
-        r = other_client.get(
-            f"/api/v1/webhooks/{sub['id']}/deliveries"
-        )
+        r = other_client.get(f"/api/v1/webhooks/{sub['id']}/deliveries")
         assert r.status_code == 404
 
     def test_list_does_not_leak_other_owners_subs(
@@ -379,9 +360,7 @@ class TestLateralAuth:
 
 
 class TestValidation:
-    def test_invalid_url_format_returns_422(
-        self, client: TestClient
-    ) -> None:
+    def test_invalid_url_format_returns_422(self, client: TestClient) -> None:
         # FastAPI/Pydantic returns 422 for unprocessable shape.
         r = client.post(
             "/api/v1/webhooks/",
@@ -393,9 +372,7 @@ class TestValidation:
         code = detail.get("error") if isinstance(detail, dict) else None
         assert code in ("WEBHOOK_INVALID_URL", None)  # Pydantic may use its own code
 
-    def test_http_url_rejected_in_production(
-        self, client: TestClient
-    ) -> None:
+    def test_http_url_rejected_in_production(self, client: TestClient) -> None:
         # default Settings.allow_insecure_webhook_targets = False
         r = client.post(
             "/api/v1/webhooks/",
@@ -412,6 +389,7 @@ class TestValidation:
     ) -> None:
         # Override the cached settings to flip the flag.
         from niki.config import settings as settings_module
+
         monkeypatch.setenv("ALLOW_INSECURE_WEBHOOK_TARGETS", "true")
         settings_module.get_settings.cache_clear()
         try:
@@ -429,9 +407,7 @@ class TestValidation:
             monkeypatch.delenv("ALLOW_INSECURE_WEBHOOK_TARGETS", raising=False)
             settings_module.get_settings.cache_clear()
 
-    def test_empty_event_types_returns_422(
-        self, client: TestClient
-    ) -> None:
+    def test_empty_event_types_returns_422(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/webhooks/",
             json={
@@ -445,12 +421,8 @@ class TestValidation:
         if r.status_code == 400:
             assert "code" in r.json()["error"]
 
-    def test_too_many_event_types_returns_422(
-        self, client: TestClient
-    ) -> None:
-        many = [
-            f"event.{i}" for i in range(MAX_EVENT_TYPES_PER_SUBSCRIPTION + 1)
-        ]
+    def test_too_many_event_types_returns_422(self, client: TestClient) -> None:
+        many = [f"event.{i}" for i in range(MAX_EVENT_TYPES_PER_SUBSCRIPTION + 1)]
         # Even with one extra item, our handler should reject —
         # but those names are also not in VALID_EVENT_TYPES. The
         # cap is checked BEFORE the closed-set check, so a
@@ -474,9 +446,7 @@ class TestValidation:
         )
         assert r.status_code in (400, 422)
 
-    def test_unsupported_event_type_returns_422(
-        self, client: TestClient
-    ) -> None:
+    def test_unsupported_event_type_returns_422(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/webhooks/",
             json={
@@ -508,13 +478,9 @@ class TestDispatcher:
         transport = httpx.MockTransport(target_handler)
         return httpx.AsyncClient(transport=transport, timeout=5.0)
 
-    def test_dispatch_finds_matching_subscriptions(
-        self, client: TestClient
-    ) -> None:
+    def test_dispatch_finds_matching_subscriptions(self, client: TestClient) -> None:
         sub1 = _register(client, "https://h1.example.com")
-        sub2 = _register(
-            client, "https://h2.example.com"
-        )
+        sub2 = _register(client, "https://h2.example.com")
         # Update sub2 to only listen for safety events.
         client.patch(
             f"/api/v1/webhooks/{sub2['id']}",
@@ -544,12 +510,8 @@ class TestDispatcher:
         assert results[0]["delivered"] is True
         assert results[0]["idempotent_replay"] is False
 
-    def test_event_type_filter_blocks_unrelated_events(
-        self, client: TestClient
-    ) -> None:
-        sub = _register(
-            client, "https://h.example.com"
-        )
+    def test_event_type_filter_blocks_unrelated_events(self, client: TestClient) -> None:
+        sub = _register(client, "https://h.example.com")
         # Sub listens only for account.deleted; the dispatcher
         # should NOT POST a safety.escalated event to it.
         client.patch(
@@ -575,9 +537,7 @@ class TestDispatcher:
         assert received == []
         assert results == []
 
-    def test_dispatch_signs_payload_correctly(
-        self, client: TestClient
-    ) -> None:
+    def test_dispatch_signs_payload_correctly(self, client: TestClient) -> None:
         sub = _register(client, "https://hook.example.com/sign")
         # Pull the secret back from the repo (the API doesn't
         # expose it after the create response).
@@ -597,7 +557,9 @@ class TestDispatcher:
         payload = {"user": "u1", "amount": 42}
         httpx_to_async(
             dispatcher.dispatch(
-                "account.deleted", payload, event_id="evt-sig",
+                "account.deleted",
+                payload,
+                event_id="evt-sig",
                 http_client=http_client,
             )
         )
@@ -605,17 +567,13 @@ class TestDispatcher:
         req = received[0]
         # Verify the signature against the body bytes.
         body = req.content
-        expected_sig = hmac.new(
-            secret.encode("utf-8"), body, hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
         sig_header = req.headers[SIGNATURE_HEADER]
         assert sig_header == f"sha256={expected_sig}"
         # Sanity-check the helper agrees.
         assert sig_header == sign_payload(secret, body)
 
-    def test_signature_header_format(
-        self, client: TestClient
-    ) -> None:
+    def test_signature_header_format(self, client: TestClient) -> None:
         """Confirm exact format: `sha256=<lowercase-hex>`."""
         sub = _register(client, "https://h.example.com/fmt")
         repo = get_webhook_repository()
@@ -628,9 +586,7 @@ class TestDispatcher:
         assert hex_part == hex_part.lower()
         int(hex_part, 16)  # would raise if not valid hex
 
-    def test_target_receives_event_and_id_headers(
-        self, client: TestClient
-    ) -> None:
+    def test_target_receives_event_and_id_headers(self, client: TestClient) -> None:
         sub = _register(client, "https://h.example.com/headers")
         received: list[httpx.Request] = []
 
@@ -642,7 +598,8 @@ class TestDispatcher:
         dispatcher = get_webhook_dispatcher()
         httpx_to_async(
             dispatcher.dispatch(
-                "account.deleted", {"a": 1},
+                "account.deleted",
+                {"a": 1},
                 event_id="evt-headers-1",
                 http_client=http_client,
             )
@@ -654,9 +611,7 @@ class TestDispatcher:
         assert req.headers["User-Agent"] == USER_AGENT
         assert req.headers["Content-Type"] == "application/json"
 
-    def test_dispatch_succeeds_on_2xx(
-        self, client: TestClient
-    ) -> None:
+    def test_dispatch_succeeds_on_2xx(self, client: TestClient) -> None:
         sub = _register(client, "https://h.example.com/2xx")
         repo = get_webhook_repository()
         captured_attempts: list[httpx.Request] = []
@@ -669,7 +624,8 @@ class TestDispatcher:
         dispatcher = get_webhook_dispatcher()
         results = httpx_to_async(
             dispatcher.dispatch(
-                "account.deleted", {"a": 1},
+                "account.deleted",
+                {"a": 1},
                 event_id="evt-2xx",
                 http_client=http_client,
             )
@@ -679,16 +635,12 @@ class TestDispatcher:
         assert r["delivered"] is True
         assert r["attempts"] == 1
         # Delivery row reflects delivered_at.
-        delivs = httpx_to_async(
-            dispatcher.get_deliveries(sub["id"], sub["owner_id"])
-        )
+        delivs = httpx_to_async(dispatcher.get_deliveries(sub["id"], sub["owner_id"]))
         assert delivs is not None and len(delivs) == 1
         assert delivs[0]["delivered_at"] is not None
         assert delivs[0]["last_status_code"] == 204
 
-    def test_dispatch_retries_on_5xx(
-        self, client: TestClient
-    ) -> None:
+    def test_dispatch_retries_on_5xx(self, client: TestClient) -> None:
         sub = _register(client, "https://h.example.com/5xx")
         attempts: list[httpx.Request] = []
 
@@ -700,7 +652,8 @@ class TestDispatcher:
         dispatcher = get_webhook_dispatcher()
         results = httpx_to_async(
             dispatcher.dispatch(
-                "account.deleted", {"a": 1},
+                "account.deleted",
+                {"a": 1},
                 event_id="evt-5xx",
                 http_client=http_client,
             )
@@ -712,16 +665,12 @@ class TestDispatcher:
         assert r["attempts"] == 4
         assert r["last_status_code"] == 503
         # Delivery row reflects the failure
-        delivs = httpx_to_async(
-            dispatcher.get_deliveries(sub["id"], sub["owner_id"])
-        )
+        delivs = httpx_to_async(dispatcher.get_deliveries(sub["id"], sub["owner_id"]))
         assert delivs is not None and len(delivs) == 1
         assert delivs[0]["delivered_at"] is None
         assert delivs[0]["last_status_code"] == 503
 
-    def test_auto_disabled_after_five_consecutive_failures(
-        self, client: TestClient
-    ) -> None:
+    def test_auto_disabled_after_five_consecutive_failures(self, client: TestClient) -> None:
         sub = _register(client, "https://h.example.com/auto-disable")
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -750,15 +699,15 @@ class TestDispatcher:
         # Subsequent dispatch returns no rows (no active subs).
         results = httpx_to_async(
             dispatcher.dispatch(
-                "account.deleted", {"after": True},
-                event_id="evt-after", http_client=http_client,
+                "account.deleted",
+                {"after": True},
+                event_id="evt-after",
+                http_client=http_client,
             )
         )
         assert results == []
 
-    def test_idempotency_same_event_id_single_delivery(
-        self, client: TestClient
-    ) -> None:
+    def test_idempotency_same_event_id_single_delivery(self, client: TestClient) -> None:
         sub = _register(client, "https://h.example.com/idem")
         attempts: list[httpx.Request] = []
 
@@ -771,24 +720,26 @@ class TestDispatcher:
         # First call → creates a delivery row + 1 HTTP attempt.
         r1 = httpx_to_async(
             dispatcher.dispatch(
-                "account.deleted", {"x": 1},
-                event_id="evt-idem", http_client=http_client,
+                "account.deleted",
+                {"x": 1},
+                event_id="evt-idem",
+                http_client=http_client,
             )
         )
         # Second call with same event_id → no-op (idempotent).
         r2 = httpx_to_async(
             dispatcher.dispatch(
-                "account.deleted", {"x": 2},
-                event_id="evt-idem", http_client=http_client,
+                "account.deleted",
+                {"x": 2},
+                event_id="evt-idem",
+                http_client=http_client,
             )
         )
         assert r1[0]["delivered"] is True
         assert r2[0]["idempotent_replay"] is True
         # Only one HTTP attempt and one delivery row.
         assert len(attempts) == 1
-        delivs = httpx_to_async(
-            dispatcher.get_deliveries(sub["id"], sub["owner_id"])
-        )
+        delivs = httpx_to_async(dispatcher.get_deliveries(sub["id"], sub["owner_id"]))
         assert delivs is not None and len(delivs) == 1
 
 
@@ -800,18 +751,15 @@ class TestDispatcher:
 class TestAuditLog:
     def _audit_rows(self, event_type: str) -> list[dict[str, Any]]:
         from niki.db.repositories import get_audit_log_repository
+
         repo = get_audit_log_repository()
         # list_events is async; the in-memory repo is small enough
         # to filter synchronously by reading _rows. But to keep
         # the test self-contained, we use list_events via httpx_to_async.
-        rows = httpx_to_async(
-            repo.list_events(event_type=event_type, limit=100)
-        )
+        rows = httpx_to_async(repo.list_events(event_type=event_type, limit=100))
         return rows
 
-    def test_audit_row_written_on_register(
-        self, client: TestClient
-    ) -> None:
+    def test_audit_row_written_on_register(self, client: TestClient) -> None:
         _register(client)
         rows = self._audit_rows("webhook_registered")
         assert len(rows) == 1
@@ -821,9 +769,7 @@ class TestAuditLog:
         assert "secret" not in md
         assert md["event_types_count"] == 2
 
-    def test_audit_row_written_on_update(
-        self, client: TestClient
-    ) -> None:
+    def test_audit_row_written_on_update(self, client: TestClient) -> None:
         sub = _register(client)
         client.patch(
             f"/api/v1/webhooks/{sub['id']}",
@@ -835,9 +781,7 @@ class TestAuditLog:
         assert md["subscription_id"] == sub["id"]
         assert "target_url" in md["fields_changed"]
 
-    def test_audit_row_written_on_disable(
-        self, client: TestClient
-    ) -> None:
+    def test_audit_row_written_on_disable(self, client: TestClient) -> None:
         sub = _register(client)
         client.delete(f"/api/v1/webhooks/{sub['id']}")
         rows = self._audit_rows("webhook_disabled")
@@ -852,9 +796,7 @@ class TestAuditLog:
 
 
 class TestRateLimit:
-    def test_rate_limit_after_ten_requests(
-        self, client: TestClient
-    ) -> None:
+    def test_rate_limit_after_ten_requests(self, client: TestClient) -> None:
         """10/minute cap on POST /webhooks. The 11th should 429."""
         # 10 should succeed
         for i in range(10):
@@ -865,9 +807,7 @@ class TestRateLimit:
                     "event_types": ["account.deleted"],
                 },
             )
-            assert r.status_code == 201, (
-                f"request #{i} failed: {r.status_code} {r.text}"
-            )
+            assert r.status_code == 201, f"request #{i} failed: {r.status_code} {r.text}"
         # 11th should be 429
         r11 = client.post(
             "/api/v1/webhooks/",
@@ -894,6 +834,7 @@ def httpx_to_async(coro):
     `@pytest.mark.asyncio` and keeps the test surface tight.
     """
     import asyncio
+
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
@@ -902,7 +843,5 @@ def httpx_to_async(coro):
     if loop.is_running():
         # Shouldn't happen inside a TestClient request, but
         # guard against a leak.
-        raise RuntimeError(
-            "httpx_to_async called inside a running event loop"
-        )
+        raise RuntimeError("httpx_to_async called inside a running event loop")
     return loop.run_until_complete(coro)

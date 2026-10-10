@@ -195,9 +195,7 @@ class TestWebPushDeliveryStatuses:
         fake = _FakeWebPush()
         backend = _backend(tmp_path, fake)
 
-        result = asyncio.run(
-            backend.deliver(_device(platform="android"), _payload())
-        )
+        result = asyncio.run(backend.deliver(_device(platform="android"), _payload()))
 
         assert result.status == STATUS_SKIPPED_NO_TOKEN
         assert fake.calls == [], "must not touch the network for a non-web device"
@@ -206,9 +204,7 @@ class TestWebPushDeliveryStatuses:
         fake = _FakeWebPush()
         backend = _backend(tmp_path, fake)
 
-        result = asyncio.run(
-            backend.deliver(_device(push_token="hms-vendor-token"), _payload())
-        )
+        result = asyncio.run(backend.deliver(_device(push_token="hms-vendor-token"), _payload()))
 
         assert result.status == STATUS_SKIPPED_NO_TOKEN
         assert fake.calls == []
@@ -217,9 +213,7 @@ class TestWebPushDeliveryStatuses:
         fake = _FakeWebPush()
         backend = _backend(tmp_path, fake)
 
-        result = asyncio.run(
-            backend.deliver(_device(), _payload(), dry_run=True)
-        )
+        result = asyncio.run(backend.deliver(_device(), _payload(), dry_run=True))
 
         assert result.status == STATUS_DRY_RUN
         assert result.dry_run is True
@@ -234,9 +228,7 @@ class TestWebPushDeliveryStatuses:
 
 
 class TestWebPushCallArguments:
-    def test_vapid_private_key_and_claims_are_passed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vapid_private_key_and_claims_are_passed(self, tmp_path: Path) -> None:
         settings = _settings_with_keys(tmp_path)
         fake = _FakeWebPush()
         backend = WebPushDeliveryBackend(webpush_fn=fake, settings=settings)
@@ -280,15 +272,11 @@ class TestWebPushCallArguments:
         fake = _FakeWebPush()
         backend = _backend(tmp_path, fake)
 
-        asyncio.run(
-            backend.deliver(_device(), _payload(dedupe_key="alert-42"))
-        )
+        asyncio.run(backend.deliver(_device(), _payload(dedupe_key="alert-42")))
 
         assert fake.last["headers"]["Topic"] == "alert-42"
 
-    def test_endpoint_only_token_borrows_device_keys(
-        self, tmp_path: Path
-    ) -> None:
+    def test_endpoint_only_token_borrows_device_keys(self, tmp_path: Path) -> None:
         fake = _FakeWebPush()
         backend = _backend(tmp_path, fake)
 
@@ -301,9 +289,7 @@ class TestWebPushCallArguments:
             "auth": "FakeAuthSecret",
         }
 
-    def test_full_subscription_json_token_is_passed_through(
-        self, tmp_path: Path
-    ) -> None:
+    def test_full_subscription_json_token_is_passed_through(self, tmp_path: Path) -> None:
         token = (
             '{"endpoint": "https://updates.push.services.mozilla.com/wpush/v2/x",'
             ' "keys": {"p256dh": "REAL_P256DH", "auth": "REAL_AUTH"}}'
@@ -332,9 +318,7 @@ class TestWebPushCallArguments:
 
 
 class TestVapidKeyGeneration:
-    def test_generates_a_pair_when_nothing_is_configured(
-        self, tmp_path: Path
-    ) -> None:
+    def test_generates_a_pair_when_nothing_is_configured(self, tmp_path: Path) -> None:
         settings = _settings_with_keys(tmp_path)
 
         private_pem, public_b64 = get_or_generate_vapid_keys(settings)
@@ -354,9 +338,7 @@ class TestVapidKeyGeneration:
 
         assert first == second
 
-    def test_pair_survives_a_fresh_settings_object_via_disk_cache(
-        self, tmp_path: Path
-    ) -> None:
+    def test_pair_survives_a_fresh_settings_object_via_disk_cache(self, tmp_path: Path) -> None:
         """A restart must not invalidate existing browser subscriptions."""
         first = get_or_generate_vapid_keys(_settings_with_keys(tmp_path))
         second = get_or_generate_vapid_keys(_settings_with_keys(tmp_path))
@@ -365,17 +347,13 @@ class TestVapidKeyGeneration:
         assert (tmp_path / "priv.pem").is_file()
         assert (tmp_path / "pub.b64").is_file()
 
-    def test_different_cache_dirs_yield_different_pairs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_different_cache_dirs_yield_different_pairs(self, tmp_path: Path) -> None:
         a = get_or_generate_vapid_keys(_settings_with_keys(tmp_path / "a"))
         b = get_or_generate_vapid_keys(_settings_with_keys(tmp_path / "b"))
 
         assert a != b
 
-    def test_explicit_settings_win_over_generation(
-        self, tmp_path: Path
-    ) -> None:
+    def test_explicit_settings_win_over_generation(self, tmp_path: Path) -> None:
         settings = _settings_with_keys(tmp_path)
         settings.vapid_private_key = "-----BEGIN PRIVATE KEY-----\nCONFIGURED\n"
         settings.vapid_public_key = "CONFIGURED_PUBLIC"
@@ -548,21 +526,15 @@ class TestVapidPublicKeyEndpoint:
 
 
 class TestStaticAssets:
-    def test_service_worker_is_served_as_javascript(
-        self, client: TestClient
-    ) -> None:
+    def test_service_worker_is_served_as_javascript(self, client: TestClient) -> None:
         response = client.get("/static/service-worker.js")
 
         assert response.status_code == 200
-        assert response.headers["content-type"].startswith(
-            "application/javascript"
-        )
+        assert response.headers["content-type"].startswith("application/javascript")
         assert "addEventListener('push'" in response.text
         assert "addEventListener('notificationclick'" in response.text
 
-    def test_service_worker_may_claim_the_root_scope(
-        self, client: TestClient
-    ) -> None:
+    def test_service_worker_may_claim_the_root_scope(self, client: TestClient) -> None:
         response = client.get("/static/service-worker.js")
 
         assert response.headers.get("Service-Worker-Allowed") == "/"

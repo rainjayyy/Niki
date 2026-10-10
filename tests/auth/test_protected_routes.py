@@ -57,18 +57,14 @@ class TestProtectedRoutesNoToken:
     def test_returns_401_with_garbage_token(
         self, client: TestClient, method: str, path: str
     ) -> None:
-        resp = client.request(
-            method, path, headers={"Authorization": "Bearer not-a-jwt"}
-        )
+        resp = client.request(method, path, headers={"Authorization": "Bearer not-a-jwt"})
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "MALFORMED_TOKEN"
 
 
 class TestProtectedRoutesWrongScheme:
     @pytest.mark.parametrize(("method", "path"), PROTECTED_ROUTES)
-    def test_returns_401_with_basic_auth(
-        self, client: TestClient, method: str, path: str
-    ) -> None:
+    def test_returns_401_with_basic_auth(self, client: TestClient, method: str, path: str) -> None:
         resp = client.request(
             method,
             path,
@@ -82,9 +78,7 @@ class TestProtectedRoutesWithValidToken:
     but never 401/403."""
 
     @pytest.mark.parametrize(("method", "path"), PROTECTED_ROUTES)
-    def test_token_passes_auth_check(
-        self, client: TestClient, method: str, path: str
-    ) -> None:
+    def test_token_passes_auth_check(self, client: TestClient, method: str, path: str) -> None:
         token = issue_access_token("parent_test", ttl_seconds=60)
         resp = client.request(
             method,
@@ -136,9 +130,7 @@ class TestPublicRoutesUnchanged:
             "/openapi.json",
         ],
     )
-    def test_public_endpoint_no_auth_required(
-        self, client: TestClient, path: str
-    ) -> None:
+    def test_public_endpoint_no_auth_required(self, client: TestClient, path: str) -> None:
         resp = client.get(path)
         # Should not 401 (some paths 200/404 if resource missing, but
         # never auth-rejected).

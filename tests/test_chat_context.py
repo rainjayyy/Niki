@@ -77,9 +77,7 @@ async def test_orchestrator_remembers_context() -> None:
 
     assert llm.calls, "expected at least one LLM call across the two turns"
     last_messages = llm.calls[-1]
-    user_contents = " ".join(
-        m["content"] for m in last_messages if m.get("role") == "user"
-    )
+    user_contents = " ".join(m["content"] for m in last_messages if m.get("role") == "user")
     assistant_contents = " ".join(
         m["content"] for m in last_messages if m.get("role") == "assistant"
     )
@@ -133,7 +131,5 @@ async def test_encyclopedia_answers_from_history_without_kb() -> None:
     )
     assert out.text == "你刚才问的是恐龙。"
     last = llm.calls[-1]
-    user_contents = " ".join(
-        m["content"] for m in last if m.get("role") == "user"
-    )
+    user_contents = " ".join(m["content"] for m in last if m.get("role") == "user")
     assert "恐龙为什么会灭绝" in user_contents

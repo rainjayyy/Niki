@@ -16,9 +16,7 @@ def client() -> TestClient:
 
 
 class TestStatusEndpoint:
-    def test_returns_200_with_structure(
-        self, client: TestClient
-    ) -> None:
+    def test_returns_200_with_structure(self, client: TestClient) -> None:
         """The endpoint is public + always 200 (degraded deps
         don't escalate the HTTP status — that's the operator's
         call to make from the body)."""
@@ -31,9 +29,7 @@ class TestStatusEndpoint:
         assert "version" in body
         assert "checked_at" in body
 
-    def test_lists_known_components(
-        self, client: TestClient
-    ) -> None:
+    def test_lists_known_components(self, client: TestClient) -> None:
         r = client.get("/api/v1/status")
         names = [c["name"] for c in r.json()["components"]]
         for expected in ("redis", "postgres", "chroma", "neo4j"):
@@ -44,15 +40,14 @@ class TestStatusEndpoint:
         r = client.get("/api/v1/status")
         assert r.status_code == 200
 
-    def test_redis_failure_degrades(
-        self, client: TestClient
-    ) -> None:
+    def test_redis_failure_degrades(self, client: TestClient) -> None:
         """If Redis is unhealthy, the overall status is degraded
         but the endpoint still returns 200."""
         with patch(
             "niki.api.status.RedisClient.health_check",
             return_value={
-                "name": "redis", "status": "unhealthy",
+                "name": "redis",
+                "status": "unhealthy",
                 "error": "ConnectionError",
             },
         ):
@@ -61,14 +56,10 @@ class TestStatusEndpoint:
         body = r.json()
         assert body["status"] == "degraded"
         # Find the redis entry and check it's marked unhealthy.
-        redis = next(
-            c for c in body["components"] if c["name"] == "redis"
-        )
+        redis = next(c for c in body["components"] if c["name"] == "redis")
         assert redis["status"] == "unhealthy"
 
-    def test_check_exception_does_not_crash(
-        self, client: TestClient
-    ) -> None:
+    def test_check_exception_does_not_crash(self, client: TestClient) -> None:
         """A raised exception in a check function must NOT 500
         the endpoint; it's reported as unhealthy instead."""
         with patch(

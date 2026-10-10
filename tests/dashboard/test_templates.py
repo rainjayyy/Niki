@@ -50,8 +50,7 @@ def _sample_report(
             "探索了 3 个新领域：恐龙、太空、海洋",
             "主动问 Niki 8 个百科问题",
         ],
-        fuzzy_negatives=fuzzy_negatives
-        or ["聊完有 2 次明显情绪波动"],
+        fuzzy_negatives=fuzzy_negatives or ["聊完有 2 次明显情绪波动"],
         anomaly_annotations=[],
         action_suggestions=action_suggestions or [],
         safety_valve_count=0,
@@ -92,9 +91,7 @@ class TestReportBranding:
 
     def test_logo_bytes_strips_data_url_prefix(self) -> None:
         png_bytes = b"\x89PNG\r\n\x1a\n" + b"x" * 50
-        prefixed = "data:image/png;base64," + base64.b64encode(
-            png_bytes
-        ).decode()
+        prefixed = "data:image/png;base64," + base64.b64encode(png_bytes).decode()
         b = ReportBranding(logo_b64=prefixed)
         assert b.logo_bytes() == png_bytes
 
@@ -114,37 +111,26 @@ class TestReportBranding:
 
 class TestTemplateDefaultActions:
     def test_preschool_shorter_actions(self) -> None:
-        actions = get_default_actions(
-            ReportTemplate.PRESCHOOL, _sample_report()
-        )
+        actions = get_default_actions(ReportTemplate.PRESCHOOL, _sample_report())
         # PRESCHOOL has 1 default action.
         assert len(actions) >= 1
         # More emoji-rich phrasing.
-        assert any(
-            "📚" in a or "陪" in a or "绘本" in a
-            for a in actions
-        ) or len(actions) == 1  # at least 1 action
+        assert (
+            any("📚" in a or "陪" in a or "绘本" in a for a in actions) or len(actions) == 1
+        )  # at least 1 action
 
     def test_school_more_actions(self) -> None:
-        actions = get_default_actions(
-            ReportTemplate.SCHOOL, _sample_report()
-        )
+        actions = get_default_actions(ReportTemplate.SCHOOL, _sample_report())
         # SCHOOL has 3 default actions.
         assert len(actions) == 3
 
     def test_child_default_actions(self) -> None:
-        actions = get_default_actions(
-            ReportTemplate.CHILD, _sample_report()
-        )
+        actions = get_default_actions(ReportTemplate.CHILD, _sample_report())
         assert len(actions) == 2
 
     def test_report_actions_override_defaults(self) -> None:
-        report = _sample_report(
-            action_suggestions=["custom 1", "custom 2"]
-        )
-        actions = get_default_actions(
-            ReportTemplate.SCHOOL, report
-        )
+        report = _sample_report(action_suggestions=["custom 1", "custom 2"])
+        actions = get_default_actions(ReportTemplate.SCHOOL, report)
         assert actions == ["custom 1", "custom 2"]
 
 
@@ -154,9 +140,7 @@ class TestTemplateDefaultActions:
 
 
 class TestPDFWithTemplates:
-    @pytest.mark.parametrize(
-        "template", list(ReportTemplate)
-    )
+    @pytest.mark.parametrize("template", list(ReportTemplate))
     def test_render_with_each_template(self, template) -> None:
         pdf = render_weekly_report_pdf(
             child_id="c-1",
@@ -172,15 +156,18 @@ class TestPDFWithTemplates:
         byte-level diff is brittle to reportlab version
         changes."""
         pdf_child = render_weekly_report_pdf(
-            child_id="c-1", report=_sample_report(),
+            child_id="c-1",
+            report=_sample_report(),
             template=ReportTemplate.CHILD,
         )
         pdf_pre = render_weekly_report_pdf(
-            child_id="c-1", report=_sample_report(),
+            child_id="c-1",
+            report=_sample_report(),
             template=ReportTemplate.PRESCHOOL,
         )
         pdf_sch = render_weekly_report_pdf(
-            child_id="c-1", report=_sample_report(),
+            child_id="c-1",
+            report=_sample_report(),
             template=ReportTemplate.SCHOOL,
         )
         # All three render valid PDFs.
@@ -226,12 +213,11 @@ class TestPDFWithTemplates:
         # Use the same PNG the existing media tests use as a
         # known-good fixture.
         from tests.api.test_media_upload import PNG
+
         pdf = render_weekly_report_pdf(
             child_id="c-1",
             report=_sample_report(),
-            branding=ReportBranding(
-                logo_b64=base64.b64encode(PNG).decode()
-            ),
+            branding=ReportBranding(logo_b64=base64.b64encode(PNG).decode()),
         )
         assert pdf.startswith(PDF_MAGIC)
 
@@ -252,9 +238,7 @@ class TestPDFWithTemplates:
 
 
 class TestEndpointTemplateParam:
-    def test_endpoint_accepts_template(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_endpoint_accepts_template(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from niki.auth.account import ParentAccount
         from niki.auth.dependencies import get_current_parent
         from niki.main import create_app
@@ -262,21 +246,24 @@ class TestEndpointTemplateParam:
             InMemoryChildRegistry,
             set_child_registry,
         )
+
         set_child_registry(InMemoryChildRegistry())
         from niki.services.child_registry import get_child_registry
+
         get_child_registry().register("c-tmpl", "p_tmpl")
         app = create_app()
         app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-            id="p_tmpl", name="T",
-            id_number_masked="****", phone_masked="****",
+            id="p_tmpl",
+            name="T",
+            id_number_masked="****",
+            phone_masked="****",
         )
         from fastapi.testclient import TestClient
+
         client = TestClient(app)
 
         # Default
-        r = client.get(
-            "/api/v1/dashboard/weekly-report/c-tmpl/pdf"
-        )
+        r = client.get("/api/v1/dashboard/weekly-report/c-tmpl/pdf")
         assert r.status_code == 200
         assert r.content.startswith(PDF_MAGIC)
 
@@ -295,9 +282,7 @@ class TestEndpointTemplateParam:
         )
         assert r.status_code == 200
 
-    def test_endpoint_rejects_invalid_template(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_endpoint_rejects_invalid_template(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from niki.auth.account import ParentAccount
         from niki.auth.dependencies import get_current_parent
         from niki.main import create_app
@@ -305,15 +290,20 @@ class TestEndpointTemplateParam:
             InMemoryChildRegistry,
             set_child_registry,
         )
+
         set_child_registry(InMemoryChildRegistry())
         from niki.services.child_registry import get_child_registry
+
         get_child_registry().register("c-tmpl", "p_tmpl")
         app = create_app()
         app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-            id="p_tmpl", name="T",
-            id_number_masked="****", phone_masked="****",
+            id="p_tmpl",
+            name="T",
+            id_number_masked="****",
+            phone_masked="****",
         )
         from fastapi.testclient import TestClient
+
         client = TestClient(app)
 
         r = client.get(

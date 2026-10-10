@@ -32,23 +32,17 @@ class TestWindowStartFor:
         # 2026-07-29 is a Wednesday.
         ts = datetime(2026, 7, 29, 14, 30, tzinfo=timezone.utc)
         # ISO weekday: Wed=3 → back 2 days to Mon=1.
-        assert _window_start_for(WINDOW_KIND_WEEKLY, ts) == date(
-            2026, 7, 27
-        )
+        assert _window_start_for(WINDOW_KIND_WEEKLY, ts) == date(2026, 7, 27)
 
     def test_weekly_sunday_returns_monday(self) -> None:
         # 2026-08-02 is a Sunday.
         ts = datetime(2026, 8, 2, 23, 0, tzinfo=timezone.utc)
-        assert _window_start_for(WINDOW_KIND_WEEKLY, ts) == date(
-            2026, 7, 27
-        )
+        assert _window_start_for(WINDOW_KIND_WEEKLY, ts) == date(2026, 7, 27)
 
     def test_weekly_monday_returns_same_monday(self) -> None:
         # 2026-07-27 is a Monday.
         ts = datetime(2026, 7, 27, 0, 1, tzinfo=timezone.utc)
-        assert _window_start_for(WINDOW_KIND_WEEKLY, ts) == date(
-            2026, 7, 27
-        )
+        assert _window_start_for(WINDOW_KIND_WEEKLY, ts) == date(2026, 7, 27)
 
     def test_unknown_window_raises(self) -> None:
         ts = datetime(2026, 7, 29, tzinfo=timezone.utc)
@@ -79,9 +73,7 @@ class TestInMemoryMultiWindow:
         assert len(repo) == 2
         # The returned row is the most recently updated.
         # We just check that it has a window_kind set.
-        assert last["window_kind"] in (
-            WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY
-        )
+        assert last["window_kind"] in (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
 
         # Both windows have count == 1.
         daily = await repo.get("c-1", window_kind=WINDOW_KIND_DAILY)
@@ -115,15 +107,21 @@ class TestInMemoryMultiWindow:
         # 5 daily events
         for _ in range(5):
             await repo.increment(
-                child_id="c-1", valence="neutral", intensity=3,
-                category="other", engagement_at=ts,
+                child_id="c-1",
+                valence="neutral",
+                intensity=3,
+                category="other",
+                engagement_at=ts,
                 window_kind=WINDOW_KIND_DAILY,
             )
         # 2 weekly events
         for _ in range(2):
             await repo.increment(
-                child_id="c-1", valence="neutral", intensity=3,
-                category="other", engagement_at=ts,
+                child_id="c-1",
+                valence="neutral",
+                intensity=3,
+                category="other",
+                engagement_at=ts,
                 window_kind=WINDOW_KIND_WEEKLY,
             )
         daily = await repo.get("c-1", window_kind=WINDOW_KIND_DAILY)
@@ -141,13 +139,19 @@ class TestInMemoryMultiWindow:
         ts_sun = datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc)
         # Use explicit "all" so both windows are written.
         await repo.increment(
-            child_id="c-1", valence="neutral", intensity=3,
-            category="self", engagement_at=ts_wed,
+            child_id="c-1",
+            valence="neutral",
+            intensity=3,
+            category="self",
+            engagement_at=ts_wed,
             window_kind="all",
         )
         await repo.increment(
-            child_id="c-1", valence="neutral", intensity=3,
-            category="self", engagement_at=ts_sun,
+            child_id="c-1",
+            valence="neutral",
+            intensity=3,
+            category="self",
+            engagement_at=ts_sun,
             window_kind="all",
         )
         # Daily: 2 separate windows (Jul 29 + Aug 2)
@@ -166,8 +170,11 @@ class TestInMemoryMultiWindow:
         repo = InMemoryTreeholeAggregationRepository()
         ts = datetime(2026, 7, 29, 14, 30, tzinfo=timezone.utc)
         await repo.increment(
-            child_id="c-1", valence="neutral", intensity=3,
-            category="other", engagement_at=ts,
+            child_id="c-1",
+            valence="neutral",
+            intensity=3,
+            category="other",
+            engagement_at=ts,
             window_kind=WINDOW_KIND_DAILY,
         )
         # Asking for the weekly kind returns None (no weekly row)
@@ -180,13 +187,19 @@ class TestInMemoryMultiWindow:
         repo = InMemoryTreeholeAggregationRepository()
         ts = datetime(2026, 7, 29, 14, 30, tzinfo=timezone.utc)
         await repo.increment(
-            child_id="c-1", valence="neutral", intensity=3,
-            category="other", engagement_at=ts,
+            child_id="c-1",
+            valence="neutral",
+            intensity=3,
+            category="other",
+            engagement_at=ts,
             window_kind=WINDOW_KIND_DAILY,
         )
         await repo.increment(
-            child_id="c-1", valence="neutral", intensity=3,
-            category="other", engagement_at=ts,
+            child_id="c-1",
+            valence="neutral",
+            intensity=3,
+            category="other",
+            engagement_at=ts,
             window_kind=WINDOW_KIND_WEEKLY,
         )
         # No filter → 2 rows
@@ -199,8 +212,11 @@ class TestInMemoryMultiWindow:
         repo = InMemoryTreeholeAggregationRepository()
         ts = datetime(2026, 7, 29, 14, 30, tzinfo=timezone.utc)
         await repo.increment(
-            child_id="c-1", valence="neutral", intensity=3,
-            category="other", engagement_at=ts,
+            child_id="c-1",
+            valence="neutral",
+            intensity=3,
+            category="other",
+            engagement_at=ts,
         )
         assert len(repo) == 2
         dropped = await repo.drop_all_for_child("c-1")
@@ -217,35 +233,37 @@ class TestManagerWindowKind:
     async def test_aggregate_weekly_default(self) -> None:
         from niki.treehole.manager import TreeholeManager
         from niki.treehole.encryption import TreeholeEncryption
+
         mgr = TreeholeManager(encryption=TreeholeEncryption(key=b"T" * 32))
         for _ in range(3):
             await mgr.engage(
-                parent_id="p-1", child_id="c-1",
-                original_text="x", emotion="negative",
+                parent_id="p-1",
+                child_id="c-1",
+                original_text="x",
+                emotion="negative",
                 intensity=4,
             )
         # Default: weekly
         result = await mgr.aggregate_for_baseline(child_id="c-1")
         assert result["count"] == 3
         # Explicit weekly
-        result_w = await mgr.aggregate_for_baseline(
-            child_id="c-1", window_kind="weekly"
-        )
+        result_w = await mgr.aggregate_for_baseline(child_id="c-1", window_kind="weekly")
         assert result_w["count"] == 3
 
     async def test_aggregate_daily(self) -> None:
         from niki.treehole.manager import TreeholeManager
         from niki.treehole.encryption import TreeholeEncryption
+
         mgr = TreeholeManager(encryption=TreeholeEncryption(key=b"T" * 32))
         for _ in range(5):
             await mgr.engage(
-                parent_id="p-1", child_id="c-1",
-                original_text="x", emotion="neutral",
+                parent_id="p-1",
+                child_id="c-1",
+                original_text="x",
+                emotion="neutral",
                 intensity=3,
             )
-        result = await mgr.aggregate_for_baseline(
-            child_id="c-1", window_kind="daily"
-        )
+        result = await mgr.aggregate_for_baseline(child_id="c-1", window_kind="daily")
         assert result["count"] == 5
 
     async def test_daily_and_weekly_isolated(self) -> None:
@@ -253,26 +271,29 @@ class TestManagerWindowKind:
         has its own count."""
         from niki.treehole.manager import TreeholeManager
         from niki.treehole.encryption import TreeholeEncryption
+
         mgr = TreeholeManager(encryption=TreeholeEncryption(key=b"T" * 32))
         # 2 negative-3
         for _ in range(2):
             await mgr.engage(
-                parent_id="p-1", child_id="c-1",
-                original_text="x", emotion="negative", intensity=3,
+                parent_id="p-1",
+                child_id="c-1",
+                original_text="x",
+                emotion="negative",
+                intensity=3,
             )
         # 3 positive-5
         for _ in range(3):
             await mgr.engage(
-                parent_id="p-1", child_id="c-1",
-                original_text="y", emotion="positive", intensity=5,
+                parent_id="p-1",
+                child_id="c-1",
+                original_text="y",
+                emotion="positive",
+                intensity=5,
             )
         # Both windows have count=5
-        d = await mgr.aggregate_for_baseline(
-            child_id="c-1", window_kind="daily"
-        )
-        w = await mgr.aggregate_for_baseline(
-            child_id="c-1", window_kind="weekly"
-        )
+        d = await mgr.aggregate_for_baseline(child_id="c-1", window_kind="daily")
+        w = await mgr.aggregate_for_baseline(child_id="c-1", window_kind="weekly")
         assert d["count"] == 5
         assert w["count"] == 5
         # Mean identical (same data)

@@ -27,9 +27,7 @@ def manager(monkeypatch: pytest.MonkeyPatch) -> TreeholeManager:
 
 
 class TestTreeholeManager:
-    async def test_engage_returns_summary_and_encrypted(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_engage_returns_summary_and_encrypted(self, manager: TreeholeManager) -> None:
         summary, encrypted = await manager.engage(
             parent_id="parent-1",
             child_id="child-1",
@@ -45,9 +43,7 @@ class TestTreeholeManager:
         assert "encrypted" in encrypted
         assert encrypted["child_id"] == "child-1"
 
-    async def test_engage_does_not_store_original_text(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_engage_does_not_store_original_text(self, manager: TreeholeManager) -> None:
         secret_text = "我有一个秘密不能让妈妈知道"
         await manager.engage(
             parent_id="parent-1",
@@ -65,9 +61,7 @@ class TestTreeholeManager:
             assert secret_text not in blob
             assert secret_text not in str(r.get("associated_data", b""))
 
-    async def test_engage_persists_to_repo(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_engage_persists_to_repo(self, manager: TreeholeManager) -> None:
         await manager.engage(
             parent_id="parent-1",
             child_id="c1",
@@ -80,9 +74,7 @@ class TestTreeholeManager:
         assert rows[0]["child_id"] == "c1"
         assert rows[0]["parent_id"] == "parent-1"
 
-    async def test_engage_sets_7_day_expiry(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_engage_sets_7_day_expiry(self, manager: TreeholeManager) -> None:
         await manager.engage(
             parent_id="parent-1",
             child_id="c1",
@@ -133,9 +125,7 @@ class TestTreeholeManager:
         # 3 * (-0.5 * 3/5) + 2 * (0.5 * 5/5) = -0.9 + 1.0 = 0.1; mean = 0.02
         assert abs(result["mean_valence"] - 0.02) < 1e-6
 
-    async def test_summary_has_no_text_field(
-        self, manager: TreeholeManager
-    ) -> None:
+    async def test_summary_has_no_text_field(self, manager: TreeholeManager) -> None:
         summary, _ = await manager.engage(
             parent_id="p",
             child_id="c",

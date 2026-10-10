@@ -41,8 +41,10 @@ class TestInMemoryRepo:
     async def test_add_then_list_returns_one(self) -> None:
         repo = InMemoryTreeholeRepository()
         await repo.add(
-            child_id="c1", parent_id="p1",
-            encrypted_payload=b"ct", associated_data=None,
+            child_id="c1",
+            parent_id="p1",
+            encrypted_payload=b"ct",
+            associated_data=None,
             expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         rows = await repo.list_for_child("c1")
@@ -53,8 +55,10 @@ class TestInMemoryRepo:
         repo = InMemoryTreeholeRepository()
         for c in ("c1", "c2", "c1"):
             await repo.add(
-                child_id=c, parent_id="p1",
-                encrypted_payload=b"ct", associated_data=None,
+                child_id=c,
+                parent_id="p1",
+                encrypted_payload=b"ct",
+                associated_data=None,
                 expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             )
         assert len(await repo.list_for_child("c1")) == 2
@@ -64,13 +68,17 @@ class TestInMemoryRepo:
     async def test_list_skips_expired(self) -> None:
         repo = InMemoryTreeholeRepository()
         await repo.add(
-            child_id="c1", parent_id="p1",
-            encrypted_payload=b"fresh", associated_data=None,
+            child_id="c1",
+            parent_id="p1",
+            encrypted_payload=b"fresh",
+            associated_data=None,
             expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         await repo.add(
-            child_id="c1", parent_id="p1",
-            encrypted_payload=b"stale", associated_data=None,
+            child_id="c1",
+            parent_id="p1",
+            encrypted_payload=b"stale",
+            associated_data=None,
             expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
         rows = await repo.list_for_child("c1")
@@ -80,12 +88,16 @@ class TestInMemoryRepo:
     async def test_delete_expired_drops_only_stale(self) -> None:
         repo = InMemoryTreeholeRepository()
         await repo.add(
-            child_id="c1", parent_id="p1", encrypted_payload=b"f",
+            child_id="c1",
+            parent_id="p1",
+            encrypted_payload=b"f",
             associated_data=None,
             expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         await repo.add(
-            child_id="c2", parent_id="p1", encrypted_payload=b"s",
+            child_id="c2",
+            parent_id="p1",
+            encrypted_payload=b"s",
             associated_data=None,
             expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
@@ -97,13 +109,17 @@ class TestInMemoryRepo:
         repo = InMemoryTreeholeRepository()
         for _ in range(3):
             await repo.add(
-                child_id="c1", parent_id="p1",
-                encrypted_payload=b"x", associated_data=None,
+                child_id="c1",
+                parent_id="p1",
+                encrypted_payload=b"x",
+                associated_data=None,
                 expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             )
         await repo.add(
-            child_id="c2", parent_id="p1",
-            encrypted_payload=b"x", associated_data=None,
+            child_id="c2",
+            parent_id="p1",
+            encrypted_payload=b"x",
+            associated_data=None,
             expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
         n = await repo.delete_all_for_child("c1")
@@ -115,8 +131,10 @@ class TestInMemoryRepo:
         repo = InMemoryTreeholeRepository()
         for _ in range(5):
             await repo.add(
-                child_id="c1", parent_id="p1",
-                encrypted_payload=b"x", associated_data=None,
+                child_id="c1",
+                parent_id="p1",
+                encrypted_payload=b"x",
+                associated_data=None,
                 expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             )
         n = await repo.delete_all()
@@ -136,13 +154,12 @@ class TestPostgresRepoSqlite:
     these operations (insert / select / delete by predicate).
     """
 
-    async def test_round_trip_insert_select_delete(
-        self, async_session_factory
-    ) -> None:
+    async def test_round_trip_insert_select_delete(self, async_session_factory) -> None:
         async with async_session_factory() as session:
             repo = PostgresTreeholeRepository(session)
             await repo.add(
-                child_id="c1", parent_id="p1",
+                child_id="c1",
+                parent_id="p1",
                 encrypted_payload=b"ct-bytes",
                 associated_data=b"aad-bytes",
                 expires_at=datetime.now(timezone.utc) + timedelta(days=7),

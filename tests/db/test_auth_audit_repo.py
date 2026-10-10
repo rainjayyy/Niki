@@ -79,9 +79,7 @@ class TestInMemoryAuthAuditLogRepository:
         # Add in order; list_recent must return newest first.
         ids = []
         for i in range(3):
-            ids.append(await repo.add(
-                AuthAuditEvent(event_type=f"e{i}")
-            ))
+            ids.append(await repo.add(AuthAuditEvent(event_type=f"e{i}")))
         rows = await repo.list_recent()
         assert [r["id"] for r in rows] == list(reversed(ids))
 
@@ -103,15 +101,9 @@ class TestInMemoryAuthAuditLogRepository:
 
     async def test_filter_by_actor(self) -> None:
         repo = InMemoryAuthAuditLogRepository()
-        await repo.add(
-            AuthAuditEvent(event_type="x", actor_parent_id="p1")
-        )
-        await repo.add(
-            AuthAuditEvent(event_type="x", actor_parent_id="p2")
-        )
-        await repo.add(
-            AuthAuditEvent(event_type="x", actor_parent_id="p1")
-        )
+        await repo.add(AuthAuditEvent(event_type="x", actor_parent_id="p1"))
+        await repo.add(AuthAuditEvent(event_type="x", actor_parent_id="p2"))
+        await repo.add(AuthAuditEvent(event_type="x", actor_parent_id="p1"))
         rows = await repo.list_recent(actor_parent_id="p1")
         assert len(rows) == 2
         assert all(r["actor_parent_id"] == "p1" for r in rows)
@@ -160,9 +152,7 @@ class TestInMemoryAuthAuditLogRepository:
         n = await repo.count(since=datetime.now(timezone.utc) - timedelta(hours=1))
         assert n == 1
         # since=in the future excludes everything.
-        n_future = await repo.count(
-            since=datetime.now(timezone.utc) + timedelta(hours=1)
-        )
+        n_future = await repo.count(since=datetime.now(timezone.utc) + timedelta(hours=1))
         assert n_future == 0
 
     async def test_empty_repo_returns_empty_list(self) -> None:

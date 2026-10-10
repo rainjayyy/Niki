@@ -36,12 +36,18 @@ class TestInMemoryTreeholeAggregationRepository:
         # 2 negative (intensity 4) + 1 positive (intensity 2)
         for _ in range(2):
             await repo.increment(
-                child_id="c1", valence="negative", intensity=4,
-                category="family", engagement_at=ts,
+                child_id="c1",
+                valence="negative",
+                intensity=4,
+                category="family",
+                engagement_at=ts,
             )
         await repo.increment(
-            child_id="c1", valence="positive", intensity=2,
-            category="school", engagement_at=ts,
+            child_id="c1",
+            valence="positive",
+            intensity=2,
+            category="school",
+            engagement_at=ts,
         )
         row = await repo.get("c1")
         assert row is not None
@@ -58,12 +64,18 @@ class TestInMemoryTreeholeAggregationRepository:
     async def test_separate_children_independent(self) -> None:
         repo = InMemoryTreeholeAggregationRepository()
         await repo.increment(
-            child_id="c1", valence="positive", intensity=5,
-            category="self", engagement_at=_now(),
+            child_id="c1",
+            valence="positive",
+            intensity=5,
+            category="self",
+            engagement_at=_now(),
         )
         await repo.increment(
-            child_id="c2", valence="negative", intensity=3,
-            category="other", engagement_at=_now(),
+            child_id="c2",
+            valence="negative",
+            intensity=3,
+            category="other",
+            engagement_at=_now(),
         )
         a = await repo.get("c1")
         b = await repo.get("c2")
@@ -80,13 +92,19 @@ class TestInMemoryTreeholeAggregationRepository:
         ts_new = _now()
         # Old engagement in a different window.
         await repo.increment(
-            child_id="c1", valence="negative", intensity=5,
-            category="family", engagement_at=ts_old,
+            child_id="c1",
+            valence="negative",
+            intensity=5,
+            category="family",
+            engagement_at=ts_old,
         )
         # New engagement in the current window.
         await repo.increment(
-            child_id="c1", valence="positive", intensity=3,
-            category="school", engagement_at=ts_new,
+            child_id="c1",
+            valence="positive",
+            intensity=3,
+            category="school",
+            engagement_at=ts_new,
         )
         # Default `get` returns the latest window.
         latest = await repo.get("c1")
@@ -97,13 +115,14 @@ class TestInMemoryTreeholeAggregationRepository:
         repo = InMemoryTreeholeAggregationRepository()
         ts = _now()
         await repo.increment(
-            child_id="c1", valence="negative", intensity=4,
-            category="family", engagement_at=ts,
+            child_id="c1",
+            valence="negative",
+            intensity=4,
+            category="family",
+            engagement_at=ts,
             window_kind="daily",  # BE-TREEHOLE-AGG-rollout: scope
         )
-        await repo.reset(
-            "c1", window_start=ts.date(), window_kind="daily"
-        )
+        await repo.reset("c1", window_start=ts.date(), window_kind="daily")
         # After reset the daily row is gone. Weekly was never
         # written (we passed window_kind="daily") so it stays
         # absent.
@@ -117,12 +136,18 @@ class TestInMemoryTreeholeAggregationRepository:
         # child + window_kind + window_start) — same for weekly.
         # BE-TREEHOLE-AGG-rollout writes BOTH kinds per call.
         await repo.increment(
-            child_id="c1", valence="positive", intensity=2,
-            category="self", engagement_at=_now(),
+            child_id="c1",
+            valence="positive",
+            intensity=2,
+            category="self",
+            engagement_at=_now(),
         )
         await repo.increment(
-            child_id="c1", valence="negative", intensity=3,
-            category="school", engagement_at=_now(),
+            child_id="c1",
+            valence="negative",
+            intensity=3,
+            category="school",
+            engagement_at=_now(),
         )
         # 1 daily row + 1 weekly row = 2 rows total.
         dropped = await repo.drop_all_for_child("c1")
@@ -140,16 +165,25 @@ class TestInMemoryTreeholeAggregationRepository:
         t1 = datetime(2026, 7, 1, 15, 0, tzinfo=timezone.utc)
         t2 = datetime(2026, 7, 1, 21, 0, tzinfo=timezone.utc)
         await repo.increment(
-            child_id="c1", valence="negative", intensity=4,
-            category="family", engagement_at=t2,
+            child_id="c1",
+            valence="negative",
+            intensity=4,
+            category="family",
+            engagement_at=t2,
         )
         await repo.increment(
-            child_id="c1", valence="positive", intensity=2,
-            category="school", engagement_at=t0,
+            child_id="c1",
+            valence="positive",
+            intensity=2,
+            category="school",
+            engagement_at=t0,
         )
         await repo.increment(
-            child_id="c1", valence="neutral", intensity=3,
-            category="self", engagement_at=t1,
+            child_id="c1",
+            valence="neutral",
+            intensity=3,
+            category="self",
+            engagement_at=t1,
         )
         row = await repo.get("c1")
         assert row["first_engagement_at"] == t0
@@ -160,8 +194,11 @@ class TestInMemoryTreeholeAggregationRepository:
         repo = InMemoryTreeholeAggregationRepository()
         ts = _now()
         await repo.increment(
-            child_id="c1", valence="positive", intensity=2,
-            category="self", engagement_at=ts,
+            child_id="c1",
+            valence="positive",
+            intensity=2,
+            category="self",
+            engagement_at=ts,
         )
         row = await repo.get("c1")
         row["count"] = 999
@@ -176,8 +213,11 @@ class TestInMemoryTreeholeAggregationRepository:
         repo = InMemoryTreeholeAggregationRepository()
         ts = _now()
         row = await repo.increment(
-            child_id="c1", valence="neutral", intensity=3,
-            category="self", engagement_at=ts,
+            child_id="c1",
+            valence="neutral",
+            intensity=3,
+            category="self",
+            engagement_at=ts,
         )
         # Force the count to 0 to exercise the guard.
         row["count"] = 0

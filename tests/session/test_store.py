@@ -130,9 +130,7 @@ class TestFallbackSessionStore:
         # plain AsyncMock (no spec) so its attributes are
         # automatically AsyncMock instances.
         primary = AsyncMock()
-        primary.get_started_at.side_effect = ConnectionError(
-            "redis down"
-        )
+        primary.get_started_at.side_effect = ConnectionError("redis down")
         fallback = InMemorySessionStore()
         store = FallbackSessionStore(primary, fallback)
 
@@ -194,9 +192,7 @@ class TestSyncSessionStore:
         interface (used by SessionLimiter). The inner must be
         an async store (RedisSessionStore or AsyncMock)."""
         inner = AsyncMock()
-        inner.get_started_at = AsyncMock(
-            return_value=datetime(2026, 7, 22, tzinfo=timezone.utc)
-        )
+        inner.get_started_at = AsyncMock(return_value=datetime(2026, 7, 22, tzinfo=timezone.utc))
         store = SyncSessionStore(inner)
         result = store.get_started_at("c-1")
         inner.get_started_at.assert_awaited_once_with("c-1")
@@ -222,24 +218,22 @@ class TestSessionLimiterWithStore:
         exactly like before — the legacy tests already cover
         this; this is a smoke test post-refactor."""
         from niki.session.limiter import SessionLimiter
+
         limiter = SessionLimiter(daily_limit_minutes=60)
 
         assert not limiter.is_started("c-1")
         limiter.start_session("c-1")
         assert limiter.is_started("c-1")
-        stats = limiter.end_session(
-            "c-1", ExitReason.CHILD_BYE
-        )
+        stats = limiter.end_session("c-1", ExitReason.CHILD_BYE)
         assert stats is not None
         assert not limiter.is_started("c-1")
 
     def test_custom_store_injection(self) -> None:
         """Injecting a custom store routes state through it."""
         from niki.session.limiter import SessionLimiter
+
         store = InMemorySessionStore()
-        limiter = SessionLimiter(
-            daily_limit_minutes=60, store=store
-        )
+        limiter = SessionLimiter(daily_limit_minutes=60, store=store)
         limiter.start_session("c-1")
         # Session state lives in `store`, not on the limiter
         assert store.get_started_at("c-1") is not None
@@ -250,6 +244,7 @@ class TestSessionLimiterWithStore:
         (think: two uvicorn workers) sharing the same store
         see the same session state."""
         from niki.session.limiter import SessionLimiter
+
         store = InMemorySessionStore()
         worker_a = SessionLimiter(store=store)
         worker_b = SessionLimiter(store=store)
@@ -265,12 +260,14 @@ class TestSessionLimiterWithStore:
         self,
     ) -> None:
         from niki.session.limiter import SessionLimiter
+
         limiter = SessionLimiter(store=InMemorySessionStore())
         limiter.record_activity("c-1")
         assert limiter.is_started("c-1")
 
     def test_end_session_clears_state(self) -> None:
         from niki.session.limiter import SessionLimiter
+
         store = InMemorySessionStore()
         limiter = SessionLimiter(store=store)
         limiter.start_session("c-1")

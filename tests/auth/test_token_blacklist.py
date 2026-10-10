@@ -37,9 +37,7 @@ class TestRevoke:
 
 
 class TestExpiry:
-    async def test_expired_revocation_drops(
-        self, bl: InMemoryTokenBlacklist
-    ) -> None:
+    async def test_expired_revocation_drops(self, bl: InMemoryTokenBlacklist) -> None:
         # Revoke with an explicit past timestamp.
         await bl.revoke("jti-old", expires_at=time.time() - 100)
         assert await bl.is_revoked("jti-old") is False

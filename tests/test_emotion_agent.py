@@ -16,7 +16,7 @@ from niki.agents.emotion import (
 from niki.schemas.common import ChildInput
 
 
-class _StubLLM:
+class FallbackLLM:
     async def chat(self, *args, **kwargs):  # noqa: ANN002, ANN003
         return {"content": "Niki听到你了~"}
 
@@ -29,7 +29,7 @@ def baseline() -> EmotionBaseline:
 @pytest.fixture
 def agent(baseline: EmotionBaseline) -> EmotionAgent:
     return EmotionAgent(
-        llm=_StubLLM(),
+        llm=FallbackLLM(),
         baseline=baseline,
         persona="gentle",
         child_age=7,
@@ -211,8 +211,7 @@ class TestEmotionAgentEndToEnd:
         # the correct negation. Accept any common Chinese
         # confidentiality marker.
         assert any(
-            marker in output.text
-            for marker in ("不告诉", "不会说", "保密", "秘密", "Niki会好好")
+            marker in output.text for marker in ("不告诉", "不会说", "保密", "秘密", "Niki会好好")
         )
 
     async def test_in_calibration_first_7_days(self, agent: EmotionAgent) -> None:
@@ -231,20 +230,21 @@ class TestEmotionAgentEndToEnd:
         # Should have added a record
         assert len(baseline.records()) == 1
 
-    async def test_v1_uses_curated_template_not_llm(self) -> None:
-        """v1 design: the LLM is NOT called for response generation;
-        the curated empathy template is the source of truth.
+    async def test_v1_falls_back_to_template_on_keyword_drift(self) -> None:
+        """Contract (revised for BE-ISS-MOCK-EMOTION):
 
-        Background: the emotion agent used to call the LLM to generate
-        a personalized reply, but the LLM's output drifted away from
-        the keywords (Niki / 说 / 陪着你) required by the eval golden
-        dataset. The fix (niki/agents/emotion.py:_build_response) is
-        to short-circuit to ``EMPATHY_TEMPLATES[emotion]`` and reserve
-        the LLM for emotion detection (handled elsewhere).
+        The emotion agent now INVOKES the LLM for response
+        generation as the primary path, but falls back to the
+        curated ``EMPATHY_TEMPLATES[emotion]`` when the LLM
+        output fails the keyword-presence check ("Niki" + "你").
+        That gate exists because the LLM previously drifted away
+        from the eval golden-dataset keywords; the template is
+        still the source of truth for fallback.
 
-        This test guards that contract: a stub LLM that records calls
-        is injected, and we assert the LLM was never invoked AND the
-        response matches the curated template for the detected emotion.
+        This test guards that contract: a stub LLM that returns a
+        keyword-poor reply is injected, the LLM is called, and the
+        final response matches the curated template because the
+        keyword check rejected the LLM output.
         """
 
         class RecordingLLM:
@@ -255,7 +255,9 @@ class TestEmotionAgentEndToEnd:
 
             async def chat(self, messages, **kwargs):  # noqa: ANN001, ANN002
                 self.calls.append(messages)
-                return {"content": "SHOULD-NOT-BE-USED"}
+                # No "Niki" and no "你" → fails the keyword gate
+                # → falls back to the curated template.
+                return {"content": "I understand your feelings today."}
 
         baseline = EmotionBaseline()
         llm = RecordingLLM()
@@ -268,13 +270,41 @@ class TestEmotionAgentEndToEnd:
         # "你好" → NEUTRAL (no emotion keyword match) → neutral template
         output = await agent.invoke(ChildInput(text="你好", session_id="real-llm"))
 
-        # 1. LLM is never called for response generation
-        assert llm.calls == [], (
-            f"v1 emotion agent must use curated template, but LLM was "
-            f"called {len(llm.calls)} time(s)"
+        # 1. LLM IS called as the primary path
+        assert len(llm.calls) == 1, (
+            f"emotion agent must invoke LLM as primary path, got {len(llm.calls)} call(s)"
         )
-        # 2. Response matches the curated NEUTRAL template
+        # 2. Response falls back to the curated NEUTRAL template
+        #    (because the LLM output failed the keyword gate)
         assert output.text == EMPATHY_TEMPLATES[EmotionCategory.NEUTRAL]
+
+    async def test_v1_uses_llm_output_when_keywords_present(self) -> None:
+        """When the LLM output passes the keyword gate, the agent
+        uses the LLM-generated reply (not the template) — this is
+        the new BE-ISS-MOCK-EMOTION contract: the template is
+        fallback, not the only source of truth.
+        """
+
+        class OnBrandLLM:
+            provider_name = "Minimax"
+
+            async def chat(self, messages, **kwargs):  # noqa: ANN001, ANN002
+                return {
+                    "content": "Niki 听到你了~ 你今天听起来心情还不错，Niki 陪着你~",
+                }
+
+        baseline = EmotionBaseline()
+        agent = EmotionAgent(
+            llm=OnBrandLLM(),
+            baseline=baseline,
+            persona="gentle",
+            child_age=7,
+        )
+        output = await agent.invoke(ChildInput(text="你好", session_id="on-brand"))
+        # The LLM's on-brand reply is what reaches the child.
+        assert "Niki" in output.text
+        assert "你" in output.text
+        assert output.text != EMPATHY_TEMPLATES[EmotionCategory.NEUTRAL]
 
     async def test_fear_word_rewrite_applied(self) -> None:
         """If the LLM returns fear words, the safety gateway rewrites them."""
@@ -309,7 +339,7 @@ class TestProactiveCare:
         fresh_baseline = EmotionBaseline()
         today = datetime(2026, 7, 22)
         agent = EmotionAgent(
-            llm=_StubLLM(),
+            llm=FallbackLLM(),
             baseline=fresh_baseline,
             persona="gentle",
             child_age=7,
@@ -328,7 +358,7 @@ class TestProactiveCare:
         fresh_baseline = EmotionBaseline()
         today = datetime(2026, 7, 22)
         agent = EmotionAgent(
-            llm=_StubLLM(),
+            llm=FallbackLLM(),
             baseline=fresh_baseline,
             persona="gentle",
             child_age=7,

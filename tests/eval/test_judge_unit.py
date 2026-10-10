@@ -31,11 +31,11 @@ from niki.eval.judge import (
 # ---------------------------------------------------------------------------
 
 
-class _StubLLM:
+class FallbackLLM:
     """Configurable stub that mimics DoubaoClient.chat().
 
     Usage:
-        stub = _StubLLM(["score": 4, ...], "score": 5, ...])
+        stub = FallbackLLM(["score": 4, ...], "score": 5, ...])
         # Each .chat() call returns the next canned response, cycling.
     """
 
@@ -56,7 +56,7 @@ class _StubLLM:
 
 def _make_judge(*stub_responses, swap_position_runs: bool = True) -> tuple:
     """Create a judge with a stub LLM that returns the given responses in order."""
-    stub = _StubLLM(list(stub_responses))
+    stub = FallbackLLM(list(stub_responses))
     judge = LLMJudge(model=stub, swap_position_runs=swap_position_runs)
     return judge, stub
 

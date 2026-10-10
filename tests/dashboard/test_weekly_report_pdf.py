@@ -54,11 +54,9 @@ def _sample_report(
             "探索了 3 个新领域：恐龙、太空、海洋",
             "主动问 Niki 8 个百科问题",
         ],
-        fuzzy_negatives=fuzzy_negatives
-        or ["聊完有 2 次明显情绪波动，建议关注"],
+        fuzzy_negatives=fuzzy_negatives or ["聊完有 2 次明显情绪波动，建议关注"],
         anomaly_annotations=anomaly_annotations or [],
-        action_suggestions=action_suggestions
-        or ["周末可一起读\"情绪绘本\"", "每天 10 分钟亲子对话"],
+        action_suggestions=action_suggestions or ['周末可一起读"情绪绘本"', "每天 10 分钟亲子对话"],
         safety_valve_count=0,
         treehole_engagement_count=2,
         generated_at=datetime(2026, 7, 29, 14, 30, tzinfo=timezone.utc),
@@ -72,9 +70,7 @@ class TestWeeklyReportPDFUnit:
         report = _sample_report()
         pdf = render_weekly_report_pdf(child_id="c-1", report=report)
         assert isinstance(pdf, bytes)
-        assert pdf.startswith(PDF_MAGIC), (
-            "PDF magic bytes missing — render produced wrong format"
-        )
+        assert pdf.startswith(PDF_MAGIC), "PDF magic bytes missing — render produced wrong format"
         # PDF ends with %%EOF
         assert b"%%EOF" in pdf[-32:]
 
@@ -84,9 +80,7 @@ class TestWeeklyReportPDFUnit:
         )
         # Generate; we can't easily assert byte content of CJK
         # without OCR, but rendering must not raise.
-        pdf = render_weekly_report_pdf(
-            child_id="c-1", report=report
-        )
+        pdf = render_weekly_report_pdf(child_id="c-1", report=report)
         # The PDF embeds the CJK font as a Type0 composite
         # (STSong-Light is a CIDFont). Verify the font name
         # appears in the byte stream.
@@ -94,9 +88,7 @@ class TestWeeklyReportPDFUnit:
 
     def test_render_includes_child_id_metadata(self) -> None:
         report = _sample_report(child_id="c-special")
-        pdf = render_weekly_report_pdf(
-            child_id="c-special", report=report
-        )
+        pdf = render_weekly_report_pdf(child_id="c-special", report=report)
         # The PDF title is set to "Niki 周报 - {child_id}".
         # Note: reportlab compresses content streams by default,
         # so we can't assert the raw child_id bytes. The Title
@@ -116,9 +108,7 @@ class TestWeeklyReportPDFUnit:
         report = _sample_report(
             headline="本周上升 ↗  持续开心 😊",
         )
-        pdf = render_weekly_report_pdf(
-            child_id="c-emoji", report=report
-        )
+        pdf = render_weekly_report_pdf(child_id="c-emoji", report=report)
         assert pdf.startswith(PDF_MAGIC)
 
     def test_render_handles_empty_optional_lists(self) -> None:
@@ -128,17 +118,13 @@ class TestWeeklyReportPDFUnit:
             action_suggestions=[],
             anomaly_annotations=[],
         )
-        pdf = render_weekly_report_pdf(
-            child_id="c-empty", report=report
-        )
+        pdf = render_weekly_report_pdf(child_id="c-empty", report=report)
         assert pdf.startswith(PDF_MAGIC)
 
     def test_trend_label_color_coding(self) -> None:
         for trend in MoodTrend:
             report = _sample_report(trend=trend)
-            pdf = render_weekly_report_pdf(
-                child_id="c-trend", report=report
-            )
+            pdf = render_weekly_report_pdf(child_id="c-trend", report=report)
             assert pdf.startswith(PDF_MAGIC)
 
     def test_weekly_report_pdf_class_directly(self) -> None:
@@ -154,18 +140,19 @@ class TestWeeklyReportPDFEndpoint:
     def client(self) -> TestClient:
         set_child_registry(InMemoryChildRegistry())
         from niki.services.child_registry import get_child_registry
+
         get_child_registry().register("c-pdf", "p_pdf")
         app = create_app()
         app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-            id="p_pdf", name="T",
-            id_number_masked="****", phone_masked="****",
+            id="p_pdf",
+            name="T",
+            id_number_masked="****",
+            phone_masked="****",
         )
         return TestClient(app)
 
     def test_endpoint_returns_pdf(self, client: TestClient) -> None:
-        r = client.get(
-            "/api/v1/dashboard/weekly-report/c-pdf/pdf"
-        )
+        r = client.get("/api/v1/dashboard/weekly-report/c-pdf/pdf")
         assert r.status_code == 200
         assert r.headers["content-type"] == "application/pdf"
         assert r.content.startswith(PDF_MAGIC)
@@ -174,12 +161,8 @@ class TestWeeklyReportPDFEndpoint:
         assert "attachment" in cd
         assert ".pdf" in cd
 
-    def test_endpoint_filename_contains_child_id(
-        self, client: TestClient
-    ) -> None:
-        r = client.get(
-            "/api/v1/dashboard/weekly-report/c-pdf/pdf"
-        )
+    def test_endpoint_filename_contains_child_id(self, client: TestClient) -> None:
+        r = client.get("/api/v1/dashboard/weekly-report/c-pdf/pdf")
         cd = r.headers["content-disposition"]
         # Filename format: niki-weekly-c-c-pdf-YYYYMMDD.pdf
         assert "c-pdf" in cd
@@ -192,18 +175,15 @@ class TestWeeklyReportPDFEndpoint:
         # `get_owned_child_id` rejects the call.
         monkeypatch.delenv("NIKI_TEST_FAKE_AUTH", raising=False)
         from niki.services.child_registry import get_child_registry
+
         get_child_registry().register("c-other", "p_someone_else")
-        r = client.get(
-            "/api/v1/dashboard/weekly-report/c-other/pdf"
-        )
+        r = client.get("/api/v1/dashboard/weekly-report/c-other/pdf")
         # 403 PARENT_CHILD_MISMATCH (BE-AUTH-001-rollout-ext)
         assert r.status_code == 403
         assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
     def test_endpoint_chinese_in_pdf_body(self, client: TestClient) -> None:
-        r = client.get(
-            "/api/v1/dashboard/weekly-report/c-pdf/pdf"
-        )
+        r = client.get("/api/v1/dashboard/weekly-report/c-pdf/pdf")
         # The PDF body embeds the CJK font reference; assert the
         # font name shows up so we know the PDF was actually
         # built with the right font. (Compressed streams are

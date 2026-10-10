@@ -1,7 +1,5 @@
 """Tests for ISS-05: pipeline step failures must record FAILED status."""
 
-
-
 from niki.memory.pipeline import (
     NightlyPipeline,
     PipelineStatus,

@@ -266,7 +266,7 @@ class TestPostPushTest:
                 "/api/v1/push/test",
                 json={"device_id": "d-1"},
             )
-            assert r.status_code == 200, f"call {i+1}: {r.status_code}"
+            assert r.status_code == 200, f"call {i + 1}: {r.status_code}"
 
         r = client.post(
             "/api/v1/push/test",
@@ -333,9 +333,7 @@ class TestPostPushTest:
                     did = device.get("device_id") or ""
                 else:
                     did = getattr(device, "device_id", "")
-                self.calls.append(
-                    (did, payload.title, dry_run)
-                )
+                self.calls.append((did, payload.title, dry_run))
                 return PushDeliveryResult(
                     device_id=getattr(device, "device_id", ""),
                     channel=getattr(device, "channel", ""),
@@ -440,16 +438,18 @@ class TestGetPushTestHistory:
             )
             # A bare namespace object is enough — the in-memory
             # impl only reads `.device_id` and `.channel`.
-            device = type("_D", (), {
-                "device_id": f"d-{i}",
-                "channel": "apns",
-                "push_token": "tok",
-            })()
+            device = type(
+                "_D",
+                (),
+                {
+                    "device_id": f"d-{i}",
+                    "channel": "apns",
+                    "push_token": "tok",
+                },
+            )()
             # Synchronously iterate via the event loop the service
             # already handles — call .deliver() in a coroutine.
-            asyncio.run(
-                delivery_svc.deliver(device, payload, dry_run=True)
-            )
+            asyncio.run(delivery_svc.deliver(device, payload, dry_run=True))
 
         # Should be capped at RING_BUFFER_CAPACITY (=100), not 150.
         assert len(delivery_svc) == RING_BUFFER_CAPACITY
@@ -471,7 +471,9 @@ class TestGetPushTestHistory:
         client, _ = _make_client()
         _register_device(client, device_id="d-1", channel="apns")
         _register_device(
-            client, device_id="d-2", channel="fcm",
+            client,
+            device_id="d-2",
+            channel="fcm",
             push_token="tok-2",
         )
 
@@ -530,16 +532,18 @@ class TestInMemoryPushDeliveryService:
         self,
     ) -> None:
         svc = InMemoryPushDeliveryService()
-        device = type("_D", (), {
-            "device_id": "d-no-tok",
-            "channel": "web",
-            "push_token": "",
-        })()
+        device = type(
+            "_D",
+            (),
+            {
+                "device_id": "d-no-tok",
+                "channel": "web",
+                "push_token": "",
+            },
+        )()
         payload = PushPayload(title="t", body="b", severity="info")
 
-        result = asyncio.run(
-            svc.deliver(device, payload, dry_run=True)
-        )
+        result = asyncio.run(svc.deliver(device, payload, dry_run=True))
         assert result.status == "skipped_no_token"
         assert result.dry_run is True
         assert result.latency_ms is None
@@ -553,15 +557,17 @@ class TestInMemoryPushDeliveryService:
     ) -> None:
         svc = InMemoryPushDeliveryService()
         for ch in ("apns", "fcm", "apns", "web"):
-            device = type("_D", (), {
-                "device_id": f"d-{ch}",
-                "channel": ch,
-                "push_token": "t",
-            })()
+            device = type(
+                "_D",
+                (),
+                {
+                    "device_id": f"d-{ch}",
+                    "channel": ch,
+                    "push_token": "t",
+                },
+            )()
             payload = PushPayload(title="t", body="b", severity="info")
-            asyncio.run(
-                svc.deliver(device, payload, dry_run=True)
-            )
+            asyncio.run(svc.deliver(device, payload, dry_run=True))
 
         only_apns = svc.history(channel="apns")
         assert len(only_apns) == 2
@@ -569,13 +575,17 @@ class TestInMemoryPushDeliveryService:
 
     def test_clear_resets_buffer(self) -> None:
         svc = InMemoryPushDeliveryService()
-        device = type("_D", (), {
-            "device_id": "d-1", "channel": "apns", "push_token": "t",
-        })()
+        device = type(
+            "_D",
+            (),
+            {
+                "device_id": "d-1",
+                "channel": "apns",
+                "push_token": "t",
+            },
+        )()
         payload = PushPayload(title="t", body="b", severity="info")
-        asyncio.run(
-            svc.deliver(device, payload, dry_run=True)
-        )
+        asyncio.run(svc.deliver(device, payload, dry_run=True))
         assert len(svc) == 1
         svc.clear()
         assert len(svc) == 0
@@ -592,6 +602,7 @@ class TestInMemoryPushDeliveryService:
         from niki.services.push_delivery import (
             reset_push_delivery_service_for_tests,
         )
+
         reset_push_delivery_service_for_tests()
         svc = get_push_delivery_service()
         try:

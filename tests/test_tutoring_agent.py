@@ -11,7 +11,7 @@ from niki.agents.tutoring import (
 )
 
 
-class _StubLLM:
+class FallbackLLM:
     """Returns the guided-discovery prompt verbatim (so the test can
     verify the agent's behavior end-to-end)."""
 
@@ -32,7 +32,7 @@ class _StubLLM:
 
 @pytest.fixture
 def agent() -> TutoringAgent:
-    return TutoringAgent(llm=_StubLLM(), persona="gentle", child_age=7)
+    return TutoringAgent(llm=FallbackLLM(), persona="gentle", child_age=7)
 
 
 class TestTutoringAgentBasics:
@@ -114,7 +114,7 @@ class TestTutoringAgentDifficulty:
 
     def test_high_accuracy_child_is_easy(self) -> None:
         agent = TutoringAgent(
-            llm=_StubLLM(),
+            llm=FallbackLLM(),
             persona="gentle",
             child_age=7,
             child_history={"pure_calculation": 0.9, "word_problem": 0.9},

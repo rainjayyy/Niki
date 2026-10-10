@@ -163,9 +163,7 @@ def client():
 
 
 class TestPhoneChangeRequest:
-    async def test_request_returns_200_with_request_id(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_request_returns_200_with_request_id(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, *_ = lifecycle_and_service
         view = await phone_svc.request(
             parent_id=parent.id,
@@ -175,9 +173,7 @@ class TestPhoneChangeRequest:
         assert view.request_id
         assert view.status == PhoneChangeStatus.PENDING_VERIFICATION.value
 
-    async def test_bad_password_returns_400(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_bad_password_returns_400(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, *_ = lifecycle_and_service
         with pytest.raises(PhoneChangeInvalidPassword):
             await phone_svc.request(
@@ -186,9 +182,7 @@ class TestPhoneChangeRequest:
                 password="",
             )
 
-    async def test_same_number_returns_409(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_same_number_returns_409(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, *_ = lifecycle_and_service
         with pytest.raises(PhoneChangeSameNumber):
             await phone_svc.request(
@@ -236,9 +230,7 @@ class TestPhoneChangeVerify:
         delta = verified.effective_at - verified.requested_at
         assert delta >= timedelta(days=PHONE_CHANGE_COOLING_DAYS - 1)
 
-    async def test_expired_verification_returns_400(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_expired_verification_returns_400(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, *_ = lifecycle_and_service
         req = await phone_svc.request(
             parent_id=parent.id,
@@ -255,9 +247,7 @@ class TestPhoneChangeVerify:
                 sms_code="000000",
             )
 
-    async def test_wrong_code_returns_400(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_wrong_code_returns_400(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, *_ = lifecycle_and_service
         req = await phone_svc.request(
             parent_id=parent.id,
@@ -281,15 +271,11 @@ class TestPhoneChangeCancel:
             new_phone="13800139999",
             password="hunter2",
         )
-        cancelled = await phone_svc.cancel(
-            request_id=req.request_id, parent_id=parent.id
-        )
+        cancelled = await phone_svc.cancel(request_id=req.request_id, parent_id=parent.id)
         assert cancelled.status == PhoneChangeStatus.CANCELLED.value
         assert cancelled.cancelled_at is not None
 
-    async def test_cancel_works_in_pending_cooling(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_cancel_works_in_pending_cooling(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, *_ = lifecycle_and_service
         req = await phone_svc.request(
             parent_id=parent.id,
@@ -301,14 +287,10 @@ class TestPhoneChangeCancel:
             request_id=req.request_id,
             sms_code=row.verification_code,
         )
-        cancelled = await phone_svc.cancel(
-            request_id=req.request_id, parent_id=parent.id
-        )
+        cancelled = await phone_svc.cancel(request_id=req.request_id, parent_id=parent.id)
         assert cancelled.status == PhoneChangeStatus.CANCELLED.value
 
-    async def test_cannot_cancel_after_completed(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_cannot_cancel_after_completed(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, *_ = lifecycle_and_service
         req = await phone_svc.request(
             parent_id=parent.id,
@@ -316,13 +298,9 @@ class TestPhoneChangeCancel:
             password="hunter2",
         )
         # Bypass cooling.
-        await phone_svc.confirm_now(
-            request_id=req.request_id, parent_id=parent.id
-        )
+        await phone_svc.confirm_now(request_id=req.request_id, parent_id=parent.id)
         with pytest.raises(PhoneChangeCannotCancel):
-            await phone_svc.cancel(
-                request_id=req.request_id, parent_id=parent.id
-            )
+            await phone_svc.cancel(request_id=req.request_id, parent_id=parent.id)
 
     async def test_lateral_auth_blocks_cross_parent_cancel(
         self, lifecycle_and_service, parent
@@ -341,18 +319,12 @@ class TestPhoneChangeCancel:
             password="hunter2",
         )
         with pytest.raises(PhoneChangeRequestNotFound):
-            await phone_svc.cancel(
-                request_id=req.request_id, parent_id=other.id
-            )
+            await phone_svc.cancel(request_id=req.request_id, parent_id=other.id)
 
 
 class TestPhoneChangeCompletion:
-    async def test_phone_hash_changes_after_completed(
-        self, lifecycle_and_service, parent
-    ) -> None:
-        lifecycle, phone_svc, email_svc, account_repo, phone_repo, captured = (
-            lifecycle_and_service
-        )
+    async def test_phone_hash_changes_after_completed(self, lifecycle_and_service, parent) -> None:
+        lifecycle, phone_svc, email_svc, account_repo, phone_repo, captured = lifecycle_and_service
         req = await phone_svc.request(
             parent_id=parent.id,
             new_phone="13800139999",
@@ -361,18 +333,14 @@ class TestPhoneChangeCompletion:
         # Verify the request was set up.
         assert account_repo.get_raw_phone(parent.id) == "13800138000"
         # Bypass cooling.
-        await phone_svc.confirm_now(
-            request_id=req.request_id, parent_id=parent.id
-        )
+        await phone_svc.confirm_now(request_id=req.request_id, parent_id=parent.id)
         # Now the raw phone should have flipped.
         assert account_repo.get_raw_phone(parent.id) == "13800139999"
 
     async def test_sweep_expired_completes_eligible_rows(
         self, lifecycle_and_service, parent
     ) -> None:
-        lifecycle, phone_svc, email_svc, account_repo, phone_repo, captured = (
-            lifecycle_and_service
-        )
+        lifecycle, phone_svc, email_svc, account_repo, phone_repo, captured = lifecycle_and_service
         req = await phone_svc.request(
             parent_id=parent.id,
             new_phone="13800139999",
@@ -408,18 +376,14 @@ class TestPhoneChangeCompletion:
             request_id=req.request_id,
             sms_code=row.verification_code,
         )
-        await phone_svc.confirm_now(
-            request_id=req.request_id, parent_id=parent.id
-        )
+        await phone_svc.confirm_now(request_id=req.request_id, parent_id=parent.id)
         # Captured events: requested, verified, completed.
         types = [e["event_type"] for e in captured]
         assert "phone_change_requested" in types
         assert "phone_change_verified" in types
         assert "phone_change_completed" in types
 
-    async def test_confirm_now_bypasses_cooling_period(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_confirm_now_bypasses_cooling_period(self, lifecycle_and_service, parent) -> None:
         """`confirm_now` is the user-facing way to skip the 7-day
         cooling window; it must complete immediately even when
         `effective_at` is in the future."""
@@ -443,9 +407,7 @@ class TestPhoneChangeCompletion:
         assert row.effective_at > datetime.now(timezone.utc)
         # confirm_now should complete even though effective_at is
         # still in the future.
-        await phone_svc.confirm_now(
-            request_id=req.request_id, parent_id=parent.id
-        )
+        await phone_svc.confirm_now(request_id=req.request_id, parent_id=parent.id)
         final = await phone_svc._repo.get(req.request_id)  # type: ignore[attr-defined]
         assert final.status == PhoneChangeStatus.COMPLETED.value
         assert account_repo.get_raw_phone(parent.id) == "13800139999"
@@ -455,12 +417,8 @@ class TestEmailChange:
     async def test_email_change_request_verify_completes(
         self, lifecycle_and_service, parent
     ) -> None:
-        lifecycle, phone_svc, email_svc, account_repo, _, captured = (
-            lifecycle_and_service
-        )
-        result = await email_svc.request(
-            parent_id=parent.id, new_email="new@example.com"
-        )
+        lifecycle, phone_svc, email_svc, account_repo, _, captured = lifecycle_and_service
+        result = await email_svc.request(parent_id=parent.id, new_email="new@example.com")
         assert "request_id" in result
         assert "dev_code" in result
         # Verify.
@@ -472,18 +430,12 @@ class TestEmailChange:
         assert account.email == "new@example.com"
         assert account.email_verified is True
 
-    async def test_email_change_bad_format_returns_422(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_email_change_bad_format_returns_422(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, email_svc, *_ = lifecycle_and_service
         with pytest.raises(EmailChangeInvalidFormat):
-            await email_svc.request(
-                parent_id=parent.id, new_email="not-an-email"
-            )
+            await email_svc.request(parent_id=parent.id, new_email="not-an-email")
 
-    async def test_email_already_in_use_returns_409(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_email_already_in_use_returns_409(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, email_svc, *_ = lifecycle_and_service
         # Create a second parent with a target email.
         await lifecycle.start_signup(
@@ -493,17 +445,11 @@ class TestEmailChange:
             email="taken@example.com",
         )
         with pytest.raises(EmailChangeAlreadyUsed):
-            await email_svc.request(
-                parent_id=parent.id, new_email="taken@example.com"
-            )
+            await email_svc.request(parent_id=parent.id, new_email="taken@example.com")
 
-    async def test_email_change_bad_code_returns_400(
-        self, lifecycle_and_service, parent
-    ) -> None:
+    async def test_email_change_bad_code_returns_400(self, lifecycle_and_service, parent) -> None:
         lifecycle, phone_svc, email_svc, *_ = lifecycle_and_service
-        await email_svc.request(
-            parent_id=parent.id, new_email="new@example.com"
-        )
+        await email_svc.request(parent_id=parent.id, new_email="new@example.com")
         with pytest.raises(EmailChangeCodeInvalid):
             await email_svc.verify(
                 parent_id=parent.id,
@@ -536,9 +482,7 @@ class TestRateLimit:
             for key, limits in registered.items()
             if "phone_change" in str(key).lower()
         ]
-        assert matches, (
-            "phone_change_request must be registered with @limiter.limit"
-        )
+        assert matches, "phone_change_request must be registered with @limiter.limit"
         # And at least one limit exists.
         assert any(len(limits) > 0 for _, limits in matches)
 
@@ -546,9 +490,7 @@ class TestRateLimit:
 class TestModel:
     def test_phone_change_status_enum_valid(self) -> None:
         # The set is closed; any drift breaks the state machine.
-        assert PhoneChangeStatus.PENDING_VERIFICATION.value == (
-            "pending_verification"
-        )
+        assert PhoneChangeStatus.PENDING_VERIFICATION.value == ("pending_verification")
         assert PhoneChangeStatus.PENDING_COOLING.value == "pending_cooling"
         assert PhoneChangeStatus.COMPLETED.value == "completed"
         assert PhoneChangeStatus.CANCELLED.value == "cancelled"
@@ -572,9 +514,7 @@ class TestAlembicMigration:
 
         path = Path("alembic/versions/2026_07_31_0005_phone_change.py")
         assert path.exists(), "migration script must exist"
-        spec = importlib.util.spec_from_file_location(
-            "phone_change_migration", path
-        )
+        spec = importlib.util.spec_from_file_location("phone_change_migration", path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
         assert mod.revision == "2026_07_31_0005"

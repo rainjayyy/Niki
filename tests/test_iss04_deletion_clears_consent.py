@@ -1,6 +1,5 @@
 """Tests for ISS-04: account deletion must clear consent records."""
 
-
 from niki.auth import AccountLifecycle
 
 

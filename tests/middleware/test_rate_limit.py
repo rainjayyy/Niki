@@ -104,9 +104,7 @@ class TestResetForTests:
 class TestSharedLimiterIntegration:
     """Apply per-route limit on a real Niki endpoint and verify it."""
 
-    def test_sms_send_returns_429_after_quota(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_sms_send_returns_429_after_quota(self, tmp_path, monkeypatch) -> None:
         """/auth/sms/send is limited to 3/minute; the 4th call should 429."""
         from niki.auth.sms_service import set_sms_service, InMemorySMSCodeService
 
@@ -118,8 +116,7 @@ class TestSharedLimiterIntegration:
         client = TestClient(create_app())
         # Make 4 calls in a row (limit is 3/min).
         statuses = [
-            client.post("/api/v1/auth/sms/send", json={"phone": f"1380000000{i}"})
-            for i in range(4)
+            client.post("/api/v1/auth/sms/send", json={"phone": f"1380000000{i}"}) for i in range(4)
         ]
         codes = [r.status_code for r in statuses]
         # First 3 should pass (200), 4th should overflow (429).

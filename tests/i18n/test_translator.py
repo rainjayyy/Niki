@@ -71,9 +71,7 @@ def test_translate_unknown_key_unknown_lang_returns_key() -> None:
 
 def test_translate_with_explicit_default_overrides_key_fallback() -> None:
     translator = Translator()
-    result = translator.translate(
-        "missing.key", "zh", default="我自己的兜底文案"
-    )
+    result = translator.translate("missing.key", "zh", default="我自己的兜底文案")
     assert result == "我自己的兜底文案"
 
 
@@ -175,17 +173,13 @@ def test_pick_lang_default_is_zh_not_en() -> None:
 
 def test_pick_lang_query_overrides_header() -> None:
     """`?lang=en` beats the Accept-Language header (en is supported)."""
-    assert pick_lang(
-        accept_language="zh-CN", query_lang="en"
-    ) == "en"
+    assert pick_lang(accept_language="zh-CN", query_lang="en") == "en"
 
 
 def test_pick_lang_unsupported_query_falls_back_to_header() -> None:
     """Unsupported `?lang=` does NOT replace the Accept-Language match."""
     # Pick a tag that isn't in our catalogs.
-    assert pick_lang(
-        accept_language="zh-CN", query_lang="fr"
-    ) == "zh"
+    assert pick_lang(accept_language="zh-CN", query_lang="fr") == "zh"
 
 
 def test_pick_lang_quality_ordering() -> None:

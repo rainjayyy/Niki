@@ -73,6 +73,7 @@ def client(store) -> TestClient:
 
 def get_child_registry_safe():
     from niki.services.child_registry import get_child_registry
+
     return get_child_registry()
 
 
@@ -98,11 +99,7 @@ class TestPairingCodeStore:
         delta = (record.expires_at - record.created_at).total_seconds()
         # Use a small fudge factor for clock skew between the two
         # `datetime.now()` calls — the spec is 300s ± a few ms.
-        assert (
-            PAIRING_CODE_TTL_SECONDS - 1
-            <= delta
-            <= PAIRING_CODE_TTL_SECONDS + 1
-        )
+        assert PAIRING_CODE_TTL_SECONDS - 1 <= delta <= PAIRING_CODE_TTL_SECONDS + 1
         # And the created_at should be very recent.
         assert abs((record.created_at - before).total_seconds()) < 5
 
@@ -166,7 +163,8 @@ class TestPairingCodeStore:
         assert store.peek(stale.code) is None
 
     def test_cleanup_expired_returns_zero_when_nothing_expired(
-        self, store,
+        self,
+        store,
     ) -> None:
         store.create("p1", "c1")
         store.create("p1", "c2")
@@ -222,9 +220,7 @@ class TestSingleton:
 
 class TestCreatePairingCodeEndpoint:
     def test_returns_200_and_six_digit_code(self, client: TestClient) -> None:
-        r = client.post(
-            "/api/v1/pairing/code", json={"child_id": "test-child-1"}
-        )
+        r = client.post("/api/v1/pairing/code", json={"child_id": "test-child-1"})
         assert r.status_code == 200
         body = r.json()
         assert body["child_id"] == "test-child-1"
@@ -236,20 +232,14 @@ class TestCreatePairingCodeEndpoint:
         assert "expires_at" in body
 
     def test_unknown_child_returns_404(self, client: TestClient) -> None:
-        r = client.post(
-            "/api/v1/pairing/code", json={"child_id": "ghost-child"}
-        )
+        r = client.post("/api/v1/pairing/code", json={"child_id": "ghost-child"})
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "CHILD_NOT_FOUND"
 
-    def test_child_owned_by_other_parent_returns_403(
-        self, client: TestClient
-    ) -> None:
+    def test_child_owned_by_other_parent_returns_403(self, client: TestClient) -> None:
         # Register a child under a DIFFERENT parent and try to pair it.
         get_child_registry_safe().register("other-child", "some-other-parent")
-        r = client.post(
-            "/api/v1/pairing/code", json={"child_id": "other-child"}
-        )
+        r = client.post("/api/v1/pairing/code", json={"child_id": "other-child"})
         assert r.status_code == 403
         assert r.json()["error"]["code"] == "PARENT_CHILD_MISMATCH"
 
@@ -258,27 +248,17 @@ class TestCreatePairingCodeEndpoint:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "BAD_REQUEST"
 
-    def test_non_string_child_id_returns_400(
-        self, client: TestClient
-    ) -> None:
-        r = client.post(
-            "/api/v1/pairing/code", json={"child_id": 12345}
-        )
+    def test_non_string_child_id_returns_400(self, client: TestClient) -> None:
+        r = client.post("/api/v1/pairing/code", json={"child_id": 12345})
         assert r.status_code == 400
 
 
 class TestConsumePairingCodeEndpoint:
-    def test_happy_path_returns_bound_payload(
-        self, client: TestClient
-    ) -> None:
+    def test_happy_path_returns_bound_payload(self, client: TestClient) -> None:
         # First, create the code as the parent.
-        created = client.post(
-            "/api/v1/pairing/code", json={"child_id": "test-child-1"}
-        ).json()
+        created = client.post("/api/v1/pairing/code", json={"child_id": "test-child-1"}).json()
         # Then consume it as the kid's H5 (no JWT).
-        r = client.post(
-            "/api/v1/pairing/consume", json={"code": created["code"]}
-        )
+        r = client.post("/api/v1/pairing/consume", json={"code": created["code"]})
         assert r.status_code == 200
         body = r.json()
         assert body["bound"] is True
@@ -286,33 +266,23 @@ class TestConsumePairingCodeEndpoint:
         assert body["child_id"] == "test-child-1"
 
     def test_unknown_code_returns_404(self, client: TestClient) -> None:
-        r = client.post(
-            "/api/v1/pairing/consume", json={"code": "000000"}
-        )
+        r = client.post("/api/v1/pairing/consume", json={"code": "000000"})
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "PAIRING_CODE_INVALID"
 
     def test_double_consume_returns_404(self, client: TestClient) -> None:
-        created = client.post(
-            "/api/v1/pairing/code", json={"child_id": "test-child-1"}
-        ).json()
+        created = client.post("/api/v1/pairing/code", json={"child_id": "test-child-1"}).json()
         # First consume succeeds.
-        r1 = client.post(
-            "/api/v1/pairing/consume", json={"code": created["code"]}
-        )
+        r1 = client.post("/api/v1/pairing/consume", json={"code": created["code"]})
         assert r1.status_code == 200
         # Second consume fails (single-use).
-        r2 = client.post(
-            "/api/v1/pairing/consume", json={"code": created["code"]}
-        )
+        r2 = client.post("/api/v1/pairing/consume", json={"code": created["code"]})
         assert r2.status_code == 404
         assert r2.json()["error"]["code"] == "PAIRING_CODE_INVALID"
 
     def test_malformed_code_returns_400(self, client: TestClient) -> None:
         for bad in ["12345", "abcdef", "", "12345a", "1234567"]:
-            r = client.post(
-                "/api/v1/pairing/consume", json={"code": bad}
-            )
+            r = client.post("/api/v1/pairing/consume", json={"code": bad})
             assert r.status_code == 400, f"expected 400 for {bad!r}"
 
     def test_missing_code_returns_400(self, client: TestClient) -> None:

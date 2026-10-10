@@ -40,9 +40,9 @@ class TestAlembicRoundtrip:
         script_dir = ScriptDirectory.from_config(alembic_cfg)
         revs = list(script_dir.walk_revisions())
         assert revs, "no migrations found in alembic/versions/"
-        assert any(
-            r.revision == "2026_07_24_0001" for r in revs
-        ), "expected initial migration 2026_07_24_0001"
+        assert any(r.revision == "2026_07_24_0001" for r in revs), (
+            "expected initial migration 2026_07_24_0001"
+        )
 
     @pytest.mark.skipif(
         _SQLITE_INCOMPATIBLE,

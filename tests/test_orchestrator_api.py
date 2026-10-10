@@ -131,6 +131,89 @@ def test_chat_stages_endpoint(client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert "stages" in data
-    assert len(data["stages"]) == 7
+    # 8 stages: safety_input, tier_classify, classify, route,
+    # dispatch, fuse, safety_output, complete
+    assert len(data["stages"]) == 8
+    assert "tier_classify" in data["stages"]
     assert "agents" in data
     assert "personas" in data
+    assert "privacy_tiers" in data
+    assert len(data["privacy_tiers"]) == 4
+
+
+class TestOrchestratorCacheISS08:
+    """ISS-08 regression: the chat orchestrator API must not share
+    a single ChatOrchestrator across requests with different
+    (child_age, persona) combos — otherwise `_update_age`
+    /`_update_persona` mutations during one request trample the
+    state of another concurrent request.
+
+    The fix: cache the orchestrator keyed by (child_age, persona).
+    Same-combo requests share an instance; different combos get
+    independent ones.
+    """
+
+    def test_different_ages_get_different_orchestrators(self, client: TestClient) -> None:
+        """Two requests with different child_ages must NOT share the
+        same ChatOrchestrator instance — otherwise `_update_age`
+        mutation from request A leaks into request B's snapshot."""
+        from niki.api import orchestrator as orch_mod
+
+        # Clear cache to start fresh.
+        orch_mod._orchestrator_cache.clear()
+
+        client.post(
+            "/api/v1/chat/full",
+            json={"text": "我喜欢恐龙", "child_age": 7, "persona": "gentle"},
+        )
+        client.post(
+            "/api/v1/chat/full",
+            json={"text": "我喜欢恐龙", "child_age": 11, "persona": "gentle"},
+        )
+
+        cache = orch_mod._orchestrator_cache
+        # Two distinct (age, persona) keys ⇒ two distinct instances.
+        assert (7, "gentle") in cache
+        assert (11, "gentle") in cache
+        assert cache[(7, "gentle")] is not cache[(11, "gentle")]
+
+    def test_same_combo_reuses_cached_instance(self, client: TestClient) -> None:
+        """Same (age, persona) should reuse the cached instance —
+        avoids constructing a brand new (expensive) ChatOrchestrator
+        per request."""
+        from niki.api import orchestrator as orch_mod
+
+        orch_mod._orchestrator_cache.clear()
+
+        client.post(
+            "/api/v1/chat/full",
+            json={"text": "我喜欢恐龙", "child_age": 7, "persona": "gentle"},
+        )
+        client.post(
+            "/api/v1/chat/full",
+            json={"text": "我喜欢恐龙", "child_age": 7, "persona": "gentle"},
+        )
+
+        cache = orch_mod._orchestrator_cache
+        assert len(cache) == 1
+        assert (7, "gentle") in cache
+
+    def test_different_personas_get_different_orchestrators(self, client: TestClient) -> None:
+        """Two requests with different personas must not share state."""
+        from niki.api import orchestrator as orch_mod
+
+        orch_mod._orchestrator_cache.clear()
+
+        client.post(
+            "/api/v1/chat/full",
+            json={"text": "我喜欢恐龙", "child_age": 7, "persona": "gentle"},
+        )
+        client.post(
+            "/api/v1/chat/full",
+            json={"text": "我喜欢恐龙", "child_age": 7, "persona": "lively"},
+        )
+
+        cache = orch_mod._orchestrator_cache
+        assert (7, "gentle") in cache
+        assert (7, "lively") in cache
+        assert cache[(7, "gentle")] is not cache[(7, "lively")]

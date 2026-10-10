@@ -45,8 +45,10 @@ def client() -> TestClient:
     set_thumbnail_cache(LRU(max_entries=4))
     app = create_app()
     app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-        id="p-1", name="T",
-        id_number_masked="****", phone_masked="****",
+        id="p-1",
+        name="T",
+        id_number_masked="****",
+        phone_masked="****",
     )
     return TestClient(app)
 
@@ -99,9 +101,7 @@ class TestBuildThumbnail:
     def test_returns_resized_bytes_for_png(self) -> None:
         storage = InMemoryMediaStorage()
         stored = storage.put(PNG_1x1, mime_type="image/png")
-        out = build_thumbnail(
-            file_id=stored.file_id, w=200, h=200, storage=storage
-        )
+        out = build_thumbnail(file_id=stored.file_id, w=200, h=200, storage=storage)
         assert out is not None
         # Returns (bytes, mime) tuple. Preserves input format.
         out_bytes, out_mime = out
@@ -110,22 +110,15 @@ class TestBuildThumbnail:
 
     def test_returns_none_for_unknown_id(self) -> None:
         storage = InMemoryMediaStorage()
-        assert build_thumbnail(
-            file_id="never-seen", w=100, h=100, storage=storage
-        ) is None
+        assert build_thumbnail(file_id="never-seen", w=100, h=100, storage=storage) is None
 
     def test_rejects_out_of_range_dims(self) -> None:
         storage = InMemoryMediaStorage()
         stored = storage.put(PNG_1x1, mime_type="image/png")
         with pytest.raises(ValueError):
-            build_thumbnail(
-                file_id=stored.file_id, w=0, h=100, storage=storage
-            )
+            build_thumbnail(file_id=stored.file_id, w=0, h=100, storage=storage)
         with pytest.raises(ValueError):
-            build_thumbnail(
-                file_id=stored.file_id, w=100, h=MAX_DIM + 1,
-                storage=storage
-            )
+            build_thumbnail(file_id=stored.file_id, w=100, h=MAX_DIM + 1, storage=storage)
 
     def test_caches_result(self) -> None:
         storage = InMemoryMediaStorage()
@@ -133,13 +126,9 @@ class TestBuildThumbnail:
         cache = LRU(max_entries=10)
         set_thumbnail_cache(cache)
         # First call populates cache.
-        out1 = build_thumbnail(
-            file_id=stored.file_id, w=200, h=200, storage=storage
-        )
+        out1 = build_thumbnail(file_id=stored.file_id, w=200, h=200, storage=storage)
         # Second call must hit cache (same bytes).
-        out2 = build_thumbnail(
-            file_id=stored.file_id, w=200, h=200, storage=storage
-        )
+        out2 = build_thumbnail(file_id=stored.file_id, w=200, h=200, storage=storage)
         assert out1 == out2
         assert len(cache) == 1
 
@@ -149,17 +138,11 @@ class TestBuildThumbnail:
         cache = LRU(max_entries=2)
         set_thumbnail_cache(cache)
         # Two distinct sizes → 2 cache entries.
-        build_thumbnail(
-            file_id=stored.file_id, w=100, h=100, storage=storage
-        )
-        build_thumbnail(
-            file_id=stored.file_id, w=200, h=200, storage=storage
-        )
+        build_thumbnail(file_id=stored.file_id, w=100, h=100, storage=storage)
+        build_thumbnail(file_id=stored.file_id, w=200, h=200, storage=storage)
         assert len(cache) == 2
         # Third one evicts the oldest (100x100).
-        build_thumbnail(
-            file_id=stored.file_id, w=300, h=300, storage=storage
-        )
+        build_thumbnail(file_id=stored.file_id, w=300, h=300, storage=storage)
         assert len(cache) == 2
         # 100x100 was evicted; cache only has 200x200 + 300x300.
         assert cache.get(f"{stored.file_id}:100x100") is None
@@ -173,13 +156,12 @@ class TestBuildThumbnail:
 
 
 class TestThumbnailEndpoint:
-    def test_get_thumb_returns_jpeg(
-        self, client: TestClient
-    ) -> None:
+    def test_get_thumb_returns_jpeg(self, client: TestClient) -> None:
         # First find the file_id of the seed PNG.
         # Use the upload endpoint to get a real file_id, or
         # just hard-code via the test storage.
         from niki.media.storage import get_media_storage
+
         storage = get_media_storage()
         # Grab the first file_id we know is in the storage.
         for k, _ in storage._objects.items():
@@ -188,9 +170,7 @@ class TestThumbnailEndpoint:
         else:
             pytest.skip("no file in storage")
 
-        r = client.get(
-            f"/api/v1/media/{fid}/thumb", params={"w": 100, "h": 100}
-        )
+        r = client.get(f"/api/v1/media/{fid}/thumb", params={"w": 100, "h": 100})
         assert r.status_code == 200
         # The endpoint uses the actual output mime from the
         # thumbnail service (preserves input format).
@@ -202,9 +182,7 @@ class TestThumbnailEndpoint:
         # ETag present and matches the cache key.
         assert r.headers.get("etag") == f'"{fid}:100x100"'
 
-    def test_invalid_size_returns_422(
-        self, client: TestClient
-    ) -> None:
+    def test_invalid_size_returns_422(self, client: TestClient) -> None:
         r = client.get(
             "/api/v1/media/f-abc12345/thumb",
             params={"w": 9999, "h": 100},
@@ -212,9 +190,7 @@ class TestThumbnailEndpoint:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_THUMB_SIZE"
 
-    def test_unknown_file_returns_404(
-        self, client: TestClient
-    ) -> None:
+    def test_unknown_file_returns_404(self, client: TestClient) -> None:
         r = client.get(
             "/api/v1/media/never-existed/thumb",
             params={"w": 100, "h": 100},
@@ -222,13 +198,12 @@ class TestThumbnailEndpoint:
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "FILE_NOT_FOUND"
 
-    def test_original_endpoint_has_public_cache(
-        self, client: TestClient
-    ) -> None:
+    def test_original_endpoint_has_public_cache(self, client: TestClient) -> None:
         """BE-MEDIA-001-rollout: the original /media/{id}
         endpoint now serves Cache-Control: public (was private
         in the previous ticket) so a CDN can cache the bytes."""
         from niki.media.storage import get_media_storage
+
         storage = get_media_storage()
         for k, _ in storage._objects.items():
             fid = k.split(".")[0]

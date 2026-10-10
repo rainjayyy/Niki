@@ -72,11 +72,9 @@ class TestWhoami:
 
     def test_revoked_token_returns_401(self, client: TestClient) -> None:
         token = issue_access_token("parent_demo", ttl_seconds=60)
-        claims = __import__(
-            "niki.auth.jwt_service", fromlist=["verify_token"]
-        ).verify_token(token, __import__(
-            "niki.auth.jwt_service", fromlist=["TokenType"]
-        ).TokenType.ACCESS)
+        claims = __import__("niki.auth.jwt_service", fromlist=["verify_token"]).verify_token(
+            token, __import__("niki.auth.jwt_service", fromlist=["TokenType"]).TokenType.ACCESS
+        )
         # Need to revoke via async API; run sync via the singleton's async method.
         import asyncio
 

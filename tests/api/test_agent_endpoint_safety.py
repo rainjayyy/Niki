@@ -73,13 +73,10 @@ def test_self_harm_phrase_xsiangsi_escalates(client: TestClient) -> None:
         ("/api/v1/emotion/express", "text"),
         ("/api/v1/tutoring/ask", "problem"),
     ]:
-        resp = client.post(
-            path, json={field: "我好想死啊", "child_age": 10}
-        )
+        resp = client.post(path, json={field: "我好想死啊", "child_age": 10})
         assert resp.status_code == 200, path
         data = resp.json()
         assert data["metadata"].get("parent_alert_required") is True, (
-            f"{path} should escalate on '我好想死啊', "
-            f"got metadata={data['metadata']!r}"
+            f"{path} should escalate on '我好想死啊', got metadata={data['metadata']!r}"
         )
         assert data["metadata"].get("escalation") is True
