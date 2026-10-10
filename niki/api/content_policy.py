@@ -27,9 +27,9 @@ from niki.content_policy import (
 
 router = APIRouter(
     prefix="/policy",
-    tags=[
+    tags=[  
         {"name": "content-policy", "description": "Content policy API endpoints — PRD #32, #34."}
-    ],
+    ]
 )
 
 # Module-level state (per-family)

@@ -68,6 +68,11 @@ class EmotionWeeklyReport:
     action_suggestions: list[str]  # actionable advice
     safety_valve_count: int = 0  # tutoring safety-valve events
     treehole_engagement_count: int = 0  # tree-hole conversations (anonymized)
+    # BE-STORG-001-ext-D: anonymized aggregate mean-valence of
+    # treehole engagements over the same window. PRD #64: "聚合即匿名" —
+    # once rolled up, individual events cannot be re-derived. Always
+    # 0.0 when there were no engagements.
+    treehole_mean_valence: float = 0.0
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     week_start: str = ""
     week_end: str = ""
@@ -82,6 +87,7 @@ class EmotionWeeklyReport:
             "action_suggestions": self.action_suggestions,
             "safety_valve_count": self.safety_valve_count,
             "treehole_engagement_count": self.treehole_engagement_count,
+            "treehole_mean_valence": self.treehole_mean_valence,
             "trend": self.trend.to_dict(),
             "week_start": self.week_start,
             "week_end": self.week_end,

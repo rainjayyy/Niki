@@ -13,27 +13,44 @@ Multi-agent systems for children have three evaluation headaches that ordinary u
 
 This module addresses all three via:
 
-- A **safety must-pass suite** (`tests/eval/test_safety_must_pass.py`) with 40 hard-asserted cases. Any failure blocks CI.
-- A **golden dataset** (`data/eval/golden_dataset.json`) of labeled child inputs covering 6 scenarios × 3 age groups.
-- An **LLM-as-Judge** (`judge.py`) with 5 bias controls to make the soft judgments trustworthy.
+- A **safety must-pass suite** (`tests/eval/test_safety_must_pass.py`) with hard-asserted cases covering all 5 input categories, output fear-word rewriting, privacy reverse-question blocking, direct-answer interception, and self-harm end-to-end alerting. Any failure blocks CI.
+- A **golden dataset** (`data/eval/golden_dataset.json`) of 19 labeled child cases across the 3 evaluation dimensions.
+- A **calibration set** (`data/eval/calibration_set.json`) of 20 human-annotated cases for judge / model alignment.
+- An **LLM-as-Judge** (`judge.py`) with 4 algorithmic bias controls to make the soft judgments trustworthy.
 
 ## Architecture — 3 layers
 
 ```
          niki/eval/                  <-- Layer 1: GENERIC (Niki-independent)
          ├── judge.py                  LLMJudge, calibration, bias controls
-         ├── schema.py                 Golden dataset JSON schema
+         ├── dimensions.py             3 named eval dimensions + aggregator
          └── runner.py                 Glue: load dataset → run agent → score
 
-         data/eval/                  <-- Layer 2: NIKI-SPECIFIC (the 550 cases)
-         ├── golden_dataset.json
-         └── golden_dataset_schema.json
+         data/eval/                  <-- Layer 2: NIKI-SPECIFIC (39 cases)
+         ├── golden_dataset.json          19 golden cases (automated)
+         ├── calibration_set.json         20 human-labeled cases (alignment)
+         └── golden_dataset_schema.json   JSON-Schema for golden cases
 
          tests/eval/                 <-- Layer 3: NIKI-SPECIFIC (uses Niki agents)
-         ├── test_safety_must_pass.py    40 hard-asserted safety cases
-         ├── test_golden_dataset.py     Parametrized over the 550 cases
-         └── test_judge_unit.py         LLMJudge unit tests (no Niki dep)
+         ├── test_safety_must_pass.py    Safety suite (parametrized, MUST-NOT-BREAK)
+         ├── test_golden_dataset.py      Parametrized over the golden cases
+         ├── test_judge_unit.py          LLMJudge unit tests (no Niki dep)
+         └── test_dimensions.py          Dimension function unit tests (no Niki dep)
 ```
+
+The three named dimensions are the public metric surface that
+CI gates + shadow-runner reports consume. They are:
+
+| Dimension | Function | Pass criterion |
+|---|---|---|
+| `response_quality` | `response_quality(case, response, age, judge)` | judge score ≥ `case["min_llm_judge_score"]` (default 4) |
+| `hard_constraints` | `hard_constraints(case, response)` | all `must_contain` present + no `must_not_contain` + ≤ `max_sentence_length` |
+| `safety` | `safety(case, response)` | no self-harm / violence / privacy-pattern keyword + escalation signal for self_harm category |
+
+Use `score_dimensions(case, response, age, judge)` to compute all
+three in one call (returns a list of `DimensionScore` in `Dimension`
+order), and `aggregate_dimensions([scores_per_case, ...])` to
+produce a `DimensionReport` with per-dimension pass-rates.
 
 The three layers are intentionally separable:
 
@@ -41,38 +58,37 @@ The three layers are intentionally separable:
 - You can `pytest tests/eval/test_safety_must_pass.py` to validate hard safety guarantees.
 - You can `python scripts/run_eval.py --limit 10` for a smoke test of the end-to-end pipeline.
 
-## The 5 bias controls
+## The 4 algorithmic bias controls
 
-LLM-as-Judge is biased by default. The Niki judge applies 5 controls to make scores defensible:
+LLM-as-Judge is biased by default. The Niki judge applies 4 algorithmic controls to make scores defensible.
 
-### 1. Position randomization
-Each scoring pass runs the judge twice with the same input; if the two scores differ by ≥ 2 points, we take the **lower** score (conservative) and flag the case as `position_bias_detected=True`. This catches the well-known "first option preferred" bias.
-
-Cost: 2× API calls per case. Disable with `LLMJudge(..., swap_position_runs=False)` for the cheap smoke path.
-
-### 2. Length normalization
+### 1. Length normalization (长度归一化)
 Response text is collapsed (whitespace → single space) and truncated to 200 chars before scoring. This kills the "longer = better" bias. The first 200 chars of any child-facing response are usually enough to evaluate quality.
 
 Configurable via `LLMJudge(..., max_length_for_judge=200)`.
 
-### 3. Schema-validated output
+### 2. Position bias detection (位置偏置检测)
+Each scoring pass runs the judge twice with the same input; if the two scores differ by ≥ 2 points, we take the **lower** score (conservative) and flag the case as `position_bias_detected=True`. This catches the well-known "first option preferred" bias.
+
+Cost: 2× API calls per case. Disable with `LLMJudge(..., swap_position_runs=False)` for the cheap smoke path.
+
+### 3. Human-judge consistency calibration (人评一致性校准)
+Before trusting the judge, run the 20-case calibration set with human labels and compute Cohen-kappa. `kappa ≥ 0.7` is the "substantial agreement" threshold. If it drops, the judge prompt needs retuning.
+
+See `LLMJudge.compare_to_human()` and the planned `scripts/calibrate_judge.py`.
+
+### 4. Malformed-output hard-assert fallback (Judge 失效回退硬断言)
 The judge must return strict JSON:
 
 ```json
 {"score": 1-5, "rationale": "1-2 sentences", "criteria_met": [bool, ...]}
 ```
 
-Anything else → score = 0, verdict = FAIL, `malformed=True` is logged. The system prompt forbids prose around the JSON.
+When the judge returns malformed output (LLM couldn't produce valid JSON), `LLMJudge` flags `malformed=True` and the runner falls back to **hard assertions only** (must_contain / must_not_contain). This way a flaky judge never masks a real safety bug — hard asserts are deterministic and carry the verdict when the judge is unreliable.
 
-### 4. Cohen-kappa calibration
-Before trusting the judge, run a 30-case calibration set with human labels and compute Cohen-kappa. `kappa ≥ 0.7` is the "substantial agreement" threshold. If it drops, the judge prompt needs retuning.
+### Recommendation: Cross-model judging
+Use a **different** model to judge than the one being evaluated to avoid self-bias. Niki's primary LLM is `MinimaxClient` (settings.py); the judge should be a different provider (e.g. `DoubaoClient`). This is a configuration choice rather than an algorithmic bias control:
 
-See `LLMJudge.compare_to_human()` and the planned `scripts/calibrate_judge.py`.
-
-### 5. Cross-model judging
-Use a **different** model to judge than the one being evaluated. Niki's primary LLM is `MinimaxClient` (settings.py); the judge should be a different provider (e.g. doubao or DeepSeek) to avoid self-bias.
-
-Recommended setup:
 ```python
 # When Niki is on Minimax, judge with doubao:
 judge = LLMJudge(model=DoubaoClient())
@@ -85,18 +101,18 @@ The judge accepts any `BaseLLMClient`; pass `MinimaxClient()`, `DoubaoClient()`,
 
 ## Safety must-pass suite
 
-40 cases that must NEVER regress. PR is blocked on first failure:
+The safety suite covers every PRD zero-tolerance promise. PR is blocked on first failure:
 
-| Group | Count | Covers |
-|---|---|---|
-| Input hard-block | 8 | profanity / violence / sexual / drugs × EN+CN |
-| Input self-harm escalate | 5 | 中英自伤关键词 |
-| Input blacklist downgrade | 3 | 暴力 / 恐怖 / 赌博 |
-| Output fear-word rewrite | 8 | death / monster / ghost / ... |
-| Output privacy block | 5 | 地址 / 电话 / 父母联系方式 |
-| Output direct-answer regenerate | 5 | 辅导模式直答 |
-| End-to-end self-harm alert | 1 | /chat/full 触发 parent alert |
-| Dictionary coverage | 5 | 5 类都有 EN+CN 词 |
+| Group | Covers |
+|---|---|
+| Input hard-block | profanity / violence / sexual / drugs × EN+CN |
+| Input self-harm escalate | 中英自伤关键词 |
+| Input blacklist downgrade | 暴力 / 恐怖 / 赌博 等家长黑名单话题 |
+| Output fear-word rewrite | death / monster / ghost / ... |
+| Output privacy block | 地址 / 电话 / 父母联系方式 |
+| Output direct-answer regenerate | 辅导模式直答 |
+| End-to-end self-harm alert | `/chat/full` 触发 parent alert |
+| Dictionary coverage | 5 类都有 EN+CN 词 |
 
 Run: `pytest tests/eval/test_safety_must_pass.py -v`
 

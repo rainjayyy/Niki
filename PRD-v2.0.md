@@ -10,7 +10,7 @@
 
 Niki 是一个基于 LangChain 构建的、面向3-12岁儿童的AI陪伴助手。核心理念是**"自适应引导，而非控制"**。
 
-系统通过多智能体路由将百科问答、作业辅导、情感陪伴三大场景解耦，引入难度感知机制替代传统人工审批，通过长期记忆图谱和情绪基线漂移算法实现个性化成长陪伴，并通过分级隐私策略和输出安全网关构建技术护城河。
+系统通过多智能体路由将百科问答、作业辅导、情感陪伴三大场景解耦，引入难度感知机制替代传统人工审批，通过长期记忆图谱和情绪基线漂移算法实现个性化成长陪伴，并通过分级家长可见性策略、输入安全网关（`InputSafetyGateway` 的 `InputAction`：ALLOW / DOWNGRADE_TO_EMOTION / ESCALATE / BLOCK）与输出安全网关共同构建技术护城河。
 
 **一句话：一个能感知情绪、适配认知、守护安全的"AI伙伴"。**
 
@@ -146,7 +146,7 @@ Niki 是一个基于 LangChain 构建的、面向3-12岁儿童的AI陪伴助手�
 - 短期记忆：Redis缓存最近10轮对话
 - 长期记忆：Chroma向量数据库（开发）/PGVector（生产），存储对话嵌入、情绪值、话题标签、时间戳
 - 认知图谱：Neo4j实体关系图谱，含实体对齐层（Chroma语义去重，余弦相似度>0.85合并）+ 关系边时间衰减函数
-- 夜间压缩流水线：APScheduler定时任务，每步骤幂等、重试3次（指数退避）、死信队列兜底；流水线健康检查端点
+- 夜间压缩流水线：当前通过 `GET /api/v1/memory/pipeline/run` 手动触发（设计上可由外部 cron 调度至凌晨 02:00；`DEFAULT_PIPELINE_TIME = "02:00"` 常量已定义），由 `niki/infrastructure/heartbeat.py` 自研 asyncio 调度框架负责健康检查；每步骤幂等、重试3次（指数退避）、死信队列兜底；流水线健康检查端点。**8 步当前实现**：(1) 读 7 天 chat_sessions，(2) `_step_deep_extraction` 用 `_NIGHTLY_ENTITY_PATTERNS` 批量抽实体并注册到认知图，(3) 写 Chroma 长记忆，(4) `_step_update_graph` 共现挖掘（同消息内多实体加 `RELATED_TO` 边 + `child → KNOWS_ABOUT → entity` 边），(5) `_step_update_emotion` 用 `_NIGHTLY_EMOTION_PATTERNS` 按 child 聚合当日情绪并写 `EmotionBaselineRecord`，(6) `_step_weekly_report` 统计本周有活动的孩子写入 `context["weekly_report_children"]` 供 DashboardService 消费，(7) `_step_calculate_baseline` 取 7 天窗口重算均值/标准差 + 1.5σ 异常计数，(8) `_step_safety_annotate` 复用 `SENSITIVE_WORDS` 扫日志，把命中写进 `context["safety_annotations"]`。第 2 步预留 LLM 接入位（注释里有 `# _LLM_HOOK_NOTE`），当前用确定性正则兜底，统计 `items_processed` 非零便于测试。
 - 情绪基线引擎：7天滑动窗口 + Z-score异常检测（阈值1.5σ）
 
 **5. 数据治理层（合规）**
@@ -194,13 +194,16 @@ Niki 是一个基于 LangChain 构建的、面向3-12岁儿童的AI陪伴助手�
 - 晚8点定时任务检查当日基线，触发主动关怀或简短晚安
 - 新用户前7天校准期，不触发异常波动告警
 
-**隐私分级策略：**
+**隐私分级策略（家长可见性维度）：**
+
 | 等级 | 包含内容 | 家长可见性 | 触发条件 |
 |------|---------|-----------|---------|
 | 🟢 绿色 | 日常情绪、兴趣、学习进度 | 周报全量可见（积极优先呈现） | 默认 |
 | 🟡 黄色 | 轻度负面情绪 | 仅情绪趋势，不含原文 | 情感Agent判定 |
 | 🔴 红色 | 高危信号 | 实时推送原文+告警 | 紧急关键词触发 |
 | ⚫ 树洞 | 私密倾诉 | 仅脱敏主题+强度摘要（不推断归因、不点名涉及的人） | 孩子主动要求保密或情感Agent判定 |
+
+> **实现说明**：本表描述的是**家长可见性分级**（写什么 / 看见什么）。**输入侧的分流**由 `niki/safety/input_gateway.py` 的 `InputAction` 枚举实现，4 个动作为 ALLOW / DOWNGRADE_TO_EMOTION / ESCALATE / BLOCK，与本表的家长可见性在概念上对应但实现上解耦。**家长可见性的判定**由 `niki/safety/privacy_tier.py` 的 `PrivacyTierClassifier` 实现，4 个 tier 为 DAILY（日常）/ MILD_NEGATIVE（轻度负面）/ HIGH_RISK（高危告警）/ TREEHOLE_PRIVATE（树洞私密），按"最严重胜出"顺序匹配：树洞触发词 → `SENSITIVE_WORDS["self_harm" / "violence" / "sexual" / "drugs"]` → 轻度负面词表 → 默认 DAILY；返回 `PrivacyTierVerdict` 提供 `is_sensitive` / `requires_parent_alert` / `should_encrypt` 三个布尔钩子供下游策略使用。**树洞模式**由 `niki/treehole/` 模块独立实现（AES-256-GCM 加密 + 7 天 TTL），TREEHOLE_PRIVATE tier 是触发 `treehole/manager.engage()` 的前置条件之一。**端到端集成**：`ChatOrchestrator.chat()` 在 `InputSafetyGateway` 之后立即调用 `PrivacyTierClassifier.classify()`（新增 `TIER_CLASSIFY` 阶段），并通过 `_dispatch_tier_side_effects()` 根据 tier 触发对应动作——HIGH_RISK 调用 `AlertBroker.publish(SecurityAlert)` 实时推送到家长 SSE 看板并通过 `DashboardRepository.add_alert` 持久化告警行；TREEHOLE_PRIVATE 调用 `TreeholeManager.engage()` 把原文 AES-256-GCM 加密后存入 7 天 TTL 存储，原始文本**永远不**写入 Chroma / Neo4j / 对话日志。`ChatResult` 新增 `privacy_tier` / `privacy_tier_reason` / `treehole_engaged` 字段，`/api/v1/chat/full` 透传到响应体。
 
 树洞内容改写原则：输出"什么类型的情绪+多强+结果"，不输出"原因推断"。示例：❌ "孩子在妈妈某些方面感到伤心" → ✅ "孩子今天有一次与家庭关系相关的短暂负面情绪（强度2/5），已通过倾诉缓解"
 

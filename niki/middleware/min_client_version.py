@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import re
 import structlog
+from collections.abc import Awaitable, Callable
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 logger = structlog.get_logger(__name__)
 
@@ -42,13 +44,20 @@ class MinClientVersionMiddleware(BaseHTTPMiddleware):
 
     HEADER = "X-Client-Version"
 
-    def __init__(self, app, *, min_supported_version: str) -> None:
-        super().__init__(app)
-        self._min = _parse_semver(min_supported_version)
-        if self._min is None:
-            raise ValueError(f"invalid min_supported_version: {min_supported_version!r}")
+    _min: tuple[int, int, int]
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    def __init__(self, app: ASGIApp, *, min_supported_version: str) -> None:
+        super().__init__(app)
+        parsed = _parse_semver(min_supported_version)
+        if parsed is None:
+            raise ValueError(f"invalid min_supported_version: {min_supported_version!r}")
+        # mypy: parsed is tuple[int,int,int] here because of the
+        # early raise above. Reassign to a typed attribute.
+        self._min = parsed
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         ver = request.headers.get(self.HEADER)
         if ver:
             parsed = _parse_semver(ver)

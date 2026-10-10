@@ -10,7 +10,7 @@ from niki.services.data_export import build_export_zip
 
 router = APIRouter(
     prefix="/parents",
-    tags=[{"name": "data-portability", "description": "Data export API endpoint (BE-COMP-001)."}],
+    tags=[{"name": "data-portability", "description": "Data export API endpoint (BE-COMP-001)."}]  # type: ignore[list-item]
 )
 
 

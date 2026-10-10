@@ -55,10 +55,7 @@ _SCHEMAS: dict[str, dict[str, Any]] = {
                     },
                     "top_k": {
                         "type": "integer",
-                        "description": (
-                            "Maximum number of hits to return (1-5). "
-                            "Default 3."
-                        ),
+                        "description": ("Maximum number of hits to return (1-5). Default 3."),
                         "minimum": 1,
                         "maximum": 5,
                     },

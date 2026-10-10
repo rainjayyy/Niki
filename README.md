@@ -15,7 +15,7 @@ Niki 是一个面向 3-12 岁儿童的 AI 陪伴系统，**不是**通用聊天�
 
 1. **儿童安全是 P0** —— 任何 LLM 输出都必须经过 `OutputSafetyGateway`；自伤 / 暴力 / 色情 / 毒 / 脏话 5 类输入直接拦截；4 级分类（ALLOW / DOWNGRADE / ESCALATE / BLOCK）。
 2. **家长必须知情可控** —— 实名 + 人脸 + 知情同意三件套注册、30 天删除冷静期、PDF 删除回执、横向越权 (lateral-auth) 模式、PII 仅以 sha256 入库、JWT 三档 scope + TOTP 2FA。
-3. **效果可评测可回归** —— LLM-as-Judge + 5 个偏差控制 + 40 条硬断言必过 + 550 条金标准数据集 + 3 层可独立运行评估架构。
+3. **效果可评测可回归** —— LLM-as-Judge + 4 项算法去偏 + 19 金 + 20 人工标注 + 3 层可独立运行评估架构。
 
 > 这些约束让本项目区别于"调 LangChain + 接 GPT-4 做个聊天 demo"——它是真在生产路径上跑过合规审查的工程。
 
@@ -34,9 +34,10 @@ Niki 是一个面向 3-12 岁儿童的 AI 陪伴系统，**不是**通用聊天�
 | LLM 工具选择 (ReAct) | 4-round (KB only) | `agent_tool_use_enabled` flag，默认关闭；`agent_tool_loop_max_rounds` 默认 4 |
 | SSE 流式 ReAct | structured events | `agent_stream_use_agent_pipeline` flag，默认关闭；开 → `/chat/stream` 走 `ChatOrchestrator.stream_chat`，emit `phase`/`chunk`/`tool_call`/`tool_result`/`final` 事件 |
 | Vertical Slice | 6 | safety → routing → encyclopedia/tutoring/emotion → orchestrator |
-| 评估金标准用例 | 550 | 6 场景 × 3 年龄段 |
-| 必过安全用例 | 40 | 任何 fail 即阻塞 CI |
-| LLM-judge 偏差控制 | 5 | 见 [`niki/eval/README.md`](niki/eval/README.md) |
+| 评估金标准用例 | 19 | 覆盖 3 个核心维度：回复质量 / 硬约束达标 / 安全性 |
+| 必过安全用例 | 覆盖 5 类输入 + 输出改写 + 直答检测 | 任何 fail 即阻塞 CI |
+| 人工标注校准集 | 20 | judge 与人评一致性（Cohen-kappa ≥ 0.7） |
+| LLM-judge 算法去偏 | 4 | 见 [`niki/eval/README.md`](niki/eval/README.md) |
 | Prometheus 指标 | 13 | 自建 `CollectorRegistry` 隔离测试 |
 | 已知技术债 | 17 | 见 [`ISSUES_FOUND.md`](ISSUES_FOUND.md) |
 
@@ -215,15 +216,16 @@ topic_blacklist  →  DOWNGRADE_TO_EMOTION  (降级到情感 agent)
 
 > 3 层可独立运行架构：通用 judge / Niki 金标准 / 集成测试
 
-**LLM-as-Judge + 5 个偏差控制**（业内 paper 反复验证过的系统性问题）：
+**LLM-as-Judge + 4 项算法去偏**（业内 paper 反复验证过的系统性问题）：
 
-1. **位置偏好**：同输入跑两遍换位，分差 ≥ 2 取**低分**（保守）
-2. **长度偏好**：截断到 200 字前评分（杀 `longer = better` 偏置）
-3. **格式偏好**：强 Schema 校验，malformed 直接 0 分
-4. **校准漂移**：Cohen-kappa ≥ 0.7 阈值，定期 30 条人标复测
-5. **自偏好**：主模型 Minimax，judge 用 doubao 跨模型评判
+1. **长度归一化**：截断到 200 字前评分（杀 `longer = better` 偏置）
+2. **位置偏置检测**：同输入跑两遍换位，分差 ≥ 2 取**低分**（保守）
+3. **人评一致性校准**：Cohen-kappa ≥ 0.7 阈值，20 条人工标注集复测
+4. **Judge 失效回退硬断言**：JSON malformed 时降级到 must_contain / must_not_contain 硬评分，避免 LLM 抖动掩盖真实安全 bug
 
-**安全必过 40 条**任何一条 fail 即阻塞 CI；**金标准 550 条**通过 LLM-judge 软评。
+**附加推荐**：跨模型 judging（主模型 Minimax，judge 用 doubao）——避免自偏好，是部署层面的选择。
+
+**安全必过套件**任何一条 fail 即阻塞 CI；**金标准 19 条**通过 LLM-judge 软评。
 
 ```bash
 python scripts/run_eval.py --limit 10 --stub     # 烟囱测试，~1s
@@ -342,7 +344,7 @@ Niki/
 |---|---|
 | [`PRD-v2.0.md`](PRD-v2.0.md) | 产品需求 v2.0（75 条 user story）|
 | [`ISSUES_FOUND.md`](ISSUES_FOUND.md) | **17 条已知问题**（P0-P3 全列）|
-| [`niki/eval/README.md`](niki/eval/README.md) | 评估层架构 + 5 个偏差控制详解 |
+| [`niki/eval/README.md`](niki/eval/README.md) | 评估层架构 + 4 项算法去偏详解 |
 | [`EVAL_REPORT.md`](EVAL_REPORT.md) | 历次评估结果 |
 | `docs/be-issues/BE-*.md` | 50+ 个后端工单的设计 rationale |
 | `docs/` | 架构决策记录 (ADR) |

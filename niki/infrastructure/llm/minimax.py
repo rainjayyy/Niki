@@ -139,12 +139,13 @@ class MinimaxClient(BaseLLMClient):
 
         logger.debug("minimax.chat.stream.start", model=self.model)
 
-        response = await self.client.send(
+        # httpx 0.28+ uses Request object as the first positional arg.
+        request = self.client.build_request(
             method="POST",
             url="/chat/completions",
             json=payload,
-            stream=True,
         )
+        response = await self.client.send(request, stream=True)
         self._handle_http_error(response.status_code, self.provider_name)
         response.raise_for_status()
 

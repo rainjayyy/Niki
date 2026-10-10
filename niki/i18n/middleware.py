@@ -19,10 +19,12 @@ Keeping the translation step in the handler preserves the existing
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Iterable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from niki.i18n.messages import CATALOGS
@@ -147,7 +149,7 @@ class LanguageMiddleware(BaseHTTPMiddleware):
         self._default_lang = default_lang
         self._supported: tuple[str, ...] = tuple(self._translator.languages)
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         # `request.query_params` is cached; reading it is cheap.
         query_lang = request.query_params.get("lang")
         lang = pick_lang(

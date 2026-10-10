@@ -35,9 +35,9 @@ from niki.api._i18n import localized_error_response
 
 router = APIRouter(
     prefix="/pairing",
-    tags=[
+    tags=[  
         {"name": "pairing", "description": "Parent ↔ Child pairing code endpoints (BE-DEV-004)."}
-    ],
+    ]
 )
 
 

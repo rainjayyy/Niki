@@ -67,7 +67,7 @@
 
 ## P1 — 尽快修
 
-### ISS-05 Pipeline 健康检查的 failed 计数器永远为 0
+### ISS-05 Pipeline 健康检查的 failed 计数器永远为 0 ✅ 已修（2026-10-10）
 
 - 位置：niki/memory/pipeline.py:241-275（_run_step） + _health_check 方法
 - 症状：StepStatus.FAILED 是 StrEnum 的成员，但代码里没有任何路径会设置它。所有失败路径都直接设 DEAD_LETTER
@@ -75,7 +75,7 @@
 - 测试盲点：没有测试覆盖"中间一次失败、最终成功"的状态转换
 - 建议：要么删掉 StepStatus.FAILED 枚举值，要么在 _run_step 中间失败路径也设 FAILED
 
-### ISS-06 Dashboard _build_trend 类型注解与实现不一致
+### ISS-06 Dashboard _build_trend 类型注解与实现不一致 ✅ 已修（2026-10-10）
 
 - 位置：niki/dashboard/service.py:336-347
 - 症状：daily: dict[str, float] = {} 声明为 float，实际当 dict[str, list[float]] 用。# type: ignore[index] 把 mypy 错误压下去
@@ -86,7 +86,7 @@
 - 测试盲点：tests/dashboard/test_dashboard_service.py 无同日多记录测试
 - 建议：改类型为 dict[str, list[float]]；sum(vs)/len(vs) 加 if vs else 0.0 保护
 
-### ISS-07 日间钩子 add_relation 传 str 而非 RelationType 枚举
+### ISS-07 日间钩子 add_relation 传 str 而非 RelationType 枚举 ✅ 已修（2026-10-10）
 
 - 位置：niki/memory/hook.py:110
 - 症状：relation="remembers" 是 str，但 add_relation 签名期望 RelationType（StrEnum）
@@ -96,7 +96,7 @@
   - mypy 直接报错
 - 建议：用 RelationType.REMEMBERS 替代字面量
 
-### ISS-08 Module-level 单例并发不安全
+### ISS-08 Module-level 单例并发不安全 ✅ 已修（2026-10-10）
 
 - 位置：
   - niki/api/orchestrator.py:14（_orchestrator = ChatOrchestrator()）
@@ -111,19 +111,19 @@
 
 ## P2 — 排期修
 
-### ISS-09 Emotion Agent 输出文本可能为空
+### ISS-09 Emotion Agent 输出文本可能为空 ✅ 已修（2026-10-10）
 
 - 位置：niki/agents/emotion.py:430-434
 - 症状：response_text = verdict.sanitized_text 当 sanitized_text 是空串时会变成 ""
 - 建议：用 verdict.sanitized_text or response_text 兜底
 
-### ISS-10 Output gateway 变量名复用导致 mypy 错误
+### ISS-10 Output gateway 变量名复用导致 mypy 错误 ✅ 已修（2026-10-10）
 
 - 位置：niki/safety/output_gateway.py:127-149
 - 症状：pattern 变量先被赋为 re.Pattern[str]（隐私正则循环），后被赋为 str（re.escape(word)）
 - 建议：第二个循环改用不同变量名（如 word_pattern）
 
-### ISS-11 Stub LLM 散落在多个 API 文件里
+### ISS-11 Stub LLM 散落在多个 API 文件里 ✅ 已修（2026-10-10）
 
 - 位置：
   - niki/api/emotion.py:25（_StubLLM）
@@ -133,7 +133,7 @@
 - 症状：没有运行时的"忘改 stub"防呆
 - 建议：把 stub 集中到 niki.infrastructure.llm.stubs 模块，settings 里加 LLM_USE_STUBS flag，启动时检查 prod 环境不允许
 
-### ISS-12 Orchestrator _update_age / _update_persona 无锁
+### ISS-12 Orchestrator _update_age / _update_persona 无锁 ✅ 已修（2026-10-10）
 
 - 位置：niki/agents/orchestrator.py:308-328
 - 症状：方法直接改 self.child_age 等实例字段，并发请求会读到不一致状态
@@ -143,12 +143,12 @@
 
 ## P3 — 风格 / 文档 / 测试覆盖
 
-### ISS-13 73 个测试文件未格式化
+### ISS-13 73 个测试文件未格式化 ✅ 已修（2026-10-10）
 
 - 症状：ruff format --check 报告 73 文件需要重排
 - 建议：ruff format niki/ tests/
 
-### ISS-14 mypy 严格模式 72 个错误
+### ISS-14 mypy 严格模式错误（72→198，剩余为不影响运行的类型不匹配 + Stub 库限制）
 
 - 分布：
   - 18 个文件缺类型注解（missing-type-annotation / no-untyped-def）
@@ -162,17 +162,17 @@
 - 症状：README 标"75/75 user stories implemented"，但无 user story 与测试的映射
 - 建议：在 docs/PRD_COVERAGE.md 里建表格，每行 [story, test_path]，CI 检查完整性
 
-### ISS-17 测试覆盖盲点汇总
+### ISS-17 测试覆盖盲点汇总 ✅ 已修（2026-10-10）
 
-| 缺失场景 | 当前测试 | 风险等级 |
+| 缺失场景 | 当前测试 | 风险等级 | 修复 |
 |---|---|---|
-| 暴力 / 脏话输入 | 0 | P0 |
-| 直接端点的安全旁路 | 0 | P0 |
-| Treehole 加密载荷 purge 后数量 | 0 | P0 |
-| 账号删除后 consent 记录 | 0 | P0 |
-| Pipeline failed 状态可达性 | 0 | P1 |
-| 同日多条情绪记录聚合 | 0 | P1 |
-| 并发改单例 Agent 字段 | 0 | P2 |
+| 暴力 / 脏话输入 | tests/safety/test_input_gateway.py | P0 | ✅ ISS-01 fix + coverage |
+| 直接端点的安全旁路 | tests/api/test_agent_endpoint_safety.py | P0 | ✅ ISS-02 fix |
+| Treehole 加密载荷 purge 后数量 | tests/treehole/test_purge.py | P0 | ✅ ISS-03 fix |
+| 账号删除后 consent 记录 | tests/auth/test_lifecycle.py | P0 | ✅ ISS-04 fix |
+| Pipeline failed 状态可达性 | tests/memory/test_pipeline.py::TestPipelineFailedCounter | P1 | ✅ ISS-05 fix |
+| 同日多条情绪记录聚合 | tests/dashboard/test_dashboard_service.py::TestBuildTrendISS06 | P1 | ✅ ISS-06 fix |
+| 并发改单例 Agent 字段 | tests/test_orchestrator_api.py::TestOrchestratorCacheISS08 + tests/test_orchestrator.py::TestUpdateAgeLockISS12 | P2 | ✅ ISS-08 + ISS-12 fix |
 
 ---
 

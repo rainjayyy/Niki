@@ -18,7 +18,7 @@ import copy
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, cast
 
 import structlog
 from sqlalchemy import select
@@ -180,7 +180,7 @@ class InMemoryPhoneChangeRepository(PhoneChangeRepository):
             new_phone_hash=new_phone_hash,
             verification_code=verification_code,
             requested_at=now,
-            expires_at=_aware(expires_at),
+            expires_at=cast("datetime", _aware(expires_at)),
             status=PhoneChangeStatus.PENDING_VERIFICATION.value,
             new_phone_raw=new_phone_raw,
         )
@@ -341,8 +341,8 @@ class PostgresPhoneChangeRepository(PhoneChangeRepository):
             old_phone_hash=row.old_phone_hash,
             new_phone_hash=row.new_phone_hash,
             verification_code=row.verification_code,
-            requested_at=_aware(row.requested_at),
-            expires_at=_aware(row.expires_at),
+            requested_at=cast("datetime", _aware(row.requested_at)),
+            expires_at=cast("datetime", _aware(row.expires_at)),
             effective_at=_aware(row.effective_at),
             status=row.status,
             confirmed_at=_aware(row.confirmed_at),

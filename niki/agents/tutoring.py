@@ -171,7 +171,7 @@ class TutoringAgent(BaseAgent):
 
     def __init__(
         self,
-        llm,
+        llm: object,
         persona: str = "gentle",
         child_age: int = 7,
         child_history: dict[str, float] | None = None,
@@ -478,7 +478,7 @@ class TutoringAgent(BaseAgent):
         child_input = ChildInput(
             text=problem,
             session_id="tutoring",
-        )
+        )  # type: ignore[call-arg]
         context: dict[str, Any] = {"problem_state": state}
         if subtype:
             context["subtype"] = subtype

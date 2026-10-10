@@ -26,11 +26,11 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from niki.api._i18n import error_response, localized_error_response, resolve_lang
+from niki.api._i18n import error_response, localized_error_response
 from niki.auth.account import ParentAccount
 from niki.schemas.requests import PushTestRequest
 from niki.auth.dependencies import get_current_parent
@@ -44,11 +44,9 @@ from niki.db.models import (
     VALID_SEVERITIES,
 )
 from niki.db.repositories import (
-    get_audit_log_repository,
     get_push_device_repository,
     get_push_prefs_repository,
 )
-from niki.i18n.translator import get_translator
 from niki.middleware.rate_limit import get_limiter
 from niki.services.audit_log import (
     SEVERITY_INFO,
@@ -65,9 +63,9 @@ from niki.services.push_delivery import (
 
 router = APIRouter(
     prefix="/push",
-    tags=[
+    tags=[  
         {"name": "push", "description": "Push notification registration endpoints (BE-PUSH-001)."}
-    ],
+    ]
 )
 
 

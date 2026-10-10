@@ -43,7 +43,7 @@ from niki.schemas.requests import (
 
 router = APIRouter(
     prefix="/dashboard",
-    tags=[{"name": "dashboard", "description": "Parent dashboard API endpoints — PRD #24-#29."}],
+    tags=[{"name": "dashboard", "description": "Parent dashboard API endpoints — PRD #24-#29."}]  # type: ignore[list-item]
 )
 
 # Module-level singletons
@@ -105,7 +105,6 @@ async def weekly_report_pdf(
     """
     # Import here so the API module doesn't pull reportlab
     # unless the endpoint is actually hit.
-    from fastapi import Query
     from niki.dashboard.pdf import render_weekly_report_pdf
     from niki.dashboard.templates import ReportTemplate
 
@@ -357,7 +356,7 @@ async def dismiss_alerts_batch(
          "skipped":   [{"alert_id": "a-3", "reason": "not_found"}, ...]}
     """
     # Cap is shared with the memory batch endpoints (BE-API-005).
-    from niki.api.memory import BATCH_MAX_ITEMS, _enforce_batch_cap
+    from niki.api.memory import _enforce_batch_cap
 
     alert_ids = _enforce_batch_cap(
         request,

@@ -18,20 +18,28 @@ from niki.safety.output_gateway import OutputAction, OutputSafetyGateway, Output
 
 router = APIRouter(
     prefix="/safety",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
+            "name": "safety",
+            "description": ("Safety API endpoints — child-facing chat with input/output gateways."),
+        },
+    ]
+)
+chat_router = APIRouter(
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "safety",
             "description": ("Safety API endpoints — child-facing chat with input/output gateways."),
         },
     ],
 )
 chat_router = APIRouter(
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "chat",
             "description": ("Safety API endpoints — child-facing chat with input/output gateways."),
         },
-    ],
+    ]
 )
 
 # Singleton gateways (cheap to construct; safe to reuse)

@@ -9,7 +9,7 @@ parent (lateral-auth via get_owned_child_id).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,12 +21,12 @@ from niki.infrastructure.postgres import PostgresClient
 
 router = APIRouter(
     prefix="/child-data",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "child-data",
             "description": "Persistent child achievements, chat history and weekly report history.",
         }
-    ],
+    ]
 )
 
 

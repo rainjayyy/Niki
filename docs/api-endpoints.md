@@ -1,35 +1,42 @@
 # Niki API 端点清单（自动生成）
 
-> 来源：`/openapi.json` · 总数：**138 个端点**
+> 来源：`/openapi.json` · 总数：**176 个端点**
 
 ## 分布
 
 | 切片 | 端点数 |
 |---|---|
-| auth | 15 |
+| auth | 21 |
 | memory | 15 |
+| dashboard | 13 |
+| push | 13 |
 | session | 13 |
-| dashboard | 12 |
-| push | 10 |
 | content-policy | 8 |
 | resilience | 8 |
+| auth-2fa | 7 |
+| child-data | 7 |
 | emotion | 7 |
 | treehole | 7 |
 | tools | 6 |
+| webhooks | 6 |
 | media | 5 |
 | routing | 5 |
 | chat | 3 |
+| letters | 3 |
 | encyclopedia | 3 |
 | health | 3 |
+| notifications | 3 |
 | safety | 3 |
 | tutoring | 3 |
 | audio | 2 |
 | children | 2 |
 | pairing | 2 |
+| admin_audit | 1 |
 | alerts | 1 |
 | auth_audit | 1 |
 | config | 1 |
 | deletion | 1 |
+| metrics | 1 |
 | data-portability | 1 |
 | status | 1 |
 
@@ -39,31 +46,38 @@
 
 | Tag | Endpoints | With summary | Missing summary |
 |---|---|---|---|
-| auth | 15 | 15 | 0 |
+| auth | 21 | 21 | 0 |
 | memory | 15 | 15 | 0 |
+| dashboard | 13 | 13 | 0 |
+| push | 13 | 13 | 0 |
 | session | 13 | 13 | 0 |
-| dashboard | 12 | 12 | 0 |
-| push | 10 | 10 | 0 |
 | content-policy | 8 | 8 | 0 |
 | resilience | 8 | 8 | 0 |
+| auth-2fa | 7 | 7 | 0 |
+| child-data | 7 | 7 | 0 |
 | emotion | 7 | 7 | 0 |
 | treehole | 7 | 7 | 0 |
 | tools | 6 | 6 | 0 |
+| webhooks | 6 | 6 | 0 |
 | media | 5 | 5 | 0 |
 | routing | 5 | 5 | 0 |
 | chat | 3 | 3 | 0 |
 | encyclopedia | 3 | 3 | 0 |
 | health | 3 | 3 | 0 |
+| letters | 3 | 3 | 0 |
+| notifications | 3 | 3 | 0 |
 | safety | 3 | 3 | 0 |
 | tutoring | 3 | 3 | 0 |
 | audio | 2 | 2 | 0 |
 | children | 2 | 2 | 0 |
 | pairing | 2 | 2 | 0 |
+| admin_audit | 1 | 1 | 0 |
 | alerts | 1 | 1 | 0 |
 | auth_audit | 1 | 1 | 0 |
 | config | 1 | 1 | 0 |
 | data-portability | 1 | 1 | 0 |
 | deletion | 1 | 1 | 0 |
+| metrics | 1 | 1 | 0 |
 | status | 1 | 1 | 0 |
 
 ✅ 100% coverage.
@@ -72,17 +86,31 @@
 
 | 方法 | 路径 | 标签 | 摘要 |
 |---|---|---|---|
+| GET | `/api/v1/admin/audit` | admin_audit | Query the unified cross-domain audit log |
 | GET | `/api/v1/alerts/stream/{child_id}` | alerts | SSE stream of high-risk alerts for the calling parent |
 | POST | `/api/v1/audio/synthesize` | audio | Synthesise speech from text and return base64-encoded audio |
 | POST | `/api/v1/audio/transcribe` | audio | Run ASR on an uploaded audio blob and return recognised text |
+| DELETE | `/api/v1/auth/2fa` | auth-2fa | Disable 2FA |
+| POST | `/api/v1/auth/2fa/backup-codes` | auth-2fa | Regenerate backup codes |
+| POST | `/api/v1/auth/2fa/enroll` | auth-2fa | Begin 2FA enrollment |
+| POST | `/api/v1/auth/2fa/enroll/verify` | auth-2fa | Verify first TOTP code and enable 2FA |
+| POST | `/api/v1/auth/2fa/login` | auth-2fa | Exchange partial_token + TOTP for full tokens |
+| GET | `/api/v1/auth/2fa/status` | auth-2fa | 2FA enrollment status |
+| POST | `/api/v1/auth/2fa/verify` | auth-2fa | Verify TOTP or backup code (re-auth) |
 | GET | `/api/v1/auth/audit/recent` | auth_audit |              Return the most recent audit events the caller is allowed to see              |
 | GET | `/api/v1/auth/captcha/challenge` | auth | Mint a captcha challenge |
 | POST | `/api/v1/auth/captcha/verify` | auth | Verify a captcha answer |
 | GET | `/api/v1/auth/consent/document/{consent_type}` | auth | Get consent document text |
 | POST | `/api/v1/auth/deletion/complete` | auth | Complete account deletion |
 | POST | `/api/v1/auth/deletion/request` | auth | Request account deletion |
+| POST | `/api/v1/auth/email/change/request` | auth | Request email change (step 1) |
+| POST | `/api/v1/auth/email/change/verify` | auth | Verify email-change code and complete (step 2) |
 | POST | `/api/v1/auth/logout` | auth | Logout (revoke access JWT) |
 | GET | `/api/v1/auth/me/{parent_id}` | auth | Get parent account |
+| POST | `/api/v1/auth/phone/change/confirm-now` | auth | Skip the 7-day cooling period |
+| POST | `/api/v1/auth/phone/change/request` | auth | Request phone change (step 1) |
+| POST | `/api/v1/auth/phone/change/verify` | auth | Verify phone-change SMS code (step 2) |
+| POST | `/api/v1/auth/phone/change/{request_id}/cancel` | auth | Cancel a phone-change request |
 | POST | `/api/v1/auth/refresh` | auth | Refresh access + refresh token |
 | POST | `/api/v1/auth/signup/consent` | auth | Step 3: Sign consent document |
 | POST | `/api/v1/auth/signup/face` | auth | Step 2: Face verification |
@@ -94,8 +122,17 @@
 | POST | `/api/v1/chat/full` | chat | Run the full chat pipeline end-to-end |
 | GET | `/api/v1/chat/stages` | chat | List the stages of the chat pipeline (for debugging) |
 | POST | `/api/v1/chat/stream` | chat | Stream a chat reply via Server-Sent Events |
+| GET | `/api/v1/child-data/achievements/{child_id}` | child-data | Get persistent achievements for a child |
+| POST | `/api/v1/child-data/achievements/{child_id}` | child-data | Upsert achievements for a child |
+| GET | `/api/v1/child-data/chat-sessions/{child_id}` | child-data | List chat sessions for a child |
+| POST | `/api/v1/child-data/chat-sessions/{child_id}` | child-data | Save or update a chat session |
+| GET | `/api/v1/child-data/chat-sessions/{child_id}/{session_id}` | child-data | Get a single chat session |
+| GET | `/api/v1/child-data/weekly-reports/{child_id}` | child-data | List weekly report history |
+| POST | `/api/v1/child-data/weekly-reports/{child_id}` | child-data | Save or update a weekly report snapshot |
+| POST | `/api/v1/children/letters/{letter_id}/read` | letters | Mark a letter as read |
 | GET | `/api/v1/children/list/{parent_id}` | children | List child_ids owned by the calling parent |
 | POST | `/api/v1/children/register/{parent_id}` | children | Register a child under a parent |
+| GET | `/api/v1/children/{child_id}/letters` | letters | List letters in a child's inbox |
 | GET | `/api/v1/config/client` | config | Return the client-facing runtime config |
 | POST | `/api/v1/dashboard/alerts/batch/dismiss` | dashboard | Dismiss many alerts in a single round trip (BE-API-005) |
 | POST | `/api/v1/dashboard/alerts/record/high-risk` | dashboard | Record a high-risk signal (self-harm, etc.) |
@@ -103,6 +140,7 @@
 | POST | `/api/v1/dashboard/alerts/{alert_id}/delivered` | dashboard | Mark a high-risk alert as delivered |
 | GET | `/api/v1/dashboard/alerts/{child_id}` | dashboard | Get pending alerts (PRD #27, #29) |
 | POST | `/api/v1/dashboard/baseline/add` | dashboard | Add a baseline record (for testing/demo) |
+| GET | `/api/v1/dashboard/emotion/timeline/{child_id}` | dashboard | Get the 7x24 emotion timeline heatmap (PRD #28) |
 | POST | `/api/v1/dashboard/events/knowledge` | dashboard | Record a knowledge-base query |
 | POST | `/api/v1/dashboard/events/tutoring` | dashboard | Record a tutoring event (for whitepaper generation) |
 | GET | `/api/v1/dashboard/interest/{child_id}` | dashboard | Get the interest graph (PRD #25) |
@@ -143,9 +181,14 @@
 | GET | `/api/v1/memory/short-term/{session_id}` | memory | Get recent conversation turns for a session |
 | POST | `/api/v1/memory/short-term/{session_id}` | memory | Append a turn to the session's recent memory |
 | DELETE | `/api/v1/memory/short-term/{session_id}` | memory | Clear a session's recent memory |
+| GET | `/api/v1/metrics` | metrics | Prometheus metrics exposition |
+| GET | `/api/v1/notifications` | notifications | List notifications for the calling parent |
+| POST | `/api/v1/notifications/read-all` | notifications | Mark every unread notification as read (BE-PUSH-005) |
+| POST | `/api/v1/notifications/{notification_id}/read` | notifications | Mark a single notification as read |
 | POST | `/api/v1/pairing/code` | pairing | Mint a 6-digit pairing code for one of the caller's children |
 | POST | `/api/v1/pairing/consume` | pairing |              Redeem a 6-digit code (called by the kid's H5 — unauthenticated)              |
 | GET | `/api/v1/parents/{parent_id}/data-export` | data-portability | Download a ZIP of all of a parent's data (PIPL Art |
+| POST | `/api/v1/parents/{parent_id}/letters` | letters | Send a letter to one of your children |
 | POST | `/api/v1/policy/age/grade` | content-policy | Grade a concept for a child's age |
 | POST | `/api/v1/policy/age/grade-text` | content-policy | Grade all concepts mentioned in text |
 | GET | `/api/v1/policy/age/{child_id}` | content-policy | Get the age band for a child |
@@ -163,7 +206,10 @@
 | GET | `/api/v1/push/prefs` | push | Return notification preferences (defaults if unset) |
 | PATCH | `/api/v1/push/prefs` | push | Partial update of notification preferences |
 | POST | `/api/v1/push/register` | push | Register (or re-register) the calling parent's device |
+| POST | `/api/v1/push/test` | push | Send a test push to one of the caller's devices |
+| GET | `/api/v1/push/test/history` | push | Recent test-push deliveries (in-memory ring buffer) |
 | POST | `/api/v1/push/unregister` | push | Remove a registered device |
+| GET | `/api/v1/push/vapid-public-key` | push | VAPID application-server public key for Web Push subscription |
 | POST | `/api/v1/resilience/breaker/force-open` | resilience | Manually trip the breaker (for testing/admin) |
 | POST | `/api/v1/resilience/breaker/reset` | resilience | Manually reset the breaker to CLOSED |
 | GET | `/api/v1/resilience/breaker/stats` | resilience | Get current circuit-breaker statistics |
@@ -210,3 +256,9 @@
 | POST | `/api/v1/tutoring/ask` | tutoring | Ask for help with a stuck problem |
 | GET | `/api/v1/tutoring/difficulty` | tutoring | Show the per-subtype difficulty discount matrix |
 | GET | `/api/v1/tutoring/strategies` | tutoring | List the 4-round guided-discovery strategy templates |
+| GET | `/api/v1/webhooks/` | webhooks | List the caller's webhook subscriptions |
+| POST | `/api/v1/webhooks/` | webhooks | Register a webhook subscription |
+| GET | `/api/v1/webhooks/{subscription_id}` | webhooks | Fetch a single subscription |
+| DELETE | `/api/v1/webhooks/{subscription_id}` | webhooks | Soft-delete a subscription |
+| PATCH | `/api/v1/webhooks/{subscription_id}` | webhooks | Partially update a subscription |
+| GET | `/api/v1/webhooks/{subscription_id}/deliveries` | webhooks | Recent delivery attempts for a subscription |

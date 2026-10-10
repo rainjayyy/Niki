@@ -1,8 +1,8 @@
 """Base agent class for all Niki agents.
 
 All agents (Encyclopedia, Tutoring, Emotion) inherit from BaseAgent,
-which provides LLM integration, persona injection, and the LangChain
-Runnable interface.
+which provides LLM integration, persona injection, and a uniform
+async ``invoke`` entry point with safety / fallback scaffolding.
 """
 
 from abc import ABC, abstractmethod

@@ -417,10 +417,8 @@ class InMemoryAccountRepository(AccountRepository):
         if account is None:
             return None
         # Drop the OLD phone_hash index entry.
-        old_hash = None
         for ph, pid in list(self._phone_to_id.items()):
             if pid == parent_id:
-                old_hash = ph
                 self._phone_to_id.pop(ph, None)
         new_hash = self.hash_field(new_phone)
         self._phone_to_id[new_hash] = parent_id

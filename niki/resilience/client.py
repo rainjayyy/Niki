@@ -116,7 +116,7 @@ class CircuitBreakerAwareClient:
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Call the primary (DeepSeek-V4) client."""
-        return await self.primary.chat(
+        return await self.primary.chat(  # type: ignore[no-any-return]
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -136,7 +136,7 @@ class CircuitBreakerAwareClient:
         (PRD: Niki must always be available).
         """
         try:
-            return await self.fallback.chat(
+            return await self.fallback.chat(  # type: ignore[no-any-return]
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,

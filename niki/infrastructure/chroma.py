@@ -40,7 +40,7 @@ logger = structlog.get_logger(__name__)
 _original_httpx_client_init = httpx.Client.__init__
 
 
-def _patched_httpx_client_init(self, *args, **kwargs):
+def _patched_httpx_client_init(self: Any, *args: Any, **kwargs: Any) -> None:
     if "transport" not in kwargs:
         kwargs["transport"] = httpx.HTTPTransport(retries=0)
     _original_httpx_client_init(self, *args, **kwargs)

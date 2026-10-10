@@ -32,6 +32,11 @@ from niki.db.repositories.auth_audit_repo import (
     get_auth_audit_log_repository,
     set_auth_audit_log_repository,
 )
+from niki.db.repositories.child_repo import (
+    ChildRepository,
+    InMemoryChildRepository,
+    PostgresChildRepository,
+)
 from niki.db.repositories.push_device_repo import (
     InMemoryPushDeviceRepository,
     InMemoryPushPrefsRepository,
@@ -87,6 +92,14 @@ from niki.db.repositories.webhook_repo import (
     get_webhook_repository,
     set_webhook_repository,
 )
+from niki.db.repositories.phone_change_repo import (
+    InMemoryPhoneChangeRepository,
+    PhoneChangeRepository,
+    PhoneChangeRequestData,
+    PostgresPhoneChangeRepository,
+    get_phone_change_repository,
+    set_phone_change_repository,
+)
 from niki.db.repositories.letter_repo import (
     InMemoryLetterRepository,
     LetterRepository,
@@ -104,6 +117,9 @@ __all__ = [
     "PostgresAuthAuditLogRepository",
     "get_auth_audit_log_repository",
     "set_auth_audit_log_repository",
+    "ChildRepository",
+    "InMemoryChildRepository",
+    "PostgresChildRepository",
     "TreeholeRepository",
     "InMemoryTreeholeRepository",
     "PostgresTreeholeRepository",
@@ -166,17 +182,3 @@ __all__ = [
     "get_letter_repository",
     "set_letter_repository",
 ]
-
-from niki.db.repositories.child_repo import (
-    ChildRepository,
-    InMemoryChildRepository,
-    PostgresChildRepository,
-)
-from niki.db.repositories.phone_change_repo import (
-    InMemoryPhoneChangeRepository,
-    PhoneChangeRepository,
-    PhoneChangeRequestData,
-    PostgresPhoneChangeRepository,
-    get_phone_change_repository,
-    set_phone_change_repository,
-)

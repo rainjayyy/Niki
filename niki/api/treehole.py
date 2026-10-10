@@ -10,6 +10,7 @@ Demonstration endpoints for the #11 vertical slice:
 """
 
 from __future__ import annotations
+from typing import Any
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -32,7 +33,7 @@ from niki.treehole import (
 
 router = APIRouter(
     prefix="/treehole",
-    tags=[{"name": "treehole", "description": "Treehole API endpoints — PRD #13, #61-#64."}],
+    tags=[{"name": "treehole", "description": "Treehole API endpoints — PRD #13, #61-#64."}]  # type: ignore[list-item]
 )
 
 # Module-level singletons
@@ -261,6 +262,6 @@ async def store_stats(
     }
 
 
-def _matches_child(summary, child_id: str) -> bool:
+def _matches_child(summary: Any, child_id: str) -> bool:
     """Legacy helper — kept for any external imports."""
     return True

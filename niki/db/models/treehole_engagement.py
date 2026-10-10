@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, LargeBinary, String
+from sqlalchemy import DateTime, Index, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from niki.db.base import Base

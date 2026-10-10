@@ -1,3 +1,6 @@
+from __future__ import annotations
+from typing import Any
+
 """Authentication & consent - PRD #30, #36, #35.
 
 Public surface:
@@ -8,7 +11,8 @@ Public surface:
     ConsentRecord            - electronic informed-consent record (PRD #30, #36)
     AccountLifecycle         - orchestrates signup + deletion (PRD #35)
 
-AccountLifecycle / DeletionStatus are imported lazily (via __getattr__)
+AccountLifecycle / DeletionStatus are
+imported lazily (via __getattr__)
 to break an import cycle: AccountLifecycle depends on
 niki.db.repositories, which depends on niki.auth.account (this module).
 BE-STOR-001.
@@ -38,7 +42,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):  # pragma: no cover - trivial lazy loader
+def __getattr__(name: str) -> Any:  # pragma: no cover - trivial lazy loader
     """Lazily import lifecycle types to avoid the auth <-> db cycle."""
     if name in ("AccountLifecycle", "DeletionStatus"):
         from niki.auth.lifecycle import AccountLifecycle, DeletionStatus

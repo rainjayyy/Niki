@@ -58,7 +58,7 @@ from niki.i18n.translator import get_translator
 
 router = APIRouter(
     prefix="/media",
-    tags=[{"name": "media", "description": "Media API endpoints (BE-MEDIA-001, BE-MEDIA-004)."}],
+    tags=[{"name": "media", "description": "Media API endpoints (BE-MEDIA-001, BE-MEDIA-004)."}]  # type: ignore[list-item]
 )
 
 
@@ -593,8 +593,6 @@ async def get_thumbnail(
     `INVALID_THUMB_SIZE`) instead of a 500 from runtime checks.
     """
     from niki.media.thumbnail import (
-        MAX_DIM,
-        MIN_DIM,
         build_thumbnail,
     )
 

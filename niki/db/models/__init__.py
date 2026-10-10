@@ -109,6 +109,12 @@ __all__ = [
     "PhoneChangeRequest",
     "PhoneChangeStatus",
     "VALID_PHONE_CHANGE_STATUSES",
+    # Letter + child session / weekly report history
+    "AuthAuditLog",
+    "ParentLetter",
+    "ChildAchievement",
+    "ChatSession",
+    "WeeklyReportHistory",
 ]
 from niki.db.models.letter import ParentLetter
 from niki.db.models.child_data import (

@@ -178,6 +178,39 @@ class MetricsRegistry:
         # Leave at 0 — the BE-REALTIME tickets will populate this from
         # the heartbeat service once it ships.
 
+        # ------------------------------------------------------------------
+        # North Star metric — emotion recovery latency
+        # (BE-ISS-NORTHSTAR: the resume claim "以「主动关怀后情绪
+        # 恢复至基线时间」替代「情绪识别准确率」作为系统北极星
+        # 指标" is wired to this histogram + counter pair.)
+        # ------------------------------------------------------------------
+        self.EMOTION_ANOMALIES_TOTAL: Counter = Counter(
+            "niki_emotion_anomalies_total",
+            "Total per-child emotion anomalies opened (|z|>1.5).",
+            ["direction"],
+            registry=self.registry,
+        )
+        self.EMOTION_RECOVERY_SECONDS: Histogram = Histogram(
+            "niki_emotion_recovery_seconds",
+            (
+                "Time elapsed between an emotion anomaly opening and "
+                "the first subsequent in-baseline record. The North "
+                "Star metric for the proactive-care feature."
+            ),
+            # Tuned for daily-granularity recovery: 1m..14d.
+            buckets=(
+                60.0,  # 1 minute
+                300.0,  # 5 minutes
+                1800.0,  # 30 minutes
+                3600.0,  # 1 hour
+                21600.0,  # 6 hours
+                86400.0,  # 1 day
+                259200.0,  # 3 days
+                604800.0,  # 7 days
+            ),
+            registry=self.registry,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Module-level singleton

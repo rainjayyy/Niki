@@ -195,7 +195,7 @@ class PostgresTreeholeRepository(TreeholeRepository):
         result = await self._session.execute(
             delete(TreeholeEngagement).where(TreeholeEngagement.expires_at <= now)
         )
-        count = result.rowcount or 0
+        count = result.rowcount or 0  # type: ignore[attr-defined]
         if count:
             logger.info("treehole_repo.purged_expired", count=count)
         return count
@@ -204,14 +204,14 @@ class PostgresTreeholeRepository(TreeholeRepository):
         result = await self._session.execute(
             delete(TreeholeEngagement).where(TreeholeEngagement.child_id == child_id)
         )
-        count = result.rowcount or 0
+        count = result.rowcount or 0  # type: ignore[attr-defined]
         if count:
             logger.info("treehole_repo.purged_for_child", child_id=child_id, count=count)
         return count
 
     async def delete_all(self) -> int:
         result = await self._session.execute(delete(TreeholeEngagement))
-        count = result.rowcount or 0
+        count = result.rowcount or 0  # type: ignore[attr-defined]
         logger.warning("treehole_repo.purged_all", count=count)
         return count
 

@@ -48,7 +48,7 @@ from niki.memory.short_term import get_short_term_memory
 
 router = APIRouter(
     prefix="/memory",
-    tags=[{"name": "memory", "description": "Memory system API endpoints — PRD #45-#51."}],
+    tags=[{"name": "memory", "description": "Memory system API endpoints — PRD #45-#51."}]  # type: ignore[list-item]
 )
 
 # Module-level singletons

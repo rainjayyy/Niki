@@ -3,7 +3,7 @@
 > **Date**: 2026-10-09 (Asia/Shanghai)
 > **LLM**: MiniMax-M3 via `https://api.minimaxi.com/v1`
 > **Run mode**: `--fast` (1 judge pass, no position-bias swap)
-> **Dataset**: `data/eval/golden_dataset.json` (16 cases)
+> **Dataset**: `data/eval/golden_dataset.json` (16 cases at run-time)
 > **Time**: 4.5 min end-to-end
 > **JSON report**: `eval_report_full.json` (machine-readable)
 
@@ -162,7 +162,7 @@ The judge scores for these fluctuate between 1-3 across runs. They're not "real 
 - `eval_report_full.json` — machine-readable per-case results
 - `data/eval/golden_dataset.json` — 16 golden cases
 - `data/eval/golden_dataset_schema.json` — JSON-Schema for cases
-- `niki/eval/judge.py` — LLM-as-Judge with 5 bias controls (now handles <think> blocks)
+- `niki/eval/judge.py` — LLM-as-Judge with 4 algorithmic bias controls (plus recommended cross-model deployment), strips <think> blocks
 - `niki/eval/README.md` — design philosophy + extension guide
 - `tests/eval/test_safety_must_pass.py` — 40 hard-asserted safety tests
 - `tests/eval/test_judge_unit.py` — 35 unit tests for the judge (mocked, Niki-independent)

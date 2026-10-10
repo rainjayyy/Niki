@@ -6,12 +6,19 @@ tutoring event log) and assembles the parent-facing reports.
 The runtime state (alerts, events, queries) is now persisted via
 `DashboardRepository` (BE-STORG-001-ext-C). The default backend
 is in-memory; production swaps in `PostgresDashboardRepository`.
+
+BE-STORG-001-ext-D: the weekly report now surfaces the anonymised
+treehole aggregate (count + mean valence) by reading from
+``TreeholeManager.aggregate_for_baseline()`` (O(1) per child) instead
+of decrypting every stored engagement. Original text is never
+exposed — the aggregate is the only thing that crosses the
+treehole boundary, in line with PRD #64 "聚合即匿名".
 """
 
 from __future__ import annotations
 
 import hashlib
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -22,13 +29,13 @@ from niki.dashboard.interest import InterestGraph, InterestTopic
 from niki.dashboard.learning import LearningWhitepaper, NewVocabulary
 from niki.dashboard.report import (
     EmotionWeeklyReport,
-    MoodTrend,
     WeeklyTrend,
 )
 from niki.db.repositories import (
     DashboardRepository,
     get_dashboard_repository,
 )
+from niki.treehole.manager import TreeholeManager
 
 logger = structlog.get_logger(__name__)
 
@@ -80,8 +87,17 @@ class DashboardService:
     Persistence is via `DashboardRepository` (BE-STORG-001-ext-C).
     """
 
-    def __init__(self, repo: DashboardRepository | None = None) -> None:
+    def __init__(
+        self,
+        repo: DashboardRepository | None = None,
+        treehole_manager: TreeholeManager | None = None,
+    ) -> None:
         self._repo = repo or get_dashboard_repository()
+        # BE-STORG-001-ext-D: optional TreeholeManager dependency for
+        # reading the per-child O(1) rolling aggregate. When ``None``,
+        # the dashboard instantiates a default manager — that path
+        # is what the API and tests use.
+        self._treehole_manager = treehole_manager or TreeholeManager()
 
     @property
     def repo(self) -> DashboardRepository:
@@ -213,6 +229,24 @@ class DashboardService:
         alerts = await self._repo.list_alerts(alert_type="safety_valve", child_id=child_id)
         safety_count = sum(1 for a in alerts if a.get("payload", {}).get("round_reached", 0) > 0)
 
+        # BE-STORG-001-ext-D: read the per-child treehole rolling
+        # aggregate. The manager handles "no engagements" gracefully
+        # (returns count=0). Exceptions are caught so a treehole-store
+        # outage can never break the parent dashboard.
+        try:
+            treehole_agg = await self._treehole_manager.aggregate_for_baseline(
+                child_id=child_id, window_kind="weekly"
+            )
+            treehole_count = int(treehole_agg.get("count", 0) or 0)
+            treehole_mean = float(treehole_agg.get("mean_valence", 0.0) or 0.0)
+        except Exception:
+            logger.exception(
+                "dashboard.treehole_aggregate_failed",
+                child_id=child_id,
+            )
+            treehole_count = 0
+            treehole_mean = 0.0
+
         return EmotionWeeklyReport(
             child_id=child_id,
             trend=trend,
@@ -222,7 +256,8 @@ class DashboardService:
             anomaly_annotations=anomalies,
             action_suggestions=actions,
             safety_valve_count=safety_count,
-            treehole_engagement_count=0,  # not tracked here (BE-STORG-001-ext-D)
+            treehole_engagement_count=treehole_count,
+            treehole_mean_valence=treehole_mean,
             week_start=week_start.date().isoformat(),
             week_end=today.date().isoformat(),
         )

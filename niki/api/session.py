@@ -30,12 +30,12 @@ from niki.session import (
 
 router = APIRouter(
     prefix="/session",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "session",
             "description": "Session control API endpoints — PRD #17, #23, #31, #33.",
         }
-    ],
+    ]
 )
 
 # Module-level singletons

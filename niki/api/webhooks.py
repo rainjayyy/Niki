@@ -31,8 +31,7 @@ the active language catalog.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
-from urllib.parse import urlparse
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import HttpUrl
@@ -53,8 +52,8 @@ from niki.services.webhook import get_webhook_dispatcher
 
 router = APIRouter(
     prefix="/webhooks",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "webhooks",
             "description": (
                 "Webhook callback subscriptions (BE-API-008). "
@@ -63,7 +62,7 @@ router = APIRouter(
                 "deletion.completed, safety.escalated, …)."
             ),
         },
-    ],
+    ]
 )
 
 

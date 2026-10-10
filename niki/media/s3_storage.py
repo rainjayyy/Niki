@@ -19,10 +19,8 @@ No real network calls, no `boto3` mock framework needed.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import io
-import re
 import threading
 from collections.abc import Iterator
 from typing import Any

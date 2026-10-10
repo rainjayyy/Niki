@@ -244,7 +244,7 @@ class OutputSafetyGateway:
         return cjk_count + word_count
 
 
-def strip_think_blocks(text) -> str:
+def strip_think_blocks(text: str) -> str:
     """Strip <think>...</think> reasoning blocks from LLM output.
 
     Some reasoning models (Minimax-M3, DeepSeek-R1, etc.) emit

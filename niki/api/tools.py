@@ -23,7 +23,7 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/tools",
-    tags=[{"name": "tools", "description": "Tool permission API endpoints — PRD #54."}],
+    tags=[{"name": "tools", "description": "Tool permission API endpoints — PRD #54."}]  # type: ignore[list-item]
 )
 
 # Module-level singleton

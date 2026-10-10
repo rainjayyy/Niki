@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     app_name: str = "Niki"
     debug: bool = False
     log_level: str = "INFO"
+    # ISS-11: deployment environment tag. ``production`` triggers a
+    # startup guard that refuses to boot if the LLM factory fell
+    # back to the stub (i.e. no real provider credentials). Allowed
+    # values: ``development`` | ``staging`` | ``production``.
+    app_env: str = "development"
 
     # --- API Server ---
     api_host: str = "0.0.0.0"

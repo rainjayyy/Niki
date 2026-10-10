@@ -30,8 +30,8 @@ from niki.services.audit_log import get_audit_log_service
 
 router = APIRouter(
     prefix="/admin",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "admin_audit",
             "description": (
                 "Unified cross-domain audit log query (BE-COMP-004) — "
@@ -39,7 +39,7 @@ router = APIRouter(
                 "history."
             ),
         },
-    ],
+    ]
 )
 
 _DEFAULT_LIMIT = 50

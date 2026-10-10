@@ -24,7 +24,7 @@ from niki.infrastructure.redis import RedisClient
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(
-    prefix="", tags=[{"name": "status", "description": "Public status endpoint (BE-MISC-003)."}]
+    prefix="", tags=[{"name": "status", "description": "Public status endpoint (BE-MISC-003)."}]  # type: ignore[list-item]
 )
 
 

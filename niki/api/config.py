@@ -13,7 +13,6 @@ that need to flip flags at runtime should use
 
 from __future__ import annotations
 
-import json
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -28,12 +27,12 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/config",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "config",
             "description": "Client configuration endpoint (BE-MISC-001 + BE-MISC-002).",
         }
-    ],
+    ]
 )
 
 

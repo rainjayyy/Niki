@@ -41,7 +41,6 @@ from niki.dashboard.report import (
     MoodTrend,
 )
 from niki.dashboard.templates import (
-    MAX_LOGO_BASE64_BYTES,
     ReportBranding,
     ReportTemplate,
     _template_text,

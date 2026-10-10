@@ -1,33 +1,16 @@
-"""EmotionBaselineRecord ORM model (BE-STORG-001-ext-D)."""
+"""DEPRECATED: the canonical EmotionBaselineRecord lives in
+``emotion_baseline_record.py`` (the one imported by
+``niki.db.models.__init__``). This file is retained only as a stub
+so older imports that referenced ``niki.db.models.emotion_baseline``
+keep resolving during the deprecation window.
+
+The schema difference from the canonical model — the ``child_id``
+column was added in alembic revision 2026_10_10_0001 — is NOT
+reflected here; do NOT import from this file.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from niki.db.models.emotion_baseline_record import EmotionBaselineRecord  # noqa: F401
 
-from sqlalchemy import DateTime, Float, Index, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
-
-from niki.db.base import Base
-
-
-class EmotionBaselineRecord(Base):
-    """A single emotion baseline entry (7-day rolling window of valences)."""
-
-    __tablename__ = "emotion_baseline_records"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    date: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
-    valence: Mapped[float] = mapped_column(Float, nullable=False)
-    intensity: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
-    source: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        index=True,
-    )
-
-    __table_args__ = (Index("ix_emotion_baseline_date_created", "date", "created_at"),)
-
-    def __repr__(self) -> str:
-        return f"<EmotionBaselineRecord id={self.id} date={self.date} valence={self.valence:.2f}>"
+__all__ = ["EmotionBaselineRecord"]

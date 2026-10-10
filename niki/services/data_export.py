@@ -239,7 +239,9 @@ def _readme_text(parent_id: str, child_id: str | None) -> str:
     return "\n".join(parts) + "\n"
 
 
-async def build_export_zip(parent_id: str, child_id: str | None = None) -> bytes:
+async def build_export_zip(
+    parent_id: str, child_id: str | None = None
+) -> tuple[bytes, ExportSummary]:
     """Build a ZIP archive of all of a parent's data."""
     dashboard_repo = get_dashboard_repository()
     treehole_repo = get_treehole_repository()

@@ -141,7 +141,7 @@ def decode_cursor(cursor: str) -> CursorPosition:
     return CursorPosition(id=alert_id, ts=ts)
 
 
-def _UTC():
+def _UTC() -> Any:
     from datetime import timezone
 
     return timezone.utc

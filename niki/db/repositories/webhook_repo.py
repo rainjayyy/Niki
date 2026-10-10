@@ -21,7 +21,7 @@ import threading
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog

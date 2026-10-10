@@ -44,7 +44,6 @@ from niki.auth.account import (
     validate_phone,
 )
 from niki.auth.email_code_service import (
-    EmailCodeError,
     EmailCodeInvalid,
     EmailCodeExpired,
     EmailTooManyAttempts,
@@ -54,19 +53,16 @@ from niki.auth.sms_service import (
     SMSCodeInvalid,
     SMSCodeExpired,
     SMSTooManyAttempts,
-    SMSError,
     get_sms_service,
 )
 from niki.db.models.phone_change import (
     PhoneChangeStatus,
-    VALID_PHONE_CHANGE_STATUSES,
 )
 from niki.db.repositories import (
     AccountRepository,
     InMemoryAccountRepository,
     InMemoryPhoneChangeRepository,
     PhoneChangeRepository,
-    get_phone_change_repository,
 )
 from niki.db.repositories.phone_change_repo import (
     PhoneChangeRequestData,
@@ -262,7 +258,7 @@ class PhoneChangeService:
         account_repo: AccountRepository | None = None,
         *,
         sms_service: Any | None = None,
-        audit_hook=None,
+        audit_hook: object = None,
     ) -> None:
         self._repo = repo or InMemoryPhoneChangeRepository()
         self._account_repo = account_repo or InMemoryAccountRepository()
@@ -539,10 +535,11 @@ class PhoneChangeService:
 
     # ---- helpers ----
 
-    def _sms_or_default(self):
+    def _sms_or_default(self) -> Any:
         return self._sms if self._sms is not None else get_sms_service()
 
     def _raw_phone_for(self, parent_id: str) -> str | None:
+
         """Return the raw phone for a parent, or None.
 
         `InMemoryAccountRepository` stashes the raw alongside the
@@ -581,7 +578,7 @@ class PhoneChangeService:
         # 1. Mutate the parent row (no-op if `new_phone_raw` is None).
         new_phone_raw = row.new_phone_raw
         if new_phone_raw is not None:
-            new_acct = await self._account_repo.update_phone_hash(row.parent_id, new_phone_raw)
+            await self._account_repo.update_phone_hash(row.parent_id, new_phone_raw)
         # 2. Flip the request row. Pass effective_at through so the
         #    bypass-cooling path (confirm_now from PENDING_VERIFICATION)
         #    lands the freshly-stamped `effective_at` on disk instead of
@@ -593,7 +590,7 @@ class PhoneChangeService:
         }
         if row.effective_at is not None:
             update_kwargs["effective_at"] = row.effective_at
-        updated = await self._repo.update_state(row.id, **update_kwargs)
+        await self._repo.update_state(row.id, **update_kwargs)
         await self._emit_audit(
             EVENT_PHONE_CHANGE_COMPLETED,
             actor_parent_id=row.parent_id,
@@ -624,7 +621,7 @@ class EmailChangeService:
         account_repo: AccountRepository | None = None,
         *,
         email_service: Any | None = None,
-        audit_hook=None,
+        audit_hook: object = None,
     ) -> None:
         self._account_repo = account_repo or InMemoryAccountRepository()
         self._email = email_service
@@ -740,7 +737,7 @@ class EmailChangeService:
         )
         return account
 
-    def _email_or_default(self):
+    def _email_or_default(self) -> Any:
         return self._email if self._email is not None else get_email_code_service()
 
 

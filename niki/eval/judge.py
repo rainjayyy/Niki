@@ -1,11 +1,14 @@
-"""LLM-as-Judge — PRD evaluation layer 2.
+"""LLM-as-Judge — PRD evaluation layer.
 
-Implements bias controls:
-1. Position randomization (run twice with swapped order)
-2. Length normalization (cap at max_length chars)
-3. Schema-validated JSON output (score 1-5, rationale, criteria_met)
-4. Cohen-kappa calibration against human labels
-5. Cross-model judge to avoid self-bias
+Implements 4 algorithmic bias controls:
+1. Length normalization (cap response at max_length chars)
+2. Position bias detection (run judge twice, take min when |Δ| ≥ 2)
+3. Cohen-kappa calibration against the 20-case human-labeled set
+4. Malformed-output hard-assert fallback (a flaky judge cannot
+   mask a real safety bug)
+
+A 5th recommendation — cross-model judging — is a deployment
+choice, not an algorithmic control, and lives in the README.
 """
 
 from __future__ import annotations
@@ -102,14 +105,23 @@ class LLMJudge:
                 that consume hundreds of tokens before the actual answer;
                 1024 is a safe default for most judges).
         """
-        self._model = model or DoubaoClient()
+        self._model = model or self._default_model()
         self._max_length = max_length_for_judge
         self._swap_position_runs = swap_position_runs
         self._max_tokens = max_tokens
 
-    async def score(
-        self, case: dict[str, Any], response_text: str, child_age: int
-    ) -> JudgeResult:
+    def _default_model(self) -> object:
+        """Return a default Doubao client wired to settings."""
+        from niki.config.settings import get_settings
+
+        s = get_settings()
+        return DoubaoClient(
+            api_key=s.doubao_api_key or "stub",
+            base_url=s.doubao_base_url,
+            model=s.doubao_model,
+        )
+
+    async def score(self, case: dict[str, Any], response_text: str, child_age: int) -> JudgeResult:
         """Score a single response against a golden case."""
         normalized = self._normalize(response_text, self._max_length)
         prompt = self._build_user_prompt(case, normalized, child_age)
@@ -178,9 +190,7 @@ class LLMJudge:
             per_case_diff=per_case,
         )
 
-    def _build_user_prompt(
-        self, case: dict[str, Any], response_text: str, child_age: int
-    ) -> str:
+    def _build_user_prompt(self, case: dict[str, Any], response_text: str, child_age: int) -> str:
         criteria = case.get("llm_judge_criteria", "回复是否合适")
         mc = case.get("must_contain", [])
         mnc = case.get("must_not_contain", [])
@@ -200,7 +210,7 @@ class LLMJudge:
         )
 
     async def _call_judge(self, prompt: str) -> str:
-        resp = await self._model.chat(
+        resp = await self._model.chat(  # type: ignore[attr-defined]
             messages=[
                 {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},

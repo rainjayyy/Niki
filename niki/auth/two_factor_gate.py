@@ -84,7 +84,7 @@ async def require_2fa_for_sensitive_ops(
     parent: Annotated[ParentAccount, Depends(get_current_parent)],
     x_2fa_code: Annotated[Optional[str], Header(alias=HEADER_TOTP_CODE)] = None,
     x_2fa_backup_code: Annotated[Optional[str], Header(alias=HEADER_BACKUP_CODE)] = None,
-) -> bool:
+) -> ParentAccount:
     """Dependency that admits the caller iff 2FA gate passes.
 
     Always returns the `ParentAccount` so handlers can keep using

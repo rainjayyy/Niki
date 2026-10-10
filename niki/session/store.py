@@ -22,7 +22,7 @@ Two implementations:
 from __future__ import annotations
 
 import asyncio
-import json
+from collections.abc import Coroutine
 import threading
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -188,7 +188,7 @@ class RedisSessionStore(SessionStore):
         self._ttl = ttl_seconds
         self._key_prefix = key_prefix
 
-    async def _redis(self):
+    async def _redis(self) -> Any:
         """Lazy client resolution — same pattern as
         `RedisClient.get_client()` in `niki/infrastructure/redis.py`."""
         if self._client is not None:
@@ -411,9 +411,9 @@ class SyncSessionStore(SessionStore):
     """
 
     def __init__(self, async_store: SessionStore) -> None:
-        self._store = async_store
+        self._store: Any = async_store
 
-    def _run(self, coro):
+    def _run(self, coro: Coroutine[object, object, object]) -> object:
         # Try to attach to the running loop first; otherwise
         # spin up a fresh one. `asyncio.run()` would close the
         # existing loop, which we don't want, so use
@@ -426,7 +426,6 @@ class SyncSessionStore(SessionStore):
         if loop is not None:
             # We're inside an async context — schedule the
             # coroutine and wait for it.
-            import concurrent.futures
 
             fut = asyncio.run_coroutine_threadsafe(coro, loop)
             return fut.result(timeout=5)

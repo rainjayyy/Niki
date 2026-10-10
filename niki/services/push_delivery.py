@@ -54,7 +54,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Optional
 from urllib.parse import urlparse
 
 import structlog

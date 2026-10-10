@@ -194,11 +194,96 @@ class InputSafetyGateway:
         return found
 
     async def _llama_guard_check(self, text: str) -> InputVerdict | None:
-        """Optional Llama Guard semantic check (placeholder).
+        """Optional semantic safety check (LLM-as-judge fallback).
 
-        Returns None when Llama Guard is not configured. When enabled,
-        would call a Llama Guard inference endpoint to catch
-        context-dependent violations that regex misses.
+        Production: wire up a Llama Guard inference endpoint via
+        ``LLAMA_GUARD_URL`` and ``LLAMA_GUARD_TOKEN`` env vars.
+        Until that's available, this method uses the configured
+        Niki LLM (DeepSeek / Minimax) to do a lightweight
+        "should this be blocked?" check. This catches the cases
+        the regex filter misses (paraphrased self-harm, etc.)
+        without introducing a new external dependency.
+
+        Returns ``None`` when no LLM client is configured — in
+        that case the regex filter alone decides. We deliberately
+        do NOT default to "ALLOW" without a real check, so the
+        caller can decide whether to treat a no-LLM environment
+        as "skip semantic check" (current behaviour) or as
+        "fail closed" (a config flag, future work).
         """
-        # TODO: integrate with Llama Guard API when API key is configured
+        from niki.infrastructure.llm.factory import (
+            get_or_create_llm,
+            is_fallback_mode,
+        )
+
+        if is_fallback_mode():
+            # No real LLM wired — let the regex filter decide.
+            return None
+
+        llm = get_or_create_llm()
+        prompt = (
+            "你是儿童内容安全审查员。判断下面这句话是否应该被"
+            "阻止或转给家长查看。\n"
+            "- 涉及自伤/自杀念头：应该阻止（self_harm）\n"
+            "- 涉及色情/毒品/暴力：应该阻止（block）\n"
+            "- 普通负面情绪（难过、委屈、生气）：应该允许（allow）\n"
+            "- 其他正常对话：应该允许（allow）\n\n"
+            f"待判断文本：{text}\n\n"
+            "只回答 JSON，不要其他文字：\n"
+            '{"action": "allow|block|escalate", '
+            '"category": "self_harm|violence|sexual|drugs|none", '
+            '"confidence": 0.0-1.0}'
+        )
+        try:
+            response = await llm.chat(
+                messages=[
+                    {"role": "system", "content": "你是儿童内容安全审查员。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.0,
+                max_tokens=120,
+            )
+            content = response["content"].strip()
+            import json
+            import re as _re
+
+            # Strip code fences if present
+            if content.startswith("```"):
+                content = _re.sub(
+                    r"^```(?:json)?\s*|\s*```$",
+                    "",
+                    content,
+                    flags=_re.MULTILINE,
+                ).strip()
+            data = json.loads(content)
+            action = data.get("action", "allow")
+            category = data.get("category", "none")
+            confidence = float(data.get("confidence", 0.5))
+        except Exception as exc:  # noqa: BLE001 — log and skip
+            logger.warning(
+                "input_gateway.llm_judge_failed",
+                error=str(exc),
+                fallback="regex_only",
+            )
+            return None
+
+        if action == "allow" or confidence < 0.6:
+            return None  # low confidence → trust the regex
+
+        if action == "escalate" or category == "self_harm":
+            return InputVerdict(
+                action=InputAction.ESCALATE,
+                matched_category="self_harm",
+                matched_words=[],
+                reason=f"LLM judge: self-harm category (confidence={confidence:.2f})",
+                sanitized_text=text,
+            )
+        if action == "block":
+            return InputVerdict(
+                action=InputAction.BLOCK,
+                matched_category=category,
+                matched_words=[],
+                reason=f"LLM judge: {category} (confidence={confidence:.2f})",
+                sanitized_text=text,
+            )
         return None

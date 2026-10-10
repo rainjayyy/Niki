@@ -37,10 +37,9 @@ import secrets
 import threading
 import time
 from abc import ABC, abstractmethod
-from base64 import urlsafe_b64encode
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import bcrypt
 import pyotp
@@ -49,7 +48,6 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from niki.config.settings import get_settings
 from niki.db.repositories.two_factor_repo import (
-    TwoFactorConfigData,
     TwoFactorRepository,
     get_two_factor_repository,
 )
@@ -370,11 +368,18 @@ class InMemoryTwoFactorService(TwoFactorService):
 
             secret = self._decrypt(row.secret_encrypted)
             totp = pyotp.TOTP(secret)
+            # pyotp.TOTP.verify expects datetime (or None for "now"),
+            # not a unix timestamp int -- passing an int triggers a
+            # TypeError at runtime. We keep both representations:
+            # ``now_dt`` for pyotp.verify and ``now_ts`` (int) for
+            # the replay-prevention step arithmetic below.
+            from datetime import datetime, timezone
+            now_dt = datetime.now(tz=timezone.utc)
             now_ts = int(time.time())
             if not totp.verify(
                 totp_code,
                 valid_window=self._valid_window,
-                for_time=now_ts,
+                for_time=now_dt,
             ):
                 raise TwoFactorInvalidCode()
 
@@ -415,6 +420,12 @@ class InMemoryTwoFactorService(TwoFactorService):
                 raise TwoFactorNotEnrolled()
             secret = self._decrypt(row.secret_encrypted)
             totp = pyotp.TOTP(secret)
+            # pyotp.TOTP.verify expects datetime (or None for "now"),
+            # not a unix timestamp int -- passing an int triggers a
+            # TypeError at runtime. We keep both representations:
+            # ``now_dt`` for pyotp.verify and ``now_ts`` (int) for
+            # the replay-prevention step arithmetic below.
+            now_dt = datetime.now(tz=timezone.utc)
             now_ts = int(time.time())
             current_step = now_ts // totp.interval
             last_step = self._last_accepted_step.get(parent_id)
@@ -424,7 +435,7 @@ class InMemoryTwoFactorService(TwoFactorService):
             if not totp.verify(
                 totp_code,
                 valid_window=self._valid_window,
-                for_time=now_ts,
+                for_time=now_dt,
             ):
                 raise TwoFactorInvalidCode()
 

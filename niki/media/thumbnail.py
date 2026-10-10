@@ -10,6 +10,7 @@ Worst-case memory budget = `LRU_MAX_ENTRIES` ×
 """
 
 from __future__ import annotations
+from typing import Generic, TypeVar
 
 import io
 import threading
@@ -34,6 +35,8 @@ MAX_DIM: int = 2048
 # In-process LRU cache cap.
 LRU_MAX_ENTRIES: int = 100
 
+T = TypeVar("T")
+
 # Output size cap. Pillow will refuse to allocate more than
 # this; protects against `?w=99999` requests eating RAM.
 MAX_THUMB_BYTES: int = 5 * 1024 * 1024
@@ -49,8 +52,8 @@ _OUTPUT_FORMAT: dict[str, str] = {
 }
 
 
-class LRU:
-    """Tiny thread-safe LRU keyed by string → bytes.
+class LRU(Generic[T]):
+    """Tiny thread-safe LRU keyed by string → T.
 
     We avoid `functools.lru_cache` because the value (bytes)
     is technically hashable but the cache size limit applies
@@ -59,10 +62,10 @@ class LRU:
 
     def __init__(self, max_entries: int = LRU_MAX_ENTRIES) -> None:
         self._max = max_entries
-        self._d: "OrderedDict[str, bytes]" = OrderedDict()
+        self._d: "OrderedDict[str, T]" = OrderedDict()
         self._lock = threading.Lock()
 
-    def get(self, key: str) -> bytes | None:
+    def get(self, key: str) -> T | None:
         with self._lock:
             if key not in self._d:
                 return None
@@ -70,7 +73,7 @@ class LRU:
             self._d.move_to_end(key)
             return self._d[key]
 
-    def set(self, key: str, value: bytes) -> None:
+    def set(self, key: str, value: T) -> None:
         with self._lock:
             self._d[key] = value
             self._d.move_to_end(key)
@@ -185,7 +188,7 @@ def _render_thumbnail(content: bytes, mime_type: str, w: int, h: int) -> tuple[b
             if fmt == "JPEG":
                 # JPEG needs RGB; preserve aspect of PNG alpha
                 if im.mode in ("RGBA", "P"):
-                    im = im.convert("RGB")
+                    im = im.convert("RGB")  # type: ignore[assignment]
                 save_kwargs["quality"] = 85
                 save_kwargs["optimize"] = True
             im.save(buf, format=fmt, **save_kwargs)

@@ -15,16 +15,33 @@ from niki.agents.orchestrator import ChatOrchestrator, ChatResult
 
 router = APIRouter(
     prefix="/chat",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "chat",
             "description": "Chat orchestrator API endpoints — the end-to-end pipeline.",
         }
-    ],
+    ]
 )
 
-# Module-level singleton (default config: 7-year-old, gentle persona)
-_orchestrator = ChatOrchestrator(child_age=7, persona="gentle")
+# ISS-08: cache ChatOrchestrator per (child_age, persona) so concurrent
+# requests with different ages/personas do not race against the singleton.
+# Each (age, persona) combo gets its own instance. Same-combo concurrent
+# requests share state, which is fine because the only fields they mutate
+# (child_age / persona) are the keys of this cache.
+_orchestrator_cache: dict[tuple[int, str], ChatOrchestrator] = {}
+
+
+def _get_orchestrator(child_age: int = 7, persona: str = "gentle") -> ChatOrchestrator:
+    """Return a per-(child_age, persona) ChatOrchestrator (ISS-08).
+
+    Different combos get different instances so each request"s
+    `_update_age` / `_update_persona` cannot trample another
+    request"s age/persona mid-pipeline.
+    """
+    key = (child_age, persona)
+    if key not in _orchestrator_cache:
+        _orchestrator_cache[key] = ChatOrchestrator(child_age=child_age, persona=persona)
+    return _orchestrator_cache[key]
 
 
 def _chat_result_to_dict(result: ChatResult) -> dict:
@@ -37,6 +54,9 @@ def _chat_result_to_dict(result: ChatResult) -> dict:
         "is_composite": result.is_composite,
         "safety_alert": result.safety_alert,
         "parent_alert_required": result.parent_alert_required,
+        "privacy_tier": result.privacy_tier.value if result.privacy_tier else None,
+        "privacy_tier_reason": result.privacy_tier_reason,
+        "treehole_engaged": result.treehole_engaged,
         "stages_completed": [s.value for s in result.stages_completed],
         "safety_rewrites": result.safety_rewrites,
         "error": result.error,
@@ -49,13 +69,15 @@ def _chat_result_to_dict(result: ChatResult) -> dict:
     summary="Run the full chat pipeline end-to-end",
     description="""
             Run the full chat pipeline end-to-end.
-            
+
             Request body:
                 {
                   "text": "...",
                   "child_age": 7,
                   "persona": "gentle" | "lively" | "rigorous",
-                  "session_id": "..."
+                  "session_id": "...",
+                  "child_id": "...",   # optional; enables HIGH_RISK
+                  "parent_id": "..."   # alerts + TREEHOLE_PRIVATE engage
                 }
             """,
 )
@@ -67,19 +89,31 @@ async def chat_full(payload: dict) -> dict:
           "text": "...",
           "child_age": 7,
           "persona": "gentle" | "lively" | "rigorous",
-          "session_id": "..."
+          "session_id": "...",
+          "child_id": "...",   # optional; enables HIGH_RISK alerts
+          "parent_id": "..."   # + TREEHOLE_PRIVATE engage
         }
     """
     text = payload.get("text", "")
-    child_age = payload.get("child_age")
-    persona = payload.get("persona")
+    raw_age = payload.get("child_age")
+    raw_persona = payload.get("persona")
     session_id = payload.get("session_id", "default")
+    child_id = payload.get("child_id")
+    parent_id = payload.get("parent_id")
 
-    result = await _orchestrator.chat(
+    # ISS-08: pick an orchestrator keyed by (age, persona) so concurrent
+    # requests with different age/persona do not trample each other.
+    effective_age = int(raw_age) if raw_age is not None else 7
+    effective_persona = str(raw_persona) if raw_persona is not None else "gentle"
+    orchestrator = _get_orchestrator(effective_age, effective_persona)
+
+    result = await orchestrator.chat(
         text=text,
         session_id=session_id,
-        child_age=child_age,
-        persona=persona,
+        child_age=effective_age,
+        persona=effective_persona,
+        child_id=child_id,
+        parent_id=parent_id,
     )
     return _chat_result_to_dict(result)
 
@@ -94,6 +128,7 @@ async def list_stages() -> dict:
     return {
         "stages": [
             "safety_input",
+            "tier_classify",
             "classify",
             "route",
             "dispatch",
@@ -107,4 +142,10 @@ async def list_stages() -> dict:
             "emotional_agent",
         ],
         "personas": ["lively", "gentle", "rigorous"],
+        "privacy_tiers": [
+            "daily",
+            "mild_negative",
+            "high_risk",
+            "treehole_private",
+        ],
     }

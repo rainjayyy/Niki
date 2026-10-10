@@ -222,10 +222,10 @@ class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
         # passed, fan out to BOTH daily and weekly so the
         # existing engage() call site works unchanged.
         if window_kind == "all" or window_kind is None:
-            kinds = (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
+            kinds: tuple[str, ...] = (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
         else:
             kinds = (window_kind,)
-        last = None
+        last: dict[str, Any] | None = None
         for k in kinds:
             ws = window_start or _window_start_for(k, ts)
             last = await self._upsert_one(
@@ -237,7 +237,10 @@ class InMemoryTreeholeAggregationRepository(TreeholeAggregationRepository):
                 window_start=ws,
                 window_kind=k,
             )
-        return last
+        # last can be None if kinds was empty (shouldn't happen with
+        # the default "all" branch, but defensive). Return empty dict
+        # to keep the declared contract (always returns dict, not None).
+        return last or {}
 
     async def get(
         self,
@@ -375,10 +378,10 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         if window_kind == "all" or window_kind is None:
-            kinds = (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
+            kinds: tuple[str, ...] = (WINDOW_KIND_DAILY, WINDOW_KIND_WEEKLY)
         else:
             kinds = (window_kind,)
-        last = None
+        last: dict[str, Any] | None = None
         for k in kinds:
             ws = window_start or _window_start_for(k, ts)
             last = await self._upsert_one(
@@ -390,7 +393,10 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
                 window_start=ws,
                 window_kind=k,
             )
-        return last
+        # last can be None if kinds was empty (shouldn't happen with
+        # the default "all" branch, but defensive). Return empty dict
+        # to keep the declared contract (always returns dict, not None).
+        return last or {}
 
     async def get(
         self,
@@ -445,7 +451,7 @@ class PostgresTreeholeAggregationRepository(TreeholeAggregationRepository):
             delete(TreeholeAggregation).where(TreeholeAggregation.child_id == child_id)
         )
         await self._session.flush()
-        return result.rowcount or 0
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------

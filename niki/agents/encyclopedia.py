@@ -106,7 +106,7 @@ class EncyclopediaAgent(BaseAgent):
 
     def __init__(
         self,
-        llm,
+        llm: object,
         knowledge_base: KnowledgeBase,
         fact_checker: FactChecker,
         persona: str = "gentle",
@@ -344,6 +344,38 @@ class EncyclopediaAgent(BaseAgent):
     # thin wrapper that just reads settings and delegates.
     _ALLOWED_TOOL_NAMES = frozenset({"knowledge_base.search"})
 
+    # Map the wire-format tool name the LLM emits to the
+    # ``ToolName`` enum the permission matrix understands. Returns
+    # ``None`` for unknown names so the caller can skip the matrix
+    # check and fall through to the dispatcher's "unknown tool"
+    # path (which returns an error envelope — never a crash).
+    _TOOL_NAME_TO_ENUM: dict[str, str] = {
+        "knowledge_base.search": "knowledge_base",
+        "time_query.now": "time_query",
+        "image_recognition.caption": "image_recognition",
+        "search_api.query": "search_api",
+        "weather_query.now": "weather_query",
+    }
+
+    @classmethod
+    def _resolve_tool_enum(cls, tool_name: str) -> Any | None:
+        """Resolve a wire-format tool name to its ``ToolName`` enum.
+
+        Returns ``None`` for names that aren't in the dispatcher's
+        known set — the caller should let the dispatcher emit its
+        "unknown tool" error envelope instead of trying to
+        check the matrix with a bogus enum value.
+        """
+        from niki.tools.matrix import ToolName
+
+        enum_value = cls._TOOL_NAME_TO_ENUM.get(tool_name)
+        if enum_value is None:
+            return None
+        try:
+            return ToolName(enum_value)
+        except ValueError:
+            return None
+
     async def _process_with_tool_loop(
         self,
         child_input: ChildInput,
@@ -449,6 +481,7 @@ class EncyclopediaAgent(BaseAgent):
                     idx=idx,
                     error=str(exc),
                 )
+
         # 1. Initial messages.
         system_prompt = self.get_system_prompt_with_persona()
         history = list(child_input.history or [])
@@ -528,8 +561,7 @@ class EncyclopediaAgent(BaseAgent):
 
             # Termination 1: LLM chose no tool → its content is the answer.
             if not tool_calls:
-                # BUG-2 fix (carried from 2026-10-09 review): even on
-                # the no-tool branch, we still retrieve KB server-side
+                # Even on the no-tool branch, re-retrieve KB server-side
                 # so the fact-checker has evidence to ground against.
                 final_draft = response.get("content") or ""
                 hits = self._retrieve(user_msg, child_input, context)
@@ -601,8 +633,7 @@ class EncyclopediaAgent(BaseAgent):
                         "tool_loop_used": True,
                         "tool_loop_rounds": round_idx,
                         "tool_calls_rejected": [
-                            tc.get("function", {}).get("name", "")
-                            for tc in tool_calls
+                            tc.get("function", {}).get("name", "") for tc in tool_calls
                         ],
                         "age_group": self._age_group,
                         "sources": [],
@@ -625,7 +656,7 @@ class EncyclopediaAgent(BaseAgent):
 
             # Build next-round messages. OpenAI spec invariant:
             # assistant-with-tool_calls must immediately precede
-            # role:tool messages (BUG-1, 2026-10-09).
+            # role:tool messages.
             messages = (
                 messages
                 + [
@@ -763,7 +794,48 @@ class EncyclopediaAgent(BaseAgent):
                 {"agent": "encyclopedia", "name": tool_name, "args": args_obj},
             )
 
-            self._tool_checker.check(matrix_key, ToolName.KNOWLEDGE_BASE)
+            # Sandbox enforcement: resolve the wire-format tool name
+            # to its ``ToolName`` enum, consult the permission matrix,
+            # and skip the dispatch when the matrix denies the call.
+            # The streaming ``tool_call`` event is still emitted so
+            # the dashboard shows the attempt, and a sibling
+            # ``tool_result`` with ``ok=False`` is fired so consumers
+            # see the rejection in the SSE stream.
+            tool_enum = self._resolve_tool_enum(tool_name)
+            if tool_enum is not None:
+                access = self._tool_checker.check(matrix_key, tool_enum)
+                if not access.allowed:
+                    logger.warning(
+                        "encyclopedia.tool_loop.matrix_denied",
+                        tool=tool_name,
+                        agent=matrix_key,
+                        reason=access.reason,
+                    )
+                    appended_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.get("id", ""),
+                            "content": json.dumps(
+                                {
+                                    "error": "permission_denied",
+                                    "tool": tool_name,
+                                    "reason": access.reason,
+                                },
+                                ensure_ascii=False,
+                            ),
+                        }
+                    )
+                    all_errors = all_errors and True
+                    await _phase(
+                        "tool_result",
+                        {
+                            "agent": "encyclopedia",
+                            "name": tool_name,
+                            "ok": False,
+                            "hit_count": 0,
+                        },
+                    )
+                    continue
             any_allowed = True
 
             result_str = await dispatch_tool_call(
@@ -798,9 +870,7 @@ class EncyclopediaAgent(BaseAgent):
                             if not isinstance(item, dict):
                                 continue
                             try:
-                                src_enum = KnowledgeSource(
-                                    item.get("source", "l1_core")
-                                )
+                                src_enum = KnowledgeSource(item.get("source", "l1_core"))
                             except ValueError:
                                 src_enum = KnowledgeSource.L1_CORE
                             kb_hits.append(
@@ -1014,5 +1084,5 @@ class EncyclopediaAgent(BaseAgent):
             text=request.question,
             session_id="encyclopedia",
             image_url=request.image_url,
-        )
+        )  # type: ignore[call-arg]
         return await self.invoke(child_input)

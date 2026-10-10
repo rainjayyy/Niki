@@ -15,7 +15,6 @@ its own header instead of Niki's.
 from __future__ import annotations
 
 import base64
-import io
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -24,7 +23,6 @@ import structlog
 
 from niki.dashboard.report import (
     EmotionWeeklyReport,
-    MoodTrend,
 )
 
 logger = structlog.get_logger(__name__)

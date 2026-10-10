@@ -69,3 +69,19 @@ alembic/versions/*.pyc
 # BE-PUSH-003: auto-generated VAPID key cache (never commit signing material)
 .vapid_private.pem
 .vapid_public.b64
+# Local integration test outputs (never commit)
+verify_*.py
+tts_test_*.mp3
+-w
+eval_full_stub.json
+eval_report*.json
+docstrings_report.json
+
+# Local dev cache (only useful during dev)
+.coverage
+.cache/
+.pytest_cache/
+
+# One-off changelogs (use git log + CHANGELOG.md if you need history)
+docs/CHANGES-*.md
+

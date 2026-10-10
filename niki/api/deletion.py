@@ -13,7 +13,7 @@ canonical record text.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 
 from niki.auth.account import ParentAccount
@@ -28,7 +28,7 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/deletion",
-    tags=[{"name": "deletion", "description": "Deletion receipt download endpoint (BE-COMP-005)."}],
+    tags=[{"name": "deletion", "description": "Deletion receipt download endpoint (BE-COMP-005)."}]  # type: ignore[list-item]
 )
 
 

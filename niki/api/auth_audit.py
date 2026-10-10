@@ -28,12 +28,12 @@ from niki.db.repositories.auth_audit_repo import (
 
 router = APIRouter(
     prefix="/auth/audit",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "auth_audit",
             "description": "Auth audit query endpoints (BE-AUTH-001-rollout-audit).",
         }
-    ],
+    ]
 )
 
 

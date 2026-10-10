@@ -35,7 +35,7 @@ from niki.services.child_registry import (
 
 router = APIRouter(
     prefix="/children",
-    tags=[{"name": "children", "description": "Children API endpoints (BE-STOR-001-ext-E)."}],
+    tags=[{"name": "children", "description": "Children API endpoints (BE-STOR-001-ext-E)."}]  # type: ignore[list-item]
 )
 
 

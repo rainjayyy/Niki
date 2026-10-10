@@ -11,6 +11,7 @@ are exposed for direct testing and integration.
 """
 
 from __future__ import annotations
+from typing import Any
 
 from fastapi import APIRouter
 
@@ -25,15 +26,15 @@ from niki.routing import (
 
 router = APIRouter(
     prefix="/routing",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "routing",
             "description": (
                 "Routing API endpoints — intent classification, "
                 "routing decisions, persona management."
             ),
         },
-    ],
+    ]
 )
 
 # Module-level singletons (cheap to construct, safe to reuse)
@@ -43,7 +44,7 @@ _fusion = FusionOrchestrator()
 _persona = PersonaInjector()
 
 
-def _intent_result_to_dict(result) -> dict:
+def _intent_result_to_dict(result: Any) -> dict[str, object]:
     """Serialise an IntentResult to JSON-safe dict."""
     return {
         "raw_text": result.raw_text,
@@ -73,7 +74,7 @@ def _intent_result_to_dict(result) -> dict:
     }
 
 
-def _routing_decision_to_dict(decision) -> dict:
+def _routing_decision_to_dict(decision: Any) -> dict[str, object]:
     """Serialise a RoutingDecision."""
     return {
         "primary_agent": decision.primary_agent.value,

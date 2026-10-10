@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from niki.auth.account import ParentAccount

@@ -52,8 +52,8 @@ from niki.services.two_factor import (
 
 router = APIRouter(
     prefix="/auth/2fa",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "auth-2fa",
             "description": (
                 "Parent two-factor authentication (BE-AUTH-007) — "
@@ -61,7 +61,7 @@ router = APIRouter(
                 "and disable/regenerate flows."
             ),
         },
-    ],
+    ]
 )
 
 
@@ -155,6 +155,13 @@ async def enroll(
         reason="2FA enrollment started",
         client_ip=_client_ip(request),
     )
+    if payload is None:
+        return {
+            "secret": "",
+            "otpauth_url": "",
+            "qr_code": "",
+        }
+    # Pydantic model — use attribute access, not .get().
     return {
         "secret": payload.secret_plaintext,
         "otpauth_url": payload.otpauth_url,

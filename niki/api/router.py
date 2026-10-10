@@ -1,5 +1,7 @@
 """Main API router — aggregates all sub-routers."""
 
+from typing import Any
+
 from fastapi import APIRouter
 
 from niki.api.alerts import router as alerts_router
@@ -41,7 +43,7 @@ from niki.api.webhooks import router as webhooks_router
 api_router = APIRouter(prefix="/api/v1")
 
 
-def _collect_tag_metadata(*routers) -> list[dict]:
+def _collect_tag_metadata(*routers: Any) -> list[dict[str, str]]:
     """Pull `{name, description}` entries from each router's tags list.
 
     FastAPI lets us attach tag metadata either inline (each `tags`

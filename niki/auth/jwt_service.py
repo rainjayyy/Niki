@@ -31,7 +31,7 @@ import time
 import uuid
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from enum import StrEnum
-from typing import Any
+from typing import Any, Callable
 
 from niki.config.settings import get_settings
 
@@ -149,7 +149,7 @@ def verify_token(
     token: str,
     expected_type: TokenType,
     *,
-    is_revoked: "callable[[str], bool] | None" = None,
+    is_revoked: Callable[[str], bool] | None = None,
 ) -> dict[str, Any]:
     """Verify a token's signature, expiry, type and revocation state.
 

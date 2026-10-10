@@ -29,6 +29,7 @@ Query params (all optional, all AND-ed together):
 """
 
 from __future__ import annotations
+from typing import Any
 
 import asyncio
 import json
@@ -47,12 +48,12 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/alerts",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "alerts",
             "description": ("Realtime alert streaming endpoint (BE-RT-002 / BE-RT-002-rollout)."),
         },
-    ],
+    ]
 )
 
 
@@ -136,7 +137,7 @@ async def stream_alerts(
     since_dt = _parse_since(since)
     queue = broker.subscribe(parent.id)
 
-    async def event_stream():
+    async def event_stream() -> Any:
         try:
             # 1) Send a `ready` event immediately so the
             # client knows the subscription is live. The ready

@@ -17,7 +17,6 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from sqlalchemy import (
-    JSON,
     DateTime,
     Index,
     String,

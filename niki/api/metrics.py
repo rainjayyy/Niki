@@ -23,8 +23,8 @@ from prometheus_client import (
 from niki.metrics import get_registry
 
 router = APIRouter(
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "metrics",
             "description": (
                 "Prometheus exposition endpoint (BE-API-009). "
@@ -32,7 +32,7 @@ router = APIRouter(
                 "by Prometheus / Grafana Alloy / OTel collectors."
             ),
         },
-    ],
+    ]
 )
 
 

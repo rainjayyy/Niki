@@ -18,8 +18,9 @@ phone number, no signature text.
 """
 
 from __future__ import annotations
+from typing import Any
 
-from typing import Annotated
+from typing import Annotated, cast
 
 import structlog
 
@@ -32,7 +33,6 @@ from niki.auth import (
 )
 from niki.auth.account import (
     ParentAccount,
-    validate_phone,
 )
 from niki.auth.dependencies import get_current_parent
 from niki.auth.two_factor_gate import (
@@ -71,42 +71,30 @@ from niki.services.two_factor import get_two_factor_service
 
 logger = structlog.get_logger(__name__)
 
-from niki.api._i18n import error_response, localized_error_response, resolve_lang
+from niki.api._i18n import error_response, resolve_lang
 from niki.i18n.translator import get_translator
 from niki.schemas.requests import (
     SMSSendRequest,
     SMSLoginRequest,
 )
 from niki.services.phone_change import (
-    EmailChangeAlreadyUsed,
-    EmailChangeCodeInvalid,
     EmailChangeError,
-    EmailChangeInvalidFormat,
-    EmailChangeRequestNotFound,
-    PhoneChangeAlreadyPending,
-    PhoneChangeAlreadyVerified,
-    PhoneChangeCannotCancel,
-    PhoneChangeCodeExpired,
-    PhoneChangeCodeInvalid,
     PhoneChangeError,
-    PhoneChangeInvalidPassword,
-    PhoneChangeRequestNotFound,
-    PhoneChangeSameNumber,
     get_email_change_service,
     get_phone_change_service,
 )
 
 router = APIRouter(
     prefix="/auth",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "auth",
             "description": (
                 "Parent authentication (PRD #30, #35, #36) — multi-step "
                 "signup, SMS-code login, JWT refresh, and account deletion."
             ),
         },
-    ],
+    ]
 )
 
 # Module-level singleton
@@ -127,7 +115,7 @@ def _request_id(request: Request) -> str:
     return request.headers.get("X-Request-ID") or str(_uuid.uuid4())
 
 
-def _audit_hook_factory():
+def _audit_hook_factory() -> Any:
     """Build an async hook that defers to the global AuditLogService."""
     from niki.services.audit_log import get_audit_log_service
 
@@ -786,7 +774,7 @@ async def sms_login(
             method="sms",
             reason=reason,
         ).inc()
-        return JSONResponse(status_code=401, content=_error_response(request, exc))
+        return JSONResponse(status_code=401, content=_error_response(request, cast("AuthError", exc)))
 
     # Find or auto-create the account.
     account = await _lifecycle.find_by_phone(phone)
@@ -926,7 +914,7 @@ async def refresh(request: Request, payload: dict) -> dict:
             is_revoked=get_blacklist().is_revoked_sync,
         )
     except JWTError as exc:
-        return JSONResponse(status_code=401, content=_error_response(request, exc))
+        return JSONResponse(status_code=401, content=_error_response(request, cast("AuthError", exc)))
 
     parent_id = claims["sub"]
     old_jti = claims.get("jti")
@@ -1202,7 +1190,7 @@ async def email_change_verify(
 # ---------------------------------------------------------------------------
 
 
-def view_to_dict(view, kind: str) -> dict:
+def view_to_dict(view: Any, kind: str) -> dict[str, object]:
     """Serialise a PhoneChangeRequestView for API responses.
 
     `kind` is "phone" today; reserved so future change services can

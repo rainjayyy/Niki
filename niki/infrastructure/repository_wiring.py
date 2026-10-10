@@ -70,17 +70,15 @@ def wire_postgres_repositories() -> None:
     from niki.db.repositories.two_factor_repo import PostgresTwoFactorRepository
     from niki.db.repositories.webhook_repo import PostgresWebhookRepository
 
-    set_audit_log_repository(SessionPerCallRepository(PostgresAuditLogRepository))
-    set_auth_audit_log_repository(SessionPerCallRepository(PostgresAuthAuditLogRepository))
-    set_dashboard_repository(SessionPerCallRepository(PostgresDashboardRepository))
-    set_emotion_baseline_repository(SessionPerCallRepository(PostgresEmotionBaselineRepository))
-    set_letter_repository(SessionPerCallRepository(PostgresLetterRepository))
-    set_phone_change_repository(SessionPerCallRepository(PostgresPhoneChangeRepository))
-    set_push_device_repository(SessionPerCallRepository(PostgresPushDeviceRepository))
-    set_push_prefs_repository(SessionPerCallRepository(PostgresPushPrefsRepository))
-    set_treehole_aggregation_repository(
-        SessionPerCallRepository(PostgresTreeholeAggregationRepository)
-    )
-    set_treehole_repository(SessionPerCallRepository(PostgresTreeholeRepository))
-    set_two_factor_repository(SessionPerCallRepository(PostgresTwoFactorRepository))
-    set_webhook_repository(SessionPerCallRepository(PostgresWebhookRepository))
+    set_audit_log_repository(SessionPerCallRepository(PostgresAuditLogRepository))  # type: ignore[arg-type]
+    set_auth_audit_log_repository(SessionPerCallRepository(PostgresAuthAuditLogRepository))  # type: ignore[arg-type]
+    set_dashboard_repository(SessionPerCallRepository(PostgresDashboardRepository))  # type: ignore[arg-type]
+    set_emotion_baseline_repository(SessionPerCallRepository(PostgresEmotionBaselineRepository))  # type: ignore[arg-type]
+    set_letter_repository(SessionPerCallRepository(PostgresLetterRepository))  # type: ignore[arg-type]
+    set_phone_change_repository(SessionPerCallRepository(PostgresPhoneChangeRepository))  # type: ignore[arg-type]
+    set_push_device_repository(SessionPerCallRepository(PostgresPushDeviceRepository))  # type: ignore[arg-type]
+    set_push_prefs_repository(SessionPerCallRepository(PostgresPushPrefsRepository))  # type: ignore[arg-type]
+    set_treehole_aggregation_repository(SessionPerCallRepository(PostgresTreeholeAggregationRepository))  # type: ignore[arg-type]
+    set_treehole_repository(SessionPerCallRepository(PostgresTreeholeRepository))  # type: ignore[arg-type]
+    set_two_factor_repository(SessionPerCallRepository(PostgresTwoFactorRepository))  # type: ignore[arg-type]
+    set_webhook_repository(SessionPerCallRepository(PostgresWebhookRepository))  # type: ignore[arg-type]

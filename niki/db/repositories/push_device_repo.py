@@ -294,14 +294,14 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
             )
         )
         await self._session.flush()
-        return result.rowcount or 0
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
     async def delete_by_token(self, push_token: str) -> int:
         result = await self._session.execute(
             delete(PushDevice).where(PushDevice.push_token == push_token)
         )
         await self._session.flush()
-        return result.rowcount or 0
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
     async def list_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         result = await self._session.execute(
@@ -330,7 +330,7 @@ class PostgresPushDeviceRepository(PushDeviceRepository):
             .values(enabled=enabled)
         )
         await self._session.flush()
-        return (result.rowcount or 0) > 0
+        return (result.rowcount or 0) > 0  # type: ignore[attr-defined]
 
     async def list_active_for_parent(self, parent_id: str) -> list[dict[str, Any]]:
         result = await self._session.execute(

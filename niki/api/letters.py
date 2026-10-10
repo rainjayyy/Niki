@@ -22,15 +22,15 @@ from niki.services.child_registry import get_child_registry
 
 router = APIRouter(
     prefix="",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "letters",
             "description": (
                 "Parent-to-child letters: send from the dashboard, "
                 "poll in the child chat, mark as read."
             ),
         }
-    ],
+    ]
 )
 
 

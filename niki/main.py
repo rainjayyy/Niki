@@ -108,6 +108,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         cleanup_completed_phone_changes,
         interval_seconds=3600,
     )
+
+    # ISS-11: refuse to boot in production with a stub LLM. The
+    # factory falls back to a stub when no real provider
+    # credentials are configured — fine for dev / staging, but a
+    # P0 incident waiting to happen in production. Trip early
+    # with a loud, structured-log message so on-call sees it
+    # immediately.
+    from niki.infrastructure.llm.factory import is_fallback_mode
+
+    if settings.app_env == "production" and is_fallback_mode():
+        logger.error(
+            "app.startup_blocked_production_stub_llm",
+            note=(
+                "app_env=production but the LLM factory fell back to the "
+                "stub provider. Set MINIMAX_API_KEY (or DEEPSEEK_API_KEY / "
+                "DOUBAO_API_KEY) to a real credential, OR set app_env to "
+                "staging / development."
+            ),
+        )
+        raise RuntimeError(
+            "Cannot start in production with the stub LLM. "
+            "Set a real MINIMAX_API_KEY (or equivalent) and restart."
+        )
+    if is_fallback_mode():
+        logger.warning(
+            "app.running_with_stub_llm",
+            app_env=settings.app_env,
+            note=(
+                "No real LLM credentials configured — all responses "
+                "come from the deterministic stub. Safe for dev / "
+                "staging, NEVER for production."
+            ),
+        )
+
     await heartbeat.start()
     app.state.heartbeat = heartbeat
 

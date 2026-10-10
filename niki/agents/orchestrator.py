@@ -1,23 +1,18 @@
-"""Chat orchestrator — the end-to-end pipeline that ties #1-#5 together.
+"""Chat orchestrator — the end-to-end pipeline.
 
 Pipeline (PRD composite-intent flow):
-  1. Input safety gateway (#1)
-     - sensitive-word filter
-     - topic-blacklist downgrade
-     - self-harm escalation
-  2. Intent classifier (#2) → top-level intent + tutoring subtype
-  3. Router (#2) → primary + parallel agents (empathy-first ordering)
-  4. Persona injector (#2) → fills {persona} in each agent's prompt
-  5. Agent dispatch:
-     - EncyclopediaAgent (#3) for encyclopedia
-     - TutoringAgent (#4) for tutoring
-     - EmotionAgent (#5) for emotional
-  6. Fusion orchestrator (#2) → merge multi-agent outputs
-  7. Output safety gateway (#1) → final fear-word rewrite, age check
-  8. Return final text + diagnostics
-
-This is the "vertical slice" that demonstrates ALL the previous slices
-working together end-to-end.
+  1. Input safety gateway — sensitive-word filter, topic-blacklist
+     downgrade, self-harm escalation.
+  2. Privacy tier classifier — DAILY / MILD_NEGATIVE / HIGH_RISK /
+     TREEHOLE_PRIVATE. HIGH_RISK fans out to parent alerts;
+     TREEHOLE_PRIVATE engages the AES-256-GCM storage path.
+  3. Intent classifier — top-level intent + tutoring subtype.
+  4. Router — primary + parallel agents (empathy-first ordering).
+  5. Persona injector — fills {persona} in each agent's prompt.
+  6. Agent dispatch: Encyclopedia / Tutoring / Emotional.
+  7. Fusion orchestrator — merge multi-agent outputs.
+  8. Output safety gateway — final fear-word rewrite, age check.
+  9. Return final text + diagnostics (including privacy tier).
 """
 
 from __future__ import annotations
@@ -26,7 +21,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Awaitable, Callable
+from typing import Any, cast
 
 import structlog
 
@@ -54,6 +49,11 @@ from niki.safety.output_gateway import (
     OutputSafetyGateway,
     strip_think_blocks,
 )
+from niki.safety.privacy_tier import (
+    PrivacyTier,
+    PrivacyTierClassifier,
+    PrivacyTierVerdict,
+)
 from niki.schemas.common import AgentOutput, ChildInput
 from niki.tools import ToolAccessChecker, ToolMatrix
 
@@ -61,50 +61,8 @@ logger = structlog.get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Stub LLMs (replace with real LLM clients in production)
-# ---------------------------------------------------------------------------
-
-
-class _StubDeepSeek:
-    """Stub DeepSeek-V4 client for tests + dev.
-
-    Returns canned text that contains the question so the safety
-    gateway + fact-checker have something to work with.
-    """
-
-    async def chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.7,
-        max_tokens: int = 512,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        # Try to find the user's question and echo keywords
-        user_msg = next(
-            (m["content"] for m in reversed(messages) if m["role"] == "user"),
-            "",
-        )
-        # Extract a short snippet as the canned response
-        snippet = user_msg[:40] + "..." if len(user_msg) > 40 else user_msg or "Niki 陪着你~"
-        return {"content": snippet}
-
-
-class _StubDoubao:
-    """Stub doubao for tests + dev (used by intent classifier)."""
-
-    async def chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.3,
-        max_tokens: int = 256,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        # Would call the LLM for real; here we just return empty
-        return {"content": '{"intents": []}'}
-
-
-# ---------------------------------------------------------------------------
 # Orchestrator
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 
 
@@ -112,6 +70,7 @@ class ChatStage(StrEnum):
     """Stages of the chat pipeline (for diagnostics + observability)."""
 
     SAFETY_INPUT = "safety_input"
+    TIER_CLASSIFY = "tier_classify"
     CLASSIFY = "classify"
     ROUTE = "route"
     DISPATCH = "dispatch"
@@ -132,6 +91,11 @@ class ChatResult:
     is_composite: bool = False
     safety_alert: bool = False
     parent_alert_required: bool = False
+    # Privacy tier (PRD #5). ``None`` means tier classification was
+    # skipped (e.g. blocked before the stage ran).
+    privacy_tier: PrivacyTier | None = None
+    privacy_tier_reason: str = ""
+    treehole_engaged: bool = False
     stages_completed: list[ChatStage] = field(default_factory=list)
     safety_rewrites: list[dict[str, str]] = field(default_factory=list)
     error: str | None = None
@@ -153,14 +117,28 @@ class ChatOrchestrator:
         self,
         child_age: int = 7,
         persona: str | None = "gentle",
-        llm=None,
+        llm: object = None,
+        *,
+        dashboard_service: object = None,
     ) -> None:
         self.child_age = child_age
         self.persona = persona
+        # BE-ISS-AUTOSAFE-VALVE: optional pre-built dashboard
+        # service. When provided, round-4 safety-valve events are
+        # auto-persisted (PRD #27) without the frontend needing
+        # to call ``/dashboard/alerts/record/safety-valve``
+        # separately. Production default: lazy-create one.
+        self._dashboard_service = dashboard_service
 
         # Safety (#1)
         self._input_gateway = InputSafetyGateway()
         self._output_gateway = OutputSafetyGateway(child_age=child_age)
+
+        # Privacy tier (#5) — classifies the message into one of
+        # DAILY / MILD_NEGATIVE / HIGH_RISK / TREEHOLE_PRIVATE. The
+        # tier drives parent-alert fan-out and treehole AES-256-GCM
+        # engagement downstream.
+        self._tier_classifier = PrivacyTierClassifier()
 
         # Routing (#2) — use rule-based classifier (LLM stub returns empty)
         self._classifier = IntentClassifier(llm=None)
@@ -172,7 +150,23 @@ class ChatOrchestrator:
 
         # Knowledge (#3) + Agents (#3, #4, #5)
         self._kb = KnowledgeBase()
-        self._fact_checker = FactChecker(self._kb)
+        # BE-FACT-LLM-JUDGE: wire the configured LLM as the
+        # fact-checker judge so production uses the LLM judge
+        # path. We only do this when the injected LLM is a real
+        # ``BaseLLMClient`` (production) — when tests inject a
+        # recording stub that doesn't speak the JSON judge
+        # protocol, we leave ``llm_judge=None`` so the
+        # FactChecker falls back to the heuristic overlap path.
+        # The heuristic path was the previous production
+        # behaviour, so this is a no-op for tests that asserted
+        # it directly.
+        from niki.infrastructure.llm.base import BaseLLMClient
+
+        is_real_llm = isinstance(llm, BaseLLMClient)
+        self._fact_checker = FactChecker(
+            self._kb,
+            llm_judge=llm if is_real_llm else None,
+        )
         self._emotion_baseline = EmotionBaseline()
         # BE-AGENT-001: shared tool-permission checker for the
         # LLM-driven tool-use loop. Constructed per-orchestrator
@@ -181,6 +175,19 @@ class ChatOrchestrator:
         self._tool_checker = ToolAccessChecker(ToolMatrix())
         # ISS-12: lock for thread-safe _update_age/_update_persona
         self._lock = asyncio.Lock()
+
+        # BE-ISS-AUTOSAFE-VALVE: dashboard service for auto-recording
+        # tutoring safety-valve triggers. Lazy-imported to avoid a
+        # hard import-time dependency on the dashboard layer. Tests
+        # can inject a stub via the ``dashboard_service`` kwarg.
+        self._dashboard_service = None
+        # BE-ISS-MEMORY-HOOK: daytime memory hook for extracting
+        # entities / emotions from each non-blocked message. Skipped
+        # for TREEHOLE_PRIVATE tier (the original text must never
+        # cross the treehole boundary — not even into a hook's
+        # in-memory candidate list). Lazy-imported to keep the
+        # orchestrator's import graph lean.
+        self._memory_hook = None
 
         # Resolve the production LLM via the factory. Callers may inject
         # one (`llm=`), otherwise we ask the factory — which returns a
@@ -221,6 +228,9 @@ class ChatOrchestrator:
         session_id: str = "default",
         child_age: int | None = None,
         persona: str | None = None,
+        *,
+        child_id: str | None = None,
+        parent_id: str | None = None,
     ) -> ChatResult:
         """Run the full chat pipeline.
 
@@ -229,6 +239,12 @@ class ChatOrchestrator:
             session_id: Session identifier (for state continuity).
             child_age: Override the default child age.
             persona: Override the default persona.
+            child_id: Required for HIGH_RISK parent alerts and
+                TREEHOLE_PRIVATE engagement. When ``None`` the
+                tier is still classified but downstream side-effects
+                (alert / treehole.engage) are skipped.
+            parent_id: Required alongside ``child_id`` for the same
+                side-effects.
 
         Returns:
             A ChatResult with final text + diagnostics.
@@ -256,6 +272,12 @@ class ChatOrchestrator:
                 safety_alert=True,
                 parent_alert_required=False,
                 stages_completed=stages,
+                metadata={
+                    "input_action": input_verdict.action.value,
+                    "input_category": input_verdict.matched_category,
+                    "child_age": self.child_age,
+                    "persona": self.persona,
+                },
             )
 
         if input_verdict.is_escalation:
@@ -266,6 +288,17 @@ class ChatOrchestrator:
                 "我们一起想想办法，好不好？"
             )
             verdict = self._output_gateway.check(caring_text, is_tutoring_response=False)
+            # PRD #5: tier still classified for downstream
+            # dashboards, and HIGH_RISK side-effects are wired here
+            # too so we don't double-classify.
+            tier_verdict = self._tier_classifier.classify(text)
+            stages.append(ChatStage.TIER_CLASSIFY)
+            treehole_engaged = await self._dispatch_tier_side_effects(
+                tier_verdict=tier_verdict,
+                original_text=text,
+                child_id=child_id,
+                parent_id=parent_id,
+            )
             return ChatResult(
                 text=text,
                 final_text=verdict.sanitized_text or caring_text,
@@ -273,10 +306,36 @@ class ChatOrchestrator:
                 primary_agent=AgentName.EMOTIONAL.value,
                 safety_alert=True,
                 parent_alert_required=True,
+                privacy_tier=tier_verdict.tier,
+                privacy_tier_reason=tier_verdict.reason,
+                treehole_engaged=treehole_engaged,
                 stages_completed=stages + [ChatStage.SAFETY_OUTPUT, ChatStage.COMPLETE],
+                metadata={
+                    "input_action": input_verdict.action.value,
+                    "input_category": input_verdict.matched_category,
+                    "privacy_tier": tier_verdict.tier.value,
+                    "privacy_tier_reason": tier_verdict.reason,
+                    "privacy_tier_category": tier_verdict.matched_category,
+                    "child_age": self.child_age,
+                    "persona": self.persona,
+                },
             )
 
-        # 2. Intent classification (#2)
+        # 2. Privacy tier classification (#5) — runs BEFORE intent
+        # classification so HIGH_RISK can fan-out a parent alert
+        # and TREEHOLE_PRIVATE can engage the treehole AES-256-GCM
+        # storage path. Tier verdict is *orthogonal* to the
+        # InputAction flow (which already handled block/escalate).
+        tier_verdict = self._tier_classifier.classify(text)
+        stages.append(ChatStage.TIER_CLASSIFY)
+        treehole_engaged = await self._dispatch_tier_side_effects(
+            tier_verdict=tier_verdict,
+            original_text=text,
+            child_id=child_id,
+            parent_id=parent_id,
+        )
+
+        # 3. Intent classification (#2)
         intent_result = await self._classifier.classify(text)
         stages.append(ChatStage.CLASSIFY)
 
@@ -289,6 +348,55 @@ class ChatOrchestrator:
         history = turns_to_history(await get_short_term_memory().get_recent(session_id))
         outputs = await self._dispatch(routing_decision, text, session_id, history)
         stages.append(ChatStage.DISPATCH)
+
+        # 4b. BE-ISS-AUTOSAFE-VALVE: if the tutoring agent
+        # triggered its safety valve (round 4), auto-persist the
+        # alert so the parent weekly report picks it up
+        # (PRD #27). The frontend previously had to make a
+        # separate POST to /dashboard/alerts/record/safety-valve;
+        # the orchestrator now does it as a side-effect of the
+        # chat call, so the dashboard KPI is correct without
+        # client cooperation. Failures are caught + logged so a
+        # dashboard outage never blocks the chat reply.
+        await self._maybe_record_safety_valve(
+            outputs=outputs,
+            child_id=child_id,
+            parent_id=parent_id,
+            problem_text=text,
+        )
+
+        # 4c. BE-ISS-MEMORY-HOOK: extract entities / emotions
+        # from the message into the cognitive graph + long-term
+        # memory. PRD #48 says < 500ms — the regex hook is
+        # sub-ms. Skipped for TREEHOLE_PRIVATE so the raw text
+        # never enters the graph or vector store. Errors are
+        # logged, not raised.
+        if tier_verdict.tier != PrivacyTier.TREEHOLE_PRIVATE:
+            await self._maybe_run_memory_hook(
+                child_id=child_id,
+                text=text,
+                context={
+                    "intent": intent_result.primary.category.value
+                    if intent_result.primary
+                    else None
+                },
+            )
+
+        # 4d. BE-ISS-NORTHSTAR: feed the EmotionAgent's anomaly
+        # verdict into the AnomalyTracker. The tracker opens an
+        # anomaly on |z|>1.5 and closes it on the next
+        # in-baseline record — the elapsed time is the North
+        # Star metric ("主动关怀后情绪恢复至基线时间"). Skipped
+        # for TREEHOLE_PRIVATE because the baseline doesn't see
+        # treehole text and the Z-score would be meaningless.
+        if tier_verdict.tier != PrivacyTier.TREEHOLE_PRIVATE and child_id is not None:
+            from datetime import datetime, timezone as _tz
+
+            self._track_emotion_anomaly(
+                outputs=outputs,
+                child_id=child_id,
+                today=datetime.now(_tz.utc),
+            )
 
         # 5. Fusion
         fused = self._fusion.fuse(routing_decision, outputs)
@@ -330,18 +438,24 @@ class ChatOrchestrator:
             "output_reason": output_verdict.reason,
             "child_age": self.child_age,
             "persona": self.persona,
+            "privacy_tier": tier_verdict.tier.value,
+            "privacy_tier_reason": tier_verdict.reason,
+            "privacy_tier_category": tier_verdict.matched_category,
         }
 
         return ChatResult(
             text=text,
             final_text=final_text,
-            intent=metadata["intent"],
+            intent=cast("str | None", metadata["intent"]),
             primary_agent=routing_decision.primary_agent.value,
             parallel_agents=[a.value for a in routing_decision.parallel_agents],
             is_composite=routing_decision.is_composite,
             stages_completed=stages,
             safety_rewrites=[{"from": o, "to": r} for o, r in output_verdict.rewrites_applied],
-            parent_alert_required=False,
+            parent_alert_required=tier_verdict.requires_parent_alert,
+            privacy_tier=tier_verdict.tier,
+            privacy_tier_reason=tier_verdict.reason,
+            treehole_engaged=treehole_engaged,
             metadata=metadata,
         )
 
@@ -349,18 +463,21 @@ class ChatOrchestrator:
 
     async def _dispatch(
         self,
-        decision,
+        decision: object,
         text: str,
         session_id: str,
         history: list[dict[str, str]],
     ) -> dict[AgentName, AgentOutput]:
         """Dispatch to each agent in the routing decision."""
         outputs: dict[AgentName, AgentOutput] = {}
-        all_agents = decision.all_agents
+        all_agents = decision.all_agents  # type: ignore[attr-defined]
         tasks = [self._invoke_agent(agent, text, session_id, history) for agent in all_agents]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for agent, result in zip(all_agents, results, strict=False):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
+                # Catch BaseException (parent of Exception) for the
+                # isinstance narrowing — otherwise mypy can't prove
+                # result is AgentOutput when we access result.text.
                 logger.error(
                     "chat.agent_failed",
                     agent=agent.value,
@@ -371,8 +488,14 @@ class ChatOrchestrator:
                 # Defense in depth: strip <think>...</think> blocks
                 # that reasoning models (Minimax-M3) emit before the
                 # final answer. These must never reach the child.
+                # BE-ISS-17: replace, do not mutate — agents that
+                # cache and return the same AgentOutput for repeated
+                # inputs would otherwise leak the cleaned text into
+                # the next call.
                 if result.text:
-                    result.text = strip_think_blocks(result.text)
+                    cleaned = strip_think_blocks(result.text)
+                    if cleaned != result.text:
+                        result = result.model_copy(update={"text": cleaned})
                 outputs[agent] = result
         return outputs
 
@@ -388,7 +511,7 @@ class ChatOrchestrator:
             text=text,
             session_id=session_id,
             history=history,
-        )
+        )  # type: ignore[call-arg]
         try:
             if agent == AgentName.ENCYCLOPEDIA:
                 return await self._encyclopedia_agent.invoke(child_input)
@@ -403,28 +526,329 @@ class ChatOrchestrator:
             logger.error("chat.invoke_failed", agent=agent.value, error=str(exc))
             return None
 
+    # ---- Post-dispatch side-effects (BE-ISS-AUTOSAFE-VALVE / BE-ISS-MEMORY-HOOK) ----
+
+    def _get_dashboard_service(self) -> object:
+        """Return the dashboard service, lazily creating a default one.
+
+        The lazy pattern keeps ``niki.dashboard.service`` out of the
+        orchestrator's import graph at module-load time (the
+        dashboard layer imports ``niki.agents.emotion`` and we don't
+        want to add another edge to the import DAG from a hot
+        path).
+        """
+        if self._dashboard_service is None:
+            from niki.dashboard.service import DashboardService
+
+            self._dashboard_service = DashboardService()
+        return self._dashboard_service
+
+    def _get_memory_hook(self) -> object:
+        """Return the daytime memory hook, lazily creating a default one.
+
+        The hook writes to ``LongTermMemory`` (Chroma) and
+        ``CognitiveGraph`` (Neo4j). Both fall back to in-memory
+        storage when their respective services are unreachable,
+        so the hook is safe to instantiate in dev / test.
+        """
+        if self._memory_hook is None:
+            from niki.memory.hook import DaytimeMemoryHook
+            from niki.memory.graph import CognitiveGraph
+            from niki.memory.long_term import LongTermMemory
+
+            self._memory_hook = DaytimeMemoryHook(
+                long_term=LongTermMemory(),
+                graph=CognitiveGraph(),
+            )
+        return self._memory_hook
+
+    async def _maybe_record_safety_valve(
+        self,
+        *,
+        outputs: dict[AgentName, AgentOutput],
+        child_id: str | None,
+        parent_id: str | None,
+        problem_text: str,
+    ) -> None:
+        """Persist a tutoring safety-valve alert if the agent fired one.
+
+        The Tutoring agent returns ``metadata["safety_valve_triggered"]``
+        on round 4 (PRD #7). The orchestrator persists the event as
+        a side-effect of the chat call so the parent weekly report
+        stays correct without the frontend having to call the
+        dashboard endpoint separately.
+
+        Failures are caught + logged so a dashboard outage never
+        blocks the chat reply.
+        """
+        if child_id is None or parent_id is None:
+            return
+        tutoring_output = outputs.get(AgentName.TUTORING)
+        if tutoring_output is None:
+            return
+        if not (tutoring_output.metadata or {}).get("safety_valve_triggered"):
+            return
+        try:
+            service = self._get_dashboard_service()
+            # Truncate the problem text so the alert payload
+            # doesn't carry a full child transcript. PRD privacy
+            # rule: alert payloads store a *summary*, not raw text.
+            summary = problem_text[:80].replace("\n", " ")
+            await service.record_safety_valve(
+                child_id=child_id,
+                parent_id=parent_id,
+                problem_summary=summary,
+                round_reached=int((tutoring_output.metadata or {}).get("round", 4)),
+            )
+        except Exception:
+            logger.exception("chat.safety_valve_persist_failed")
+
+    async def _maybe_run_memory_hook(
+        self,
+        *,
+        child_id: str | None,
+        text: str,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """Run the daytime memory hook for non-treehole messages.
+
+        Skipped when ``child_id`` is missing (the hook is
+        per-child) and silently swallows errors so a hook
+        failure can never abort the chat pipeline.
+        """
+        if child_id is None:
+            return
+        try:
+            hook = self._get_memory_hook()
+            await hook.process(child_id=child_id, text=text, context=context)
+        except Exception:
+            logger.exception("chat.memory_hook_failed")
+
+    def _track_emotion_anomaly(
+        self,
+        *,
+        outputs: dict[AgentName, AgentOutput],
+        child_id: str,
+        today: object,
+    ) -> None:
+        """Feed the EmotionAgent's anomaly verdict into the tracker.
+
+        The EmotionAgent returns ``metadata["anomaly"]`` with
+        ``{is_anomaly, z_score, direction}`` when the emotion
+        was non-neutral. We forward the Z-score to the
+        AnomalyTracker, which opens / closes the per-child
+        anomaly event and (on close) observes the recovery
+        latency into the North Star Prometheus histogram.
+
+        We observe even when ``is_anomaly`` is False because the
+        tracker needs the non-anomaly observation to close an
+        open event. When the agent was neutral it returns
+        ``anomaly=None`` and we skip the call (no Z-score to
+        use as the close signal).
+
+        Errors are logged but never raised so a tracker outage
+        cannot break the chat reply.
+        """
+        emotion_output = outputs.get(AgentName.EMOTIONAL)
+        if emotion_output is None:
+            return
+        anomaly_meta = (emotion_output.metadata or {}).get("anomaly")
+        if anomaly_meta is None:
+            return
+        z_score = anomaly_meta.get("z_score")
+        if z_score is None:
+            return
+        try:
+            from niki.agents.anomaly_tracker import get_tracker
+
+            tracker = get_tracker()
+            tracker.observe(
+                child_id=child_id,
+                z_score=float(z_score),
+                today=today,
+            )
+        except Exception:
+            logger.exception("chat.anomaly_tracker_failed")
+
+    async def _dispatch_tier_side_effects(
+        self,
+        *,
+        tier_verdict: PrivacyTierVerdict,
+        original_text: str,
+        child_id: str | None,
+        parent_id: str | None,
+    ) -> bool:
+        """Act on a privacy tier verdict.
+
+        Wired into :meth:`chat` right after the tier is classified.
+        Returns True iff a TREEHOLE_PRIVATE engagement succeeded (so
+        the caller can record ``treehole_engaged`` on the
+        ChatResult).
+
+        Side-effects:
+
+        * ``HIGH_RISK`` + child_id + parent_id → publish a
+          SecurityAlert to the AlertBroker (real-time SSE push to
+          the parent's dashboard) AND persist a DashboardAlert row
+          via ``DashboardRepository.add_alert`` (history view).
+        * ``TREEHOLE_PRIVATE`` + child_id + parent_id → engage the
+          TreeholeManager so the original text is NEVER written to
+          Chroma / Neo4j / conversation logs; only the AES-256-GCM
+          encrypted emotion summary is stored (7-day TTL).
+
+        All side-effect exceptions are caught + logged so a failing
+        alert/treehole call never blocks the chat reply.
+        """
+        if child_id is None or parent_id is None:
+            # HIGH_RISK with no child_id/parent_id means we can't
+            # notify the parent — this is the production default
+            # case in tests AND the production case until auth is
+            # wired up. WARNING (not DEBUG) so it surfaces in any
+            # non-debug log stream.
+            logger.warning(
+                "chat.tier_side_effects_skipped",
+                tier=tier_verdict.tier.value,
+                reason="missing child_id/parent_id",
+            )
+            return False
+
+        # ---- HIGH_RISK: real-time parent alert + persisted row ----
+        if tier_verdict.requires_parent_alert:
+            try:
+                from datetime import datetime, timezone
+
+                from niki.realtime.alert_broker import get_alert_broker
+                from niki.security.alerts import (
+                    SEVERITY_CRITICAL,
+                    SecurityAlert,
+                )
+
+                alert = SecurityAlert(
+                    alert_type="high_risk_content",
+                    severity=SEVERITY_CRITICAL,
+                    actor_parent_id=parent_id,
+                    target_parent_id=parent_id,
+                    target_child_id=child_id,
+                    client_ip=None,
+                    event_count=1,
+                    window_seconds=0,
+                    detected_at=datetime.now(timezone.utc),
+                    title="Niki detected high-risk content",
+                    detail=(
+                        f"Child message matched category "
+                        f"{tier_verdict.matched_category!r}; "
+                        f"please check in with your child."
+                    ),
+                )
+                # BE-REALTIME-001: SSE pub/sub for the dashboard
+                subscribers_notified = get_alert_broker().publish(alert)
+                logger.info(
+                    "chat.high_risk_alert_published",
+                    child_id=child_id,
+                    parent_id=parent_id,
+                    subscribers=subscribers_notified,
+                    category=tier_verdict.matched_category,
+                )
+            except Exception:
+                # Use logger.exception so the traceback lands in
+                # the log (narrow except in a follow-up if the
+                # failure modes get classified).
+                logger.exception(
+                    "chat.high_risk_alert_publish_failed",
+                )
+
+            try:
+                from niki.db.repositories.dashboard_repo import (
+                    get_dashboard_repository,
+                )
+
+                repo = get_dashboard_repository()
+                # Every implementation in the codebase is async;
+                # we always await. (Removed the dead
+                # `hasattr(result, "__await__")` check — it was
+                # always True and obscured the real contract.)
+                await repo.add_alert(
+                    alert_type="high_risk_content",
+                    child_id=child_id,
+                    parent_id=parent_id,
+                    payload={
+                        "category": tier_verdict.matched_category,
+                        "matched_words": tier_verdict.matched_words,
+                        "reason": tier_verdict.reason,
+                        "text_preview": original_text[:120],
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "chat.high_risk_alert_persist_failed",
+                )
+
+        # ---- TREEHOLE_PRIVATE: encrypt + aggregate, no raw text ----
+        treehole_engaged = False
+        if tier_verdict.should_encrypt:
+            try:
+                from niki.treehole.manager import TreeholeManager
+
+                manager = TreeholeManager()
+                # The orchestrator only has the raw text. The
+                # TreeholeManager will accept whatever emotion hint
+                # we extract; until we have an LLM-side classifier
+                # we default to "neutral" / 3 / "other", which
+                # matches the "聚合即匿名" PRD #64 contract.
+                _summary, _payload = await manager.engage(
+                    child_id=child_id,
+                    parent_id=parent_id,
+                    original_text=original_text,
+                    emotion="neutral",
+                    intensity=3,
+                    category="other",
+                )
+                treehole_engaged = True
+                logger.info(
+                    "chat.treehole_engaged",
+                    child_id=child_id,
+                    parent_id=parent_id,
+                )
+            except Exception:
+                logger.exception(
+                    "chat.treehole_engage_failed",
+                )
+
+        return treehole_engaged
+
     async def _update_age(self, age: int) -> None:
-        """Reconfigure all agents for a new child age (thread-safe)."""
+        """Reconfigure all agents for a new child age (thread-safe).
+
+        ISS-12: the lock must cover the WHOLE reconfiguration, not
+        just the top-level ``self.child_age`` write. Otherwise two
+        concurrent calls can both pass the ``async with self._lock``
+        block, then race on the sub-agent mutations and leave the
+        output_gateway / per-agent child_age in a half-updated state.
+        """
         async with self._lock:
             self.child_age = age
-        self._output_gateway = OutputSafetyGateway(child_age=age)
-        self._encyclopedia_agent.child_age = age
-        self._encyclopedia_agent._age_group = self._encyclopedia_agent._resolve_age_group(age)
-        self._tutoring_agent.child_age = age
-        self._tutoring_agent._age_group = self._tutoring_agent._resolve_age_group(age)
-        self._tutoring_agent._output_gateway = OutputSafetyGateway(child_age=age)
-        self._emotion_agent.child_age = age
-        self._emotion_agent._age_group = self._emotion_agent._resolve_age_group(age)
-        self._emotion_agent._output_gateway = OutputSafetyGateway(child_age=age)
+            self._output_gateway = OutputSafetyGateway(child_age=age)
+            self._encyclopedia_agent.child_age = age
+            self._encyclopedia_agent._age_group = self._encyclopedia_agent._resolve_age_group(age)
+            self._tutoring_agent.child_age = age
+            self._tutoring_agent._age_group = self._tutoring_agent._resolve_age_group(age)
+            self._tutoring_agent._output_gateway = OutputSafetyGateway(child_age=age)
+            self._emotion_agent.child_age = age
+            self._emotion_agent._age_group = self._emotion_agent._resolve_age_group(age)
+            self._emotion_agent._output_gateway = OutputSafetyGateway(child_age=age)
 
     async def _update_persona(self, persona: str) -> None:
-        """Reconfigure all agents for a new persona (thread-safe)."""
+        """Reconfigure all agents for a new persona (thread-safe).
+
+        ISS-12: same rationale as _update_age — lock the whole
+        reconfiguration, not just the top-level write.
+        """
         async with self._lock:
             self.persona = persona
-        self._persona_injector.set_default(Persona(persona))
-        self._encyclopedia_agent.persona = persona
-        self._tutoring_agent.persona = persona
-        self._emotion_agent.persona = persona
+            self._persona_injector.set_default(Persona(persona))
+            self._encyclopedia_agent.persona = persona
+            self._tutoring_agent.persona = persona
+            self._emotion_agent.persona = persona
 
     # ---- ISS-23: streaming variant ----
 
@@ -435,6 +859,8 @@ class ChatOrchestrator:
         session_id: str = "default",
         child_age: int | None = None,
         persona: str | None = None,
+        child_id: str | None = None,
+        parent_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Streaming variant of :meth:`chat` (ISS-23).
 
@@ -473,6 +899,17 @@ class ChatOrchestrator:
         stages.append(ChatStage.SAFETY_INPUT)
 
         if input_verdict.is_blocked:
+            # Even on block, classify tier so a high-risk signal
+            # in a blocked message still fires the parent alert
+            # and treehole is still engaged (defense in depth).
+            tier_verdict = self._tier_classifier.classify(text)
+            stages.append(ChatStage.TIER_CLASSIFY)
+            treehole_engaged = await self._dispatch_tier_side_effects(
+                tier_verdict=tier_verdict,
+                original_text=text,
+                child_id=child_id,
+                parent_id=parent_id,
+            )
             yield {
                 "kind": "phase",
                 "name": "input_blocked",
@@ -484,9 +921,18 @@ class ChatOrchestrator:
                 "total_text": "嗯…这个问题Niki还没想好怎么回答呢~",
                 "intent": None,
                 "safety_alert": True,
-                "parent_alert_required": False,
+                "parent_alert_required": tier_verdict.requires_parent_alert,
+                "privacy_tier": tier_verdict.tier.value,
+                "treehole_engaged": treehole_engaged,
                 "is_final": True,
-                "metadata": {"input_action": input_verdict.action.value},
+                "metadata": {
+                    "input_action": input_verdict.action.value,
+                    "input_category": input_verdict.matched_category,
+                    "privacy_tier": tier_verdict.tier.value,
+                    "privacy_tier_reason": tier_verdict.reason,
+                    "child_age": self.child_age,
+                    "persona": self.persona,
+                },
             }
             return
 
@@ -497,6 +943,18 @@ class ChatOrchestrator:
                 "我们一起想想办法，好不好？"
             )
             verdict = self._output_gateway.check(caring_text, is_tutoring_response=False)
+            # Tier classification also runs on escalation so
+            # TREEHOLE_PRIVATE children who also self-harm still
+            # get the AES-256-GCM storage path (and the parent
+            # alert goes out as usual).
+            tier_verdict = self._tier_classifier.classify(text)
+            stages.append(ChatStage.TIER_CLASSIFY)
+            treehole_engaged = await self._dispatch_tier_side_effects(
+                tier_verdict=tier_verdict,
+                original_text=text,
+                child_id=child_id,
+                parent_id=parent_id,
+            )
             yield {
                 "kind": "phase",
                 "name": "input_escalation",
@@ -517,6 +975,8 @@ class ChatOrchestrator:
                 "primary_agent": AgentName.EMOTIONAL.value,
                 "safety_alert": True,
                 "parent_alert_required": True,
+                "privacy_tier": tier_verdict.tier.value,
+                "treehole_engaged": treehole_engaged,
                 "is_final": True,
             }
             return
@@ -526,6 +986,20 @@ class ChatOrchestrator:
             "name": "input_safety_ok",
             "payload": {"category": input_verdict.matched_category},
         }
+
+        # 1b. Privacy tier classification (#5). Mirrors :meth:`chat`:
+        # HIGH_RISK fans out to parent alerts; TREEHOLE_PRIVATE
+        # engages the AES-256-GCM storage path. Runs BEFORE intent
+        # classification so the side-effects happen even when the
+        # rest of the pipeline is short-circuited later.
+        tier_verdict = self._tier_classifier.classify(text)
+        stages.append(ChatStage.TIER_CLASSIFY)
+        treehole_engaged = await self._dispatch_tier_side_effects(
+            tier_verdict=tier_verdict,
+            original_text=text,
+            child_id=child_id,
+            parent_id=parent_id,
+        )
 
         # 2. Intent classification.
         intent_result = await self._classifier.classify(text)
@@ -548,10 +1022,28 @@ class ChatOrchestrator:
         # sync ``yield`` boundary inside this generator to the
         # agent's ``await on_phase(...)`` coroutine calls via a
         # per-agent ``asyncio.Queue`` and a concurrent draining task.
-        history = turns_to_history(
-            await get_short_term_memory().get_recent(session_id)
-        )
+        history = turns_to_history(await get_short_term_memory().get_recent(session_id))
         outputs: dict[AgentName, AgentOutput] = {}
+
+        # BE-ISS-MEMORY-HOOK (streaming path): start the daytime
+        # hook as a background task so the < 500ms extraction runs
+        # in parallel with agent streaming. Skipped for
+        # TREEHOLE_PRIVATE — same privacy contract as the
+        # non-streaming path.
+        if child_id is not None and tier_verdict.tier != PrivacyTier.TREEHOLE_PRIVATE:
+            hook_task = asyncio.create_task(
+                self._maybe_run_memory_hook(
+                    child_id=child_id,
+                    text=text,
+                    context={
+                        "intent": intent_result.primary.category.value
+                        if intent_result.primary
+                        else None
+                    },
+                )
+            )
+        else:
+            hook_task = None
 
         for agent_name in routing_decision.all_agents:
             yield {
@@ -564,7 +1056,7 @@ class ChatOrchestrator:
             event_queue: asyncio.Queue[Any] = asyncio.Queue()
             token_box = [0]
 
-            async def make_phase_cb(name_for_cb: str = agent_name.value):
+            async def make_phase_cb(name_for_cb: str = agent_name.value) -> object:
                 async def cb(name: str, payload: dict[str, Any]) -> None:
                     if name == "tool_call":
                         evt = {
@@ -594,7 +1086,7 @@ class ChatOrchestrator:
 
                 return cb
 
-            async def make_chunk_cb():
+            async def make_chunk_cb() -> object:
                 async def cb(text_chunk: str, idx: int) -> None:
                     await event_queue.put(
                         {
@@ -668,6 +1160,40 @@ class ChatOrchestrator:
             }
         stages.append(ChatStage.DISPATCH)
 
+        # BE-ISS-AUTOSAFE-VALVE (streaming): if the tutoring agent
+        # triggered its safety valve during streaming, persist the
+        # alert. Same contract as the non-streaming path.
+        await self._maybe_record_safety_valve(
+            outputs=outputs,
+            child_id=child_id,
+            parent_id=parent_id,
+            problem_text=text,
+        )
+
+        # BE-ISS-MEMORY-HOOK (streaming): wait for the hook task we
+        # kicked off before dispatch. If it failed, ``_maybe_run_
+        # memory_hook`` already logged it; awaiting here just makes
+        # sure the task is observed before the generator returns
+        # (so an unhandled exception would surface).
+        if hook_task is not None:
+            try:
+                await hook_task
+            except Exception:
+                logger.exception("chat.stream.memory_hook_failed")
+
+        # BE-ISS-NORTHSTAR (streaming): same as the non-streaming
+        # path — feed the emotion agent's anomaly verdict into the
+        # tracker so the recovery-latency histogram is populated
+        # for streamed sessions too.
+        if tier_verdict.tier != PrivacyTier.TREEHOLE_PRIVATE and child_id is not None:
+            from datetime import datetime, timezone as _tz
+
+            self._track_emotion_anomaly(
+                outputs=outputs,
+                child_id=child_id,
+                today=datetime.now(_tz.utc),
+            )
+
         # 5. Fusion.
         fused = self._fusion.fuse(routing_decision, outputs)
         stages.append(ChatStage.FUSE)
@@ -682,9 +1208,7 @@ class ChatOrchestrator:
 
         # 6. Output safety.
         is_tutoring = routing_decision.primary_agent == AgentName.TUTORING
-        output_verdict = self._output_gateway.check(
-            fused.text, is_tutoring_response=is_tutoring
-        )
+        output_verdict = self._output_gateway.check(fused.text, is_tutoring_response=is_tutoring)
         stages.append(ChatStage.SAFETY_OUTPUT)
 
         final_text = output_verdict.sanitized_text or fused.text
@@ -708,9 +1232,7 @@ class ChatOrchestrator:
         # 7. Memory append.
         memory = get_short_term_memory()
         await memory.append(session_id, ConversationTurn(role="child", text=text))
-        await memory.append(
-            session_id, ConversationTurn(role="niki", text=final_text)
-        )
+        await memory.append(session_id, ConversationTurn(role="niki", text=final_text))
         stages.append(ChatStage.COMPLETE)
 
         # 8. Final event.
@@ -724,7 +1246,10 @@ class ChatOrchestrator:
             "is_composite": routing_decision.is_composite,
             "stages_completed": [s.value for s in stages],
             "safety_alert": safety_alert,
-            "parent_alert_required": False,
+            "parent_alert_required": tier_verdict.requires_parent_alert,
+            "privacy_tier": tier_verdict.tier.value,
+            "privacy_tier_reason": tier_verdict.reason,
+            "treehole_engaged": treehole_engaged,
             "metadata": {
                 "input_action": input_verdict.action.value,
                 "intent": intent_result.primary.category.value if intent_result.primary else None,
@@ -732,6 +1257,9 @@ class ChatOrchestrator:
                 "fusion_strategy": fused.strategy.value,
                 "contributing_agents": [a.value for a in fused.contributing_agents],
                 "output_action": output_verdict.action.value,
+                "privacy_tier": tier_verdict.tier.value,
+                "privacy_tier_reason": tier_verdict.reason,
+                "privacy_tier_category": tier_verdict.matched_category,
                 "child_age": self.child_age,
                 "persona": self.persona,
             },
@@ -745,8 +1273,8 @@ class ChatOrchestrator:
         session_id: str,
         history: list[dict[str, str]],
         *,
-        phase_cb,
-        chunk_cb,
+        phase_cb: object,
+        chunk_cb: Any,
     ) -> AgentOutput | None:
         """Invoke a single agent with streaming callbacks.
 
@@ -760,7 +1288,7 @@ class ChatOrchestrator:
             text=text,
             session_id=session_id,
             history=history,
-        )
+        )  # type: ignore[call-arg]
         try:
             if agent == AgentName.ENCYCLOPEDIA:
                 return await self._encyclopedia_agent.invoke(

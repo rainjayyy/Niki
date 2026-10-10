@@ -51,8 +51,8 @@ class _EmptyBody(BaseModel):
 
 router = APIRouter(
     prefix="/notifications",
-    tags=[
-        {
+    tags=[  
+        {  # type: ignore[list-item]
             "name": "notifications",
             "description": (
                 "Parent-facing notification center (BE-PUSH-005). Cursor-"
@@ -60,7 +60,7 @@ router = APIRouter(
                 "caller, with mark-single / mark-all read endpoints."
             ),
         }
-    ],
+    ]
 )
 
 # Maximum page size (matches `_pagination.MAX_PAGE_SIZE`).

@@ -16,8 +16,8 @@ are logged at `error` level for ops to investigate.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -196,7 +196,6 @@ class EmailAlertDispatcher(AlertDispatcher):
             )
             return
         import asyncio
-        import smtplib
         from email.message import EmailMessage
 
         subject, body = self._render(alert)
@@ -223,7 +222,7 @@ class EmailAlertDispatcher(AlertDispatcher):
             )
             raise
 
-    def _send(self, msg) -> None:
+    def _send(self, msg: Any) -> None:
         """Run in a worker thread (smtplib is sync)."""
         import smtplib
 

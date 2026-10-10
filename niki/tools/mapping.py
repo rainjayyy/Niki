@@ -57,8 +57,7 @@ def agent_type_to_matrix_key(agent_type: str) -> str:
         return _AGENT_TYPE_TO_MATRIX_KEY[agent_type]
     except KeyError as exc:
         raise ValueError(
-            f"Unknown agent_type {agent_type!r}; "
-            f"known types: {sorted(_AGENT_TYPE_TO_MATRIX_KEY)}"
+            f"Unknown agent_type {agent_type!r}; known types: {sorted(_AGENT_TYPE_TO_MATRIX_KEY)}"
         ) from exc
 
 
@@ -78,8 +77,7 @@ def matrix_key_to_agent_type(matrix_key: str) -> str:
         return _MATRIX_KEY_TO_AGENT_TYPE[matrix_key]
     except KeyError as exc:
         raise ValueError(
-            f"Unknown matrix key {matrix_key!r}; "
-            f"known keys: {sorted(_MATRIX_KEY_TO_AGENT_TYPE)}"
+            f"Unknown matrix key {matrix_key!r}; known keys: {sorted(_MATRIX_KEY_TO_AGENT_TYPE)}"
         ) from exc
 
 

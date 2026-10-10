@@ -43,18 +43,42 @@ class TreeholeEncryption:
     def _load_key_from_env() -> bytes:
         """Load the encryption key from AES_ENCRYPTION_KEY env var.
 
-        Returns 32 zero bytes as fallback (NOT for production use).
+        Production: set ``AES_ENCRYPTION_KEY`` to a 64-char hex
+        string (32 bytes for AES-256-GCM). The function fails
+        fast on missing / malformed keys rather than falling
+        back to a zero-byte key — a zero-byte key would let any
+        attacker trivially decrypt treehole payloads.
+
+        Test mode: the ``NIKI_TEST_DEV_KEY`` env var (any truthy
+        value) restores the old dev-key fallback so the test
+        suite can still construct ``TreeholeEncryption()``
+        without provisioning real keys. The dev key is the
+        single byte 0xFF repeated 32 times (clearly fake,
+        impossible to confuse with a real production key).
         """
         hex_key = os.environ.get("AES_ENCRYPTION_KEY", "")
         if not hex_key:
-            # Use a deterministic dev key (32 zero bytes)
-            return b"\x00" * KEY_LENGTH_BYTES
+            if os.environ.get("NIKI_TEST_DEV_KEY", "").lower() in ("1", "true", "yes"):
+                # Deterministic dev key — clearly fake (all-0xFF).
+                return b"\xff" * KEY_LENGTH_BYTES
+            raise RuntimeError(
+                "AES_ENCRYPTION_KEY is not set. Treehole encryption requires a "
+                "64-char hex string (32 bytes for AES-256-GCM). Set it in your "
+                "environment, or set NIKI_TEST_DEV_KEY=1 in test environments "
+                "to use a deterministic dev fallback."
+            )
         try:
-            return bytes.fromhex(hex_key)
+            key = bytes.fromhex(hex_key)
         except ValueError as exc:
             raise ValueError(
                 "AES_ENCRYPTION_KEY must be a valid hex string of 64 chars (32 bytes)"
             ) from exc
+        if len(key) != KEY_LENGTH_BYTES:
+            raise ValueError(
+                f"AES_ENCRYPTION_KEY must decode to {KEY_LENGTH_BYTES} bytes "
+                f"(got {len(key)}). For AES-256-GCM use 64 hex chars."
+            )
+        return key
 
     def encrypt(self, plaintext: str, associated_data: bytes | None = None) -> str:
         """Encrypt a plaintext string.

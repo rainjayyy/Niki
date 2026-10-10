@@ -402,7 +402,7 @@ class PostgresDashboardRepository(DashboardRepository):
             .where(DashboardAlert.id == alert_id)
             .values(delivered_at=datetime.now(timezone.utc))
         )
-        return (result.rowcount or 0) > 0
+        return (result.rowcount or 0) > 0  # type: ignore[attr-defined]
 
     # ---------------- BE-PUSH-005 notification center ----------------
 
@@ -423,7 +423,7 @@ class PostgresDashboardRepository(DashboardRepository):
         # we can switch to a generated `severity_text` column with an
         # index, but at the current scale (≤ 1000/parent) a per-row
         # filter is fine.
-        from sqlalchemy import func, or_, tuple_
+        from sqlalchemy import or_, tuple_
 
         stmt = (
             select(DashboardAlert)
@@ -468,7 +468,7 @@ class PostgresDashboardRepository(DashboardRepository):
             .where(DashboardAlert.parent_id == parent_id)
             .values(read_at=datetime.now(timezone.utc))
         )
-        return (result.rowcount or 0) > 0
+        return (result.rowcount or 0) > 0  # type: ignore[attr-defined]
 
     async def mark_all_read_for_parent(self, parent_id: str) -> int:
         from sqlalchemy import update as sa_update
@@ -479,7 +479,7 @@ class PostgresDashboardRepository(DashboardRepository):
             .where(DashboardAlert.read_at.is_(None))
             .values(read_at=datetime.now(timezone.utc))
         )
-        return result.rowcount or 0
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
     async def count_unread_for_parent(self, parent_id: str) -> int:
         from sqlalchemy import func as sa_func

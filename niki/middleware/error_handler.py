@@ -100,8 +100,8 @@ def _classify_validation_error(raw_errors: list[dict[str, Any]]) -> str:
         loc = [str(p) for p in err.get("loc", [])]
         # Drop the leading "body" / "query" / "path" prefix.
         field_loc = [p for p in loc if p not in ("body", "query", "path", "__root__")]
-        msg = (err.get("msg") or "").lower()
-        err_type = (err.get("type") or "").lower()
+        (err.get("msg") or "").lower()
+        (err.get("type") or "").lower()
 
         # field=phone + any validation error → INVALID_PHONE_FORMAT
         if field_loc == ["phone"] or (field_loc and field_loc[-1] == "phone"):
