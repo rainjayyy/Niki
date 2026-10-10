@@ -11,7 +11,7 @@ from niki.auth.account import ParentAccount
 from niki.auth.dependencies import get_current_parent
 from niki.main import create_app
 from niki.media.ocr import (
-    MockOcrBackend,
+    FallbackOcrBackend,
     OcrBackend,
     OcrError,
     OcrResult,
@@ -35,11 +35,13 @@ def client() -> TestClient:
     teardown so singleton state doesn't leak between tests."""
     app = create_app()
     app.dependency_overrides[get_current_parent] = lambda: ParentAccount(
-        id="p-ocr", name="OCR Test",
-        id_number_masked="****", phone_masked="****",
+        id="p-ocr",
+        name="OCR Test",
+        id_number_masked="****",
+        phone_masked="****",
     )
     saved = get_ocr_backend()
-    set_ocr_backend(MockOcrBackend())
+    set_ocr_backend(FallbackOcrBackend())
     yield TestClient(app)
     set_ocr_backend(saved)
 
@@ -49,10 +51,10 @@ def client() -> TestClient:
 # ---------------------------------------------------------------------------
 
 
-class TestMockOcrBackend:
+class TestFallbackOcrBackend:
     @pytest.mark.asyncio
     async def test_returns_nonzero_text(self) -> None:
-        be = MockOcrBackend()
+        be = FallbackOcrBackend()
         result = await be.recognize(PNG_1x1)
         assert isinstance(result, OcrResult)
         assert result.text  # non-empty
@@ -66,45 +68,43 @@ class TestMockOcrBackend:
 
     @pytest.mark.asyncio
     async def test_deterministic_same_bytes_same_text(self) -> None:
-        be = MockOcrBackend()
+        be = FallbackOcrBackend()
         r1 = await be.recognize(PNG_1x1)
         r2 = await be.recognize(PNG_1x1)
         assert r1.text == r2.text
         assert r1.confidence == r2.confidence
-        assert [r.text for r in r1.regions] == [
-            r.text for r in r2.regions
-        ]
+        assert [r.text for r in r1.regions] == [r.text for r in r2.regions]
 
     @pytest.mark.asyncio
     async def test_different_bytes_usually_different_text(self) -> None:
-        be = MockOcrBackend()
+        be = FallbackOcrBackend()
         r1 = await be.recognize(PNG_1x1)
         r2 = await be.recognize(b"\x89PNG\r\n\x1a\nNOT-REAL-IMAGE")
         # Different bytes → almost certainly different buckets, so
         # at least one of text or region count differs.
-        assert (r1.text != r2.text) or (
-            len(r1.regions) != len(r2.regions)
-        )
+        assert (r1.text != r2.text) or (len(r1.regions) != len(r2.regions))
 
     @pytest.mark.asyncio
     async def test_empty_image_raises_ocr_error(self) -> None:
-        be = MockOcrBackend()
+        be = FallbackOcrBackend()
         with pytest.raises(OcrError) as exc_info:
             await be.recognize(b"")
         assert exc_info.value.code == "EMPTY_IMAGE"
 
     @pytest.mark.asyncio
     async def test_english_uses_english_wordlist(self) -> None:
-        be = MockOcrBackend()
+        be = FallbackOcrBackend()
         result = await be.recognize(PNG_1x1, language="en-US")
         assert result.language == "en-US"
         # Every picked word should be in the English list. The mock
         # is exhaustive so we can check membership exactly.
         from niki.media.ocr import _MOCK_WORDS_EN
+
         for r in result.regions:
             assert r.text in _MOCK_WORDS_EN
         # And none of the picked words should be a zh-CN-only one.
         from niki.media.ocr import _MOCK_WORDS_ZH
+
         for r in result.regions:
             assert r.text not in _MOCK_WORDS_ZH
 
@@ -116,10 +116,11 @@ class TestMockOcrBackend:
 
 class TestOcrBackendSingleton:
     def test_default_is_mock(self) -> None:
-        # The global singleton should default to MockOcrBackend.
+        # The global singleton should default to FallbackOcrBackend.
         from niki.media import ocr as ocr_mod
-        set_ocr_backend(ocr_mod.MockOcrBackend())
-        assert isinstance(get_ocr_backend(), MockOcrBackend)
+
+        set_ocr_backend(ocr_mod.FallbackOcrBackend())
+        assert isinstance(get_ocr_backend(), FallbackOcrBackend)
 
     def test_set_and_get_swap(self) -> None:
         class _Fake(OcrBackend):
@@ -164,7 +165,9 @@ class TestOcrEndpoint:
         assert len(body["regions"]) >= 1
         for region in body["regions"]:
             assert set(region.keys()) == {
-                "text", "confidence", "bbox",
+                "text",
+                "confidence",
+                "bbox",
             }
             assert region["text"]
             assert 0.0 < region["confidence"] <= 1.0
@@ -183,9 +186,7 @@ class TestOcrEndpoint:
         assert r.status_code == 200, r.text
         assert r.json()["text"]
 
-    def test_language_form_field_forwarded(
-        self, client: TestClient
-    ) -> None:
+    def test_language_form_field_forwarded(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/media/ocr",
             files={"file": ("p.png", PNG_1x1, "image/png")},
@@ -230,9 +231,7 @@ class TestOcrEndpoint:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "EMPTY_FILE"
 
-    def test_mock_backend_returns_deterministic_text(
-        self, client: TestClient
-    ) -> None:
+    def test_mock_backend_returns_deterministic_text(self, client: TestClient) -> None:
         # Same image uploaded twice → identical response. Locks in
         # the mock's determinism at the API surface (not just the
         # backend unit test).
@@ -249,9 +248,7 @@ class TestOcrEndpoint:
         assert r1.json()["text"] == r2.json()["text"]
         assert r1.json()["confidence"] == r2.json()["confidence"]
 
-    def test_ocr_backend_failure_maps_to_503(
-        self, client: TestClient
-    ) -> None:
+    def test_ocr_backend_failure_maps_to_503(self, client: TestClient) -> None:
         class _ExplodingBackend(OcrBackend):
             async def recognize(self, image, *, language="zh-CN"):
                 raise OcrError("OCR_QUOTA_EXCEEDED", "upstream rate-limited")
