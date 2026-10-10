@@ -3,7 +3,6 @@
  *
  * Re-run `make ts-sdk` after any backend route change.
  * Endpoints tagged `chat` (3 operation(s)).
- * Generated: 2026-08-05T07:39:42Z
  */
 
 import { request } from "./client";
@@ -12,7 +11,7 @@ import type { RequestOptions } from "./client";
 /**
  * Run the full chat pipeline end-to-end
  *
- * Run the full chat pipeline end-to-end. Request body: { "text": "...", "child_age": 7, "persona": "gentle" | "lively" | "rigorous", "session_id": "..." }
+ * Run the full chat pipeline end-to-end. Request body: { "text": "...", "child_age": 7, "persona": "gentle" | "lively" | "rigorous", "session_id": "...", "child_id": "...", # optional; enables HIGH_RISK "parent_id": "..." # alerts + TREEHOLE_PRIVATE engage }
  *
  * @remarks `POST /api/v1/chat/full`
  */
