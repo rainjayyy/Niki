@@ -85,3 +85,8 @@ docstrings_report.json
 # One-off changelogs (use git log + CHANGELOG.md if you need history)
 docs/CHANGES-*.md
 
+# Eval run snapshots (transient; one is committed via EVAL_REPORT.md)
+eval_*.json
+eval_current*.json
+eval_run*.json
+eval_final*.json
