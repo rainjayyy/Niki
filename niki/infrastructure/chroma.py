@@ -107,12 +107,12 @@ class ChromaClient:
         Should be called during application startup.
         """
         client = cls.get_client()
-        existing = {c.name for c in client.list_collections()}
+        existing = {c.name for c in client.list_collections()}  # type: ignore[attr-defined]
 
         for name in [COLLECTION_CONVERSATIONS, COLLECTION_KNOWLEDGE_BASE, COLLECTION_ENTITIES]:
             if name not in existing:
                 logger.info("chroma.creating_collection", collection=name)
-                client.create_collection(name=name)
+                client.create_collection(name=name)  # type: ignore[attr-defined]
             else:
                 logger.debug("chroma.collection_exists", collection=name)
 

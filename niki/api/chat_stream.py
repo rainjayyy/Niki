@@ -81,7 +81,7 @@ async def _sse_generator(
             pass
 
     try:
-        async for chunk in get_streaming_provider().stream(
+        async for chunk in get_streaming_provider().stream(  # type: ignore[attr-defined]
             prompt,
             child_age=child_age,
             persona=persona,

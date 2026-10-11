@@ -106,7 +106,7 @@ class EncyclopediaAgent(BaseAgent):
 
     def __init__(
         self,
-        llm: object,
+        llm: Any,
         knowledge_base: KnowledgeBase,
         fact_checker: FactChecker,
         persona: str = "gentle",

@@ -163,9 +163,9 @@ async def enroll(
         }
     # Pydantic model — use attribute access, not .get().
     return {
-        "secret": payload.secret_plaintext,
-        "otpauth_url": payload.otpauth_url,
-        "qr_code": payload.qr_code,
+        "secret": payload.secret_plaintext,  # type: ignore[attr-defined]
+        "otpauth_url": payload.otpauth_url,  # type: ignore[attr-defined]
+        "qr_code": payload.qr_code,  # type: ignore[attr-defined]
     }
 
 

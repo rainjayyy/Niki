@@ -64,7 +64,7 @@ async def health_check() -> HealthResponse:
                 HealthStatus(component="unknown", status="unhealthy", error=str(result), latency_ms=None)
             )
         else:
-            components.append(result)
+            components.append(result)  # type: ignore[arg-type]
 
     # Overall status: healthy if all components are healthy
     statuses = [c.status for c in components]

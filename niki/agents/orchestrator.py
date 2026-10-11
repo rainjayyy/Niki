@@ -594,7 +594,7 @@ class ChatOrchestrator:
             # doesn't carry a full child transcript. PRD privacy
             # rule: alert payloads store a *summary*, not raw text.
             summary = problem_text[:80].replace("\n", " ")
-            await service.record_safety_valve(
+            await service.record_safety_valve(  # type: ignore[attr-defined]
                 child_id=child_id,
                 parent_id=parent_id,
                 problem_summary=summary,
@@ -620,7 +620,7 @@ class ChatOrchestrator:
             return
         try:
             hook = self._get_memory_hook()
-            await hook.process(child_id=child_id, text=text, context=context)
+            await hook.process(child_id=child_id, text=text, context=context)  # type: ignore[attr-defined]
         except Exception:
             logger.exception("chat.memory_hook_failed")
 

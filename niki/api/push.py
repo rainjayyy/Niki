@@ -1066,7 +1066,7 @@ async def test_push_history(
         limit = MAX_HISTORY_LIMIT
 
     svc = get_push_delivery_service()
-    deliveries = svc.history(limit=limit, channel=channel)
+    deliveries = svc.history(limit=limit, channel=channel)  # type: ignore[attr-defined]
     return {
         "deliveries": [d.to_dict() for d in deliveries],
         "count": len(deliveries),

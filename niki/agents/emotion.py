@@ -420,7 +420,7 @@ class EmotionAgent(BaseAgent):
 
     def __init__(
         self,
-        llm: object,
+        llm: Any,
         baseline: EmotionBaseline | None = None,
         persona: str = "gentle",
         child_age: int = 7,

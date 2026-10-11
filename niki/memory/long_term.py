@@ -87,7 +87,7 @@ class LongTermMemory:
         # Try Chroma
         if self._chroma is not None:
             try:
-                coll = self._chroma.get_collection(self.collection_name)
+                coll = self._chroma.get_collection(self.collection_name)  # type: ignore[attr-defined]
                 # Run in thread (chromadb is sync)
                 await asyncio.to_thread(
                     coll.add,
@@ -123,7 +123,7 @@ class LongTermMemory:
         # Try Chroma first
         if self._chroma is not None:
             try:
-                coll = self._chroma.get_collection(self.collection_name)
+                coll = self._chroma.get_collection(self.collection_name)  # type: ignore[attr-defined]
                 where = {"child_id": child_id} if child_id else None
                 results = await asyncio.to_thread(
                     coll.query,

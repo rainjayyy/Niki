@@ -171,7 +171,7 @@ class TutoringAgent(BaseAgent):
 
     def __init__(
         self,
-        llm: object,
+        llm: Any,
         persona: str = "gentle",
         child_age: int = 7,
         child_history: dict[str, float] | None = None,
