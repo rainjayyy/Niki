@@ -304,7 +304,7 @@ class IntentClassifier:
             cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
 
         try:
-            return json.loads(cleaned)
+            return json.loads(cleaned)  # type: ignore[no-any-return]
         except json.JSONDecodeError:
             logger.warning("intent_classifier.llm_invalid_json", content=cleaned[:200])
             return {"intents": []}

@@ -257,7 +257,7 @@ def _raise_change_error(request: Request, exc: PhoneChangeError | EmailChangeErr
         status = _EMAIL_CHANGE_STATUS.get(exc.code, 400)
     else:
         status = _PHONE_CHANGE_STATUS.get(exc.code, 400)
-    return JSONResponse(  # type: ignore[return-value]
+    return JSONResponse(
         status_code=status,
         content=_error_response(request, exc),
     )

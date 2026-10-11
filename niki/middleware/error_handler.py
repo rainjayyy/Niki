@@ -308,7 +308,7 @@ def setup_error_handlers(app: FastAPI) -> None:
         # the new Pydantic-typed endpoints produce identical error
         # codes from the frontend's perspective.
         raw_errors = exc.errors() if hasattr(exc, "errors") else []
-        code = _classify_validation_error(raw_errors)
+        code = _classify_validation_error(raw_errors)  # type: ignore[arg-type]
         # First error message is usually the most actionable.
         msg = (
             "; ".join(

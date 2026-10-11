@@ -87,7 +87,7 @@ class SessionLimiter:
         self,
         daily_limit_minutes: int = DEFAULT_DAILY_LIMIT_MINUTES,
         max_idle_minutes: int = MAX_IDLE_MINUTES,
-        store: "SessionStore | None" = None,
+        store: "SessionStore | None" = None,  # type: ignore[return-value]
     ) -> None:
         self.daily_limit_minutes = daily_limit_minutes
         self.max_idle_minutes = max_idle_minutes

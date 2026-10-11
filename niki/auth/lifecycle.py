@@ -317,7 +317,7 @@ class AccountLifecycle:
         from niki.db.repositories.account_repo import AccountRepository as _AR
 
         phone_hash = _AR.hash_field(phone) if hasattr(_AR, "hash_field") else phone
-        return await self._repo.get_by_phone_hash(phone_hash)  # type: ignore[no-any-return]
+        return await self._repo.get_by_phone_hash(phone_hash)
 
     def get_consent_manager(self) -> ConsentManager:
         return self._consent

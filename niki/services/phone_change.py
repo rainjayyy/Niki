@@ -755,7 +755,7 @@ def _unmask_phone(account: ParentAccount) -> str:
     """
     raw = getattr(account, "_raw_phone", None)
     if raw:
-        return raw
+        return raw  # type: ignore[no-any-return]
     return ""
 
 

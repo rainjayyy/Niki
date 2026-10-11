@@ -665,7 +665,7 @@ class ChatOrchestrator:
             tracker.observe(
                 child_id=child_id,
                 z_score=float(z_score),
-                today=today,
+                today=today,  # type: ignore[arg-type]
             )
         except Exception:
             logger.exception("chat.anomaly_tracker_failed")
@@ -1292,7 +1292,7 @@ class ChatOrchestrator:
         try:
             if agent == AgentName.ENCYCLOPEDIA:
                 return await self._encyclopedia_agent.invoke(
-                    child_input, on_phase=phase_cb, on_chunk=chunk_cb
+                    child_input, on_phase=phase_cb, on_chunk=chunk_cb  # type: ignore[arg-type]
                 )
             elif agent == AgentName.TUTORING:
                 return await self._tutoring_agent.invoke(child_input)

@@ -78,6 +78,8 @@ async def get_achievements(
             "counters": row["counters"] or {},
         }
 
+    return {"child_id": child_id, "unlocked": [], "counters": {}}
+
 
 @router.post(
     "/achievements/{child_id}",

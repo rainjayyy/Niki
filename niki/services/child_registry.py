@@ -48,7 +48,7 @@ class ChildRegistry:
         return self._repo.delete(child_id)
 
     def __len__(self) -> int:
-        return len(self._repo)
+        return len(self._repo)  # type: ignore[arg-type]
 
 
 # Back-compat: re-export the InMemoryChildRepository under its

@@ -176,13 +176,13 @@ class EdgeTTSProvider(TTSProvider):
     Caches per (text, voice, speed, language).
     """
 
-    def __init__(self, cache_size=64):
+    def __init__(self, cache_size: int = 64) -> None:
         self._cache_size = cache_size
         self._cache = {}
 
     async def synthesize(
         self,
-        text,
+        text: str,
         *,
         voice="child_friendly",
         speed=1.0,
@@ -234,7 +234,7 @@ class EdgeTTSProvider(TTSProvider):
         return result
 
 
-def _default_provider():
+def _default_provider() -> object:
     """Return EdgeTTSProvider when edge-tts is installed, else mock."""
     try:
         import edge_tts  # noqa: F401
@@ -246,12 +246,12 @@ def _default_provider():
 _provider = _default_provider()
 
 
-def get_tts_provider():
+def get_tts_provider() -> object:
     """Return the process-wide TTS provider."""
     return _provider
 
 
-def set_tts_provider(provider):
+def set_tts_provider(provider: object) -> None:
     """Override the process-wide TTS provider (for tests / real swap)."""
     global _provider
     _provider = provider

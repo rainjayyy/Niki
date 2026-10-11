@@ -104,7 +104,7 @@ async def get_current_parent(
         id_number_masked="****",
         phone_masked="****",
         email=None,
-        status=ParentAccount.__dataclass_fields__["status"].default,
+        status=ParentAccount.__dataclass_fields__["status"].default,  # type: ignore[arg-type]
     )
 
 

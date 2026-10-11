@@ -433,7 +433,7 @@ class SyncSessionStore(SessionStore):
         return asyncio.run(coro)
 
     def get_started_at(self, child_id: str) -> datetime | None:
-        return self._run(self._store.get_started_at(child_id))
+        return self._run(self._store.get_started_at(child_id))  # type: ignore[return-value]
 
     def set_started_at(self, child_id: str, ts: datetime) -> None:
         self._run(self._store.set_started_at(child_id, ts))
@@ -442,7 +442,7 @@ class SyncSessionStore(SessionStore):
         self._run(self._store.clear_started_at(child_id))
 
     def get_last_activity(self, child_id: str) -> datetime | None:
-        return self._run(self._store.get_last_activity(child_id))
+        return self._run(self._store.get_last_activity(child_id))  # type: ignore[return-value]
 
     def set_last_activity(self, child_id: str, ts: datetime) -> None:
         self._run(self._store.set_last_activity(child_id, ts))
@@ -451,7 +451,7 @@ class SyncSessionStore(SessionStore):
         self._run(self._store.clear_last_activity(child_id))
 
     def is_soft_warned(self, child_id: str) -> bool:
-        return self._run(self._store.is_soft_warned(child_id))
+        return self._run(self._store.is_soft_warned(child_id))  # type: ignore[return-value]
 
     def mark_soft_warned(self, child_id: str) -> None:
         self._run(self._store.mark_soft_warned(child_id))
@@ -460,7 +460,7 @@ class SyncSessionStore(SessionStore):
         self._run(self._store.clear_soft_warned(child_id))
 
     def get_ended(self, child_id: str) -> str | None:
-        return self._run(self._store.get_ended(child_id))
+        return self._run(self._store.get_ended(child_id))  # type: ignore[return-value]
 
     def set_ended(self, child_id: str, reason: str) -> None:
         self._run(self._store.set_ended(child_id, reason))

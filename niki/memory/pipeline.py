@@ -504,7 +504,7 @@ class NightlyPipeline:
                         # existing dead-letter surface (a list of
                         # PipelineStepResult-like dicts) keeps
                         # working without adding a new type.
-                        {
+                        {  # type: ignore[arg-type]
                             "step_name": "generate_weekly_report",
                             "child_id": child_id,
                             "reason": "missing parent_id",
