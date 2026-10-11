@@ -454,7 +454,7 @@ def _webpush_exception_type() -> type[BaseException]:
             pass
 
         return _NeverRaised
-    return WebPushException
+    return WebPushException  # type: ignore[no-any-return]
 
 
 def _response_status(obj: Any) -> Optional[int]:

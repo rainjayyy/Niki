@@ -205,7 +205,7 @@ def verify_token(
     if is_revoked is not None and jti and is_revoked(jti):
         raise JWTError("TOKEN_REVOKED", "Token has been revoked")
 
-    return claims
+    return claims  # type: ignore[no-any-return]
 
 
 def decode_unverified(token: str) -> dict[str, Any]:
@@ -217,7 +217,7 @@ def decode_unverified(token: str) -> dict[str, Any]:
     if len(parts) != 3:
         raise JWTError("MALFORMED_TOKEN", "JWT must have 3 segments")
     try:
-        return json.loads(_b64_decode(parts[1]))
+        return json.loads(_b64_decode(parts[1]))  # type: ignore[no-any-return]
     except Exception as exc:
         raise JWTError("MALFORMED_TOKEN", f"Could not decode payload: {exc}") from exc
 

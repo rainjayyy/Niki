@@ -549,7 +549,7 @@ class PhoneChangeService:
         """
         getter = getattr(self._account_repo, "get_raw_phone", None)
         if getter is not None:
-            return getter(parent_id)
+            return getter(parent_id)  # type: ignore[no-any-return]
         return None
 
     def _reverse_phone_hash(self, phone_hash: str) -> str:

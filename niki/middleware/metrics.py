@@ -56,7 +56,7 @@ def _resolve_endpoint_template(request: Request) -> str:
     """
     route = request.scope.get("route")
     if route is not None and getattr(route, "path", None):
-        return route.path
+        return route.path  # type: ignore[no-any-return]
     return request.url.path
 
 

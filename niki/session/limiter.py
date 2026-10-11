@@ -175,7 +175,7 @@ class SessionLimiter:
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
         elapsed = (now - started).total_seconds() / 60
-        return max(0.0, elapsed)
+        return max(0.0, elapsed)  # type: ignore[no-any-return]
 
     def idle_minutes(self, child_id: str, now: datetime | None = None) -> float:
         """Get the minutes since last activity (PRD #17)."""
@@ -186,7 +186,7 @@ class SessionLimiter:
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
         elapsed = (now - activity).total_seconds() / 60
-        return max(0.0, elapsed)
+        return max(0.0, elapsed)  # type: ignore[no-any-return]
 
     def should_warn(self, child_id: str, now: datetime | None = None) -> bool:
         """True if the soft warning should be issued (5 min before limit)."""

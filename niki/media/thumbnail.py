@@ -147,7 +147,7 @@ def build_thumbnail(
     cached = cache.get(cache_key)
     if cached is not None:
         # Cache stores (bytes, mime) tuple.
-        return cached
+        return cached  # type: ignore[no-any-return]
 
     storage = storage or get_media_storage()
     stored: StoredContent | None = storage.get_with_meta(file_id)

@@ -410,7 +410,7 @@ class WebhookDispatcherService:
         the only writer — but a defence-in-depth net).
         """
         try:
-            return json.loads(body_bytes.decode("utf-8"))
+            return json.loads(body_bytes.decode("utf-8"))  # type: ignore[no-any-return]
         except (ValueError, UnicodeDecodeError):
             return {"_raw": body_bytes.decode("utf-8", errors="replace")}
 

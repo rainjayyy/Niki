@@ -257,7 +257,7 @@ def _raise_change_error(request: Request, exc: PhoneChangeError | EmailChangeErr
         status = _EMAIL_CHANGE_STATUS.get(exc.code, 400)
     else:
         status = _PHONE_CHANGE_STATUS.get(exc.code, 400)
-    return JSONResponse(
+    return JSONResponse(  # type: ignore[return-value]
         status_code=status,
         content=_error_response(request, exc),
     )
@@ -306,7 +306,7 @@ async def signup_start(request: Request, payload: dict) -> dict:
         except Exception as exc:
             logger.warning("auth.parent_persist_failed", error=str(exc))
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=f"Missing field: {exc}")
 
@@ -336,7 +336,7 @@ async def signup_real_name(request: Request, payload: dict) -> dict:
             id_number=payload["id_number"],
         )
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
 
     return {"account": account.to_dict()}
 
@@ -358,7 +358,7 @@ async def signup_face(request: Request, payload: dict) -> dict:
             reference_image_url=payload.get("reference_image_url"),
         )
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
 
     return {"account": account.to_dict()}
 
@@ -383,7 +383,7 @@ async def signup_consent(request: Request, payload: dict) -> dict:
             sign_child_consent=payload.get("sign_child_consent", True),
         )
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
 
     # BE-COMP-004: consent is the single most compliance-relevant
     # event on the account — PIPL Art. 14 requires we can show when
@@ -445,7 +445,7 @@ async def whoami(
 async def get_account(request: Request, parent_id: str) -> dict:
     account = await _lifecycle.get_account(parent_id)
     if account is None:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=404,
             content=error_response(
                 request,
@@ -497,7 +497,7 @@ async def deletion_request(
     try:
         account = await _lifecycle.request_deletion(parent_id)
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
     return {
         "account": account.to_dict(),
         "deletion_window_remaining_days": account.deletion_window_remaining_days,
@@ -518,7 +518,7 @@ async def deletion_complete(request: Request, payload: dict) -> dict:
     try:
         account = await _lifecycle.complete_deletion(parent_id)
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
     return {"account": account.to_dict()}
 
 
@@ -534,7 +534,7 @@ async def deletion_complete(request: Request, payload: dict) -> dict:
 async def get_consent_document(request: Request, consent_type: str) -> dict:
     """Get the consent document text (parent or child version)."""
     if consent_type not in ("parent", "child"):
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content=error_response(
                 request,
@@ -666,7 +666,7 @@ async def sms_send(
             captcha_answer if captcha_answer is not None else "",
         )
         if not ok:
-            return JSONResponse(
+            return JSONResponse(  # type: ignore[return-value]
                 status_code=400,
                 content=error_response(
                     request,
@@ -677,7 +677,7 @@ async def sms_send(
             )
     elif settings.sms_captcha_required:
         # Production mode: captcha is mandatory.
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content=error_response(
                 request,
@@ -716,7 +716,7 @@ async def sms_send(
             },
             "request_id": _request_id(request),
         }
-        return JSONResponse(status_code=429, content=body)
+        return JSONResponse(status_code=429, content=body)  # type: ignore[return-value]
     body: dict = {"phone": phone, "status": "sent"}
     if settings.debug:
         # Echo the code in DEBUG only; production must NEVER do this.
@@ -774,7 +774,7 @@ async def sms_login(
             method="sms",
             reason=reason,
         ).inc()
-        return JSONResponse(status_code=401, content=_error_response(request, cast("AuthError", exc)))
+        return JSONResponse(status_code=401, content=_error_response(request, cast("AuthError", exc)))  # type: ignore[return-value]
 
     # Find or auto-create the account.
     account = await _lifecycle.find_by_phone(phone)
@@ -800,7 +800,7 @@ async def sms_login(
             except Exception as exc:
                 logger.warning("auth.parent_persist_failed_sms", error=str(exc))
         except AuthError as exc:
-            return JSONResponse(status_code=400, content=_error_response(request, exc))
+            return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
 
     settings = get_settings()
 
@@ -897,7 +897,7 @@ async def refresh(request: Request, payload: dict) -> dict:
     """
     refresh_token = payload.get("refresh_token")
     if not refresh_token or not isinstance(refresh_token, str):
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content=error_response(
                 request,
@@ -914,7 +914,7 @@ async def refresh(request: Request, payload: dict) -> dict:
             is_revoked=get_blacklist().is_revoked_sync,
         )
     except JWTError as exc:
-        return JSONResponse(status_code=401, content=_error_response(request, cast("AuthError", exc)))
+        return JSONResponse(status_code=401, content=_error_response(request, cast("AuthError", exc)))  # type: ignore[return-value]
 
     parent_id = claims["sub"]
     old_jti = claims.get("jti")
@@ -968,7 +968,7 @@ async def logout(
     """
     if not authorization or not authorization.lower().startswith("bearer "):
         # Should be impossible — the dep would have raised 401.
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=401,
             content=error_response(
                 request,
@@ -986,7 +986,7 @@ async def logout(
         )
     except JWTError:
         # Dep already validated; this is purely defensive.
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=401,
             content=error_response(
                 request,
@@ -1034,7 +1034,7 @@ async def phone_change_request(
     except PhoneChangeError as exc:
         return _raise_change_error(request, exc)
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
     return view_to_dict(view, "phone")
 
 
@@ -1066,7 +1066,7 @@ async def phone_change_verify(
     if view.parent_id != parent.id:
         # Lateral-auth: never reveal the row exists if it doesn't
         # belong to the caller.
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=404,
             content=error_response(
                 request,
@@ -1154,7 +1154,7 @@ async def email_change_request(
     except EmailChangeError as exc:
         _raise_change_error(request, exc)
     except AuthError as exc:
-        return JSONResponse(status_code=400, content=_error_response(request, exc))
+        return JSONResponse(status_code=400, content=_error_response(request, exc))  # type: ignore[return-value]
     return result
 
 

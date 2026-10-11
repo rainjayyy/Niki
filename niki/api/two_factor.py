@@ -199,7 +199,7 @@ async def enroll_verify(
     try:
         backup_codes = await get_two_factor_service().verify_enrollment(parent.id, totp_code)
     except TwoFactorNotEnrolled as exc:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content=error_response(
                 request,
@@ -209,7 +209,7 @@ async def enroll_verify(
             ),
         )
     except TwoFactorAlreadyEnrolled as exc:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=409,
             content=error_response(
                 request,
@@ -220,7 +220,7 @@ async def enroll_verify(
         )
     except TwoFactorInvalidCode as exc:
         get_registry().LOGIN_FAILURE_TOTAL.labels(method="totp", reason=exc.code).inc()
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=401,
             content=error_response(
                 request,
@@ -477,7 +477,7 @@ async def login(request: Request, payload: dict) -> dict:
     partial_token = payload.get("partial_token")
     totp_code = payload.get("totp_code")
     if not partial_token or not isinstance(partial_token, str):
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content=error_response(
                 request,
@@ -487,7 +487,7 @@ async def login(request: Request, payload: dict) -> dict:
             ),
         )
     if not totp_code or not isinstance(totp_code, str):
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content=error_response(
                 request,
@@ -502,7 +502,7 @@ async def login(request: Request, payload: dict) -> dict:
             is_revoked=get_blacklist().is_revoked_sync,
         )
     except JWTError as exc:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=401,
             content=error_response(
                 request,
@@ -512,7 +512,7 @@ async def login(request: Request, payload: dict) -> dict:
             ),
         )
     if claims.get("scope") != SCOPE_2FA_PENDING:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=401,
             content=error_response(
                 request,
@@ -529,7 +529,7 @@ async def login(request: Request, payload: dict) -> dict:
     try:
         await get_two_factor_service().verify_code(parent_id, totp_code)
     except TwoFactorNotEnrolled as exc:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content=error_response(
                 request,
@@ -550,7 +550,7 @@ async def login(request: Request, payload: dict) -> dict:
             reason="2FA login verification failed",
             client_ip=_client_ip(request),
         )
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=401,
             content=error_response(
                 request,

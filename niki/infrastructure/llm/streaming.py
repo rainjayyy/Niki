@@ -37,7 +37,7 @@ class StreamingLLMProvider(ABC):
         persona: str | None = None,
         session_id: str | None = None,
         history: list[dict[str, str]] | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[str]:  # type: ignore[override]
         """Yield successive text chunks for `prompt`.
 
         Args:

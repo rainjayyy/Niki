@@ -198,7 +198,7 @@ class S3CompatibleStorage(MediaStorage):
                 return None
             logger.error("s3_storage.get_failed", key=key, error=str(exc))
             return None
-        return resp["Body"].read()
+        return resp["Body"].read()  # type: ignore[no-any-return]
 
     def get_with_meta(self, file_id: str) -> StoredContent | None:
         """Read body + authoritative MIME from object metadata.
@@ -234,7 +234,7 @@ class S3CompatibleStorage(MediaStorage):
     # ----------------- helpers -----------------
 
     def _presign(self, key: str) -> str:
-        return self._client.generate_presigned_url(
+        return self._client.generate_presigned_url(  # type: ignore[no-any-return]
             "get_object",
             Params={"Bucket": self._bucket, "Key": key},
             ExpiresIn=self._presign_ttl,
@@ -256,7 +256,7 @@ class S3CompatibleStorage(MediaStorage):
             logger.error("s3_storage.list_failed", prefix=prefix, error=str(exc))
             return None
         for obj in resp.get("Contents", []):
-            return obj["Key"]
+            return obj["Key"]  # type: ignore[no-any-return]
         return None
 
     @staticmethod

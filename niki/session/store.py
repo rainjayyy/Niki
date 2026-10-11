@@ -204,7 +204,7 @@ class RedisSessionStore(SessionStore):
 
     async def _get(self, key: str) -> str | None:
         client = await self._redis()
-        return await client.get(key)
+        return await client.get(key)  # type: ignore[no-any-return]
 
     async def _set(self, key: str, value: str) -> None:
         client = await self._redis()
@@ -325,7 +325,7 @@ class FallbackSessionStore(SessionStore):
         return result
 
     async def get_started_at(self, child_id: str) -> datetime | None:  # type: ignore[override]
-        return await self._run("get_started_at", child_id)
+        return await self._run("get_started_at", child_id)  # type: ignore[no-any-return]
 
     async def set_started_at(self, child_id: str, ts: datetime) -> None:  # type: ignore[override]
         await self._run("set_started_at", child_id, ts)
@@ -334,7 +334,7 @@ class FallbackSessionStore(SessionStore):
         await self._run("clear_started_at", child_id)
 
     async def get_last_activity(self, child_id: str) -> datetime | None:  # type: ignore[override]
-        return await self._run("get_last_activity", child_id)
+        return await self._run("get_last_activity", child_id)  # type: ignore[no-any-return]
 
     async def set_last_activity(self, child_id: str, ts: datetime) -> None:  # type: ignore[override]
         await self._run("set_last_activity", child_id, ts)
@@ -343,7 +343,7 @@ class FallbackSessionStore(SessionStore):
         await self._run("clear_last_activity", child_id)
 
     async def is_soft_warned(self, child_id: str) -> bool:  # type: ignore[override]
-        return await self._run("is_soft_warned", child_id)
+        return await self._run("is_soft_warned", child_id)  # type: ignore[no-any-return]
 
     async def mark_soft_warned(self, child_id: str) -> None:  # type: ignore[override]
         await self._run("mark_soft_warned", child_id)
@@ -352,7 +352,7 @@ class FallbackSessionStore(SessionStore):
         await self._run("clear_soft_warned", child_id)
 
     async def get_ended(self, child_id: str) -> str | None:  # type: ignore[override]
-        return await self._run("get_ended", child_id)
+        return await self._run("get_ended", child_id)  # type: ignore[no-any-return]
 
     async def set_ended(self, child_id: str, reason: str) -> None:  # type: ignore[override]
         await self._run("set_ended", child_id, reason)

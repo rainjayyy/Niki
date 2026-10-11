@@ -107,6 +107,15 @@ class AccountRepository(ABC):
     async def list_all(self) -> list[ParentAccount]:
         """All accounts (admin / debug only)."""
 
+    @abstractmethod
+    async def get_by_phone_hash(self, phone_hash: str) -> ParentAccount | None:
+        """Look up an account by its sha256-hashed phone number.
+
+        Used by PhoneChangeService to detect duplicate-phone collisions
+        before granting a number-change request. Returns the existing
+        account that owns \`phone_hash\`, or None if no match.
+        """
+
     # ---- BE-AUTH-006 phone / email change plumbing ----
 
     @abstractmethod
@@ -452,7 +461,7 @@ class InMemoryAccountRepository(AccountRepository):
         name: str,
         id_number: str,
         phone: str,
-        email: str | None,
+        email: str | None = None,
     ) -> ParentAccount:
         from niki.auth.lifecycle import SignupProgress, SignupStep
 

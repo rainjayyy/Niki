@@ -242,7 +242,7 @@ async def record_tutoring_event(
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
     """Record a tutoring event (for whitepaper generation)."""
-    _dashboard.record_tutoring_event(
+    await _dashboard.record_tutoring_event(
         child_id=payload["child_id"],
         parent_id=parent.id,
         problem=payload["problem"],
@@ -262,7 +262,7 @@ async def record_knowledge_query(
     parent: ParentAccount = Depends(get_current_parent),
 ) -> dict:
     """Record a knowledge-base query."""
-    _dashboard.record_knowledge_query(
+    await _dashboard.record_knowledge_query(
         child_id=payload["child_id"],
         parent_id=parent.id,
         question=payload["question"],

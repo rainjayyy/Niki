@@ -53,7 +53,7 @@ def resolve_lang(request: Request | None) -> str:
         return DEFAULT_LANG
     lang = getattr(request.state, "lang", None)
     if lang:
-        return lang
+        return lang  # type: ignore[no-any-return]
     return pick_lang(
         accept_language=request.headers.get("accept-language"),
         query_lang=request.query_params.get("lang"),

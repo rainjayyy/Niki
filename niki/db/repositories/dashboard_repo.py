@@ -280,7 +280,7 @@ class InMemoryDashboardRepository(DashboardRepository):
             matched.append(row)
         # Step 2: sort — newest first, stable on id as tie-breaker.
         matched.sort(
-            key=lambda r: (r.get("created_at"), r.get("id")),
+            key=lambda r: ((r.get("created_at") or ""), r.get("id")),
             reverse=True,
         )
         # Step 3: limit.
