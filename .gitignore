@@ -90,3 +90,7 @@ eval_*.json
 eval_current*.json
 eval_run*.json
 eval_final*.json
+
+# Internal product spec (private business documentation)
+PRD-v2.0.md
+PRD-*.md
