@@ -132,6 +132,10 @@ module = [
     "boto3.*",
     "botocore.*",
     "pywebpush.*",
+    "httpx.*",
+    "PIL.*",
+    "pytesseract.*",
+    "edge_tts.*",
 ]
 ignore_missing_imports = true
 
