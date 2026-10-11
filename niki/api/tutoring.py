@@ -39,12 +39,12 @@ _input_gateway = InputSafetyGateway()
 # Wire the production LLM via the factory — see encyclopedia.py
 from niki.infrastructure.llm.factory import (  # noqa: E402
     get_or_create_llm as _get_llm,
-    is_fallback_mode as _is_stub,
+    is_fallback_mode as _is_fallback,
 )
 
 # In stub mode, layer on the domain-aware tutoring stub so dev / tests
 # can still exercise the full pipeline.
-_llm = FallbackLLM() if _is_stub() else _get_llm()
+_llm = FallbackLLM() if _is_fallback() else _get_llm()
 
 
 # Module-level singletons

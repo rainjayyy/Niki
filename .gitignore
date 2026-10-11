@@ -91,6 +91,8 @@ eval_current*.json
 eval_run*.json
 eval_final*.json
 
-# Internal product spec (private business documentation)
+# Internal product documentation (not for public repo)
+ISSUES_FOUND.md
 PRD-v2.0.md
 PRD-*.md
+docs/CHANGES-*.md

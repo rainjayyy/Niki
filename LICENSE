@@ -1,35 +1,47 @@
-Copyright (c) 2026 Niki Project Authors. All rights reserved.
+MIT License
 
-This software and associated documentation files are proprietary
-and confidential. Unauthorized copying, distribution, modification,
-or use of this software, via any medium, is strictly prohibited.
+Copyright (c) 2026 Niki Project Authors
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
-BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
-ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
----
+----
 
-This is a child-safety-critical product (target users: ages 3-12).
-Production deployments MUST satisfy the following before processing
-any real child data:
+ADDITIONAL NOTICE: CHILD-SAFETY PRODUCT
 
-  1. A signed Parental Consent record (see niki/auth/consent.py).
-  2. A region-specific Privacy Policy presented to and acknowledged
-     by the parent at sign-up.
-  3. A documented Data Deletion workflow capable of completing within
-     30 days of a verified request (PRD-v2.0 #30-day cooling).
-  4. An independent Security review of the four-tier privacy classifier
-     (niki/safety/privacy_tier.py) and the AES-256-GCM treehole
-     encryption module (niki/treehole/encryption.py).
-  5. Local regulatory compliance (COPPA, GDPR-K, etc.) signed off by
-    qualified counsel.
+This is a child-safety product. The target user population includes children
+between 3 and 12 years of age. Production deployments that process real
+child data MUST independently satisfy, in addition to the MIT license
+terms above:
 
-Deployments that fail any of the above are NOT AUTHORIZED to
-process real child data and may only be used for development,
-testing, or research under controlled conditions.
+  (a) A signed Parental Consent record under applicable law (e.g. COPPA in
+      the US, GDPR-K in the EU).
+  (b) A region-specific Privacy Policy presented to and acknowledged by the
+      parent at sign-up.
+  (c) A documented Data Deletion workflow capable of completing within the
+      window required by applicable law (Niki's design target is 30 days; your
+      mileage may vary).
+  (d) An independent Security review of the four-tier privacy classifier and
+      the AES-256-GCM treehole encryption module.
+  (e) Local regulatory compliance signed off by qualified counsel.
+
+The MIT license does not, and is not intended to, waive any of the above
+obligations. The Authors make this Software available primarily for review,
+education, and integration testing. The Authors have not authorised any
+deployment of this Software to real child users; any such deployment is at
+the deployer's sole risk and responsibility.

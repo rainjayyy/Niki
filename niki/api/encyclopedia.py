@@ -53,10 +53,10 @@ _tool_checker = ToolAccessChecker(ToolMatrix())
 # agent pipeline end-to-end without network access.
 from niki.infrastructure.llm.factory import (  # noqa: E402
     get_or_create_llm as _get_llm,
-    is_fallback_mode as _is_stub,
+    is_fallback_mode as _is_fallback,
 )
 
-_llm = FallbackEncyclopediaLLM() if _is_stub() else _get_llm()
+_llm = FallbackEncyclopediaLLM() if _is_fallback() else _get_llm()
 # BE-FACT-LLM-JUDGE: in non-stub mode, hand the real LLM to
 # FactChecker so production uses the LLM judge by default. In
 # stub mode we leave ``llm_judge=None`` and the heuristic
@@ -64,7 +64,7 @@ _llm = FallbackEncyclopediaLLM() if _is_stub() else _get_llm()
 # environment deterministic and matches the test contract.
 _fact_checker = FactChecker(
     _kb,
-    llm_judge=_llm if not _is_stub() else None,
+    llm_judge=_llm if not _is_fallback() else None,
 )
 
 
