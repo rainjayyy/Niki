@@ -101,3 +101,24 @@ curl http://localhost:8000/api/v1/health
 └────────────────────────────────────────────────────────────────────┘
 ```
 
+
+
+## 5. TypeScript SDK (auto-generated for the frontend)
+
+The frontend `src/api/` directory contains 36 auto-generated
+TypeScript files (one per endpoint group). They are regenerated
+from the FastAPI OpenAPI schema, so any backend change flows through
+to the frontend type-safe client automatically.
+
+\`\`\`bash
+# Regenerate frontend/src/api/*.ts from the live FastAPI schema
+make ts-sdk         # writes to frontend/src/api/
+# (regenerates via scripts/gen_ts_sdk.py)
+
+# CI guard: fail if the checked-in SDK is stale
+make ts-sdk-check
+\`\`\`
+
+If you change a backend route signature, re-run `make ts-sdk`
+before opening a PR. The check in CI blocks merges where the SDK is
+out of sync with the backend.
