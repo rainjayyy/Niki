@@ -151,7 +151,7 @@ doubao (doubao-lite)   ← 轻量分类 / 检查
 _StubLLM               ← 确定性 fallback
 ```
 
-**3 个工程细节**值得面试展开：
+**3 个工程细节**：
 
 1. **凭证占位符检测**（`_PLACEHOLDER_TOKENS`）：`your-` / `changeme` / `xxx` 等占位符字符串会被识别成"假凭证"，强制走 stub。这是被真实事故驱动加的——曾有 staging 带着 `your-key-here` 跑了一周没人发现。
 2. **降级而非中断**：prefer 失败 → 试下一个；全失败 → stub + 结构化日志，绝不让 5xx 阻塞业务。
