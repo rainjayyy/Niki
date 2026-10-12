@@ -192,10 +192,8 @@ async def get_alerts(
             "id": row["id"],
             "child_id": row["child_id"],
             "parent_id": row.get("parent_id"),
-            "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
-            "delivered_at": row.get("delivered_at").isoformat()
-            if row.get("delivered_at")
-            else None,
+            "created_at": row.get("created_at").isoformat() if row.get("created_at") is not None else None,  # type: ignore[union-attr]
+            "delivered_at": row.get("delivered_at").isoformat() if row.get("delivered_at") is not None else None,  # type: ignore[union-attr]
         }
         flat.update(row.get("payload", {}))
         return flat
@@ -455,7 +453,7 @@ async def emotion_timeline(
     for offset in range(max(1, days) - 1, -1, -1):
         day = today - timedelta(days=offset)
         day_iso = day.isoformat()
-        rec = by_date.get(day_iso)
+        rec = by_date.get(day_iso)  # type: ignore[assignment]
         for hour in range(24):
             if rec is None:
                 grid.append(
@@ -483,10 +481,10 @@ async def emotion_timeline(
                     }
                 )
 
-    active = [g for g in grid if g["hasConversation"]]
+    active = [g for g in grid if g["hasConversation"]]  # type: ignore[misc]
     daily_mean = round(sum(g["valence"] for g in active) / len(active), 3) if active else 0.0
-    lowest = min(active, key=lambda g: g["valence"]) if active else None
-    highest = max(active, key=lambda g: g["valence"]) if active else None
+    lowest = min(active, key=lambda g: g["valence"]) if active else None  # type: ignore[arg-type, return-value]
+    highest = max(active, key=lambda g: g["valence"]) if active else None  # type: ignore[arg-type, return-value]
 
     records_by_day: dict[str, list[EmotionRecord]] = {}
     for rec in _baseline.records():
@@ -517,9 +515,9 @@ async def emotion_timeline(
         "grid": grid,
         "insights": {
             "lowest_hour": lowest["hour"] if lowest else 0,
-            "lowest_valence": round(lowest["valence"], 3) if lowest else 0.0,
+            "lowest_valence": round(lowest["valence"], 3) if lowest else 0.0,  # type: ignore[call-overload]
             "highest_hour": highest["hour"] if highest else 0,
-            "highest_valence": round(highest["valence"], 3) if highest else 0.0,
+            "highest_valence": round(highest["valence"], 3) if highest else 0.0,  # type: ignore[call-overload]
             "daily_mean": daily_mean,
             "suggestion": suggestion,
             "trend_vs_yesterday_pct": trend_pct,

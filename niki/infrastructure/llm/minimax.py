@@ -37,6 +37,36 @@ from niki.infrastructure.llm.base import BaseLLMClient
 logger = structlog.get_logger(__name__)
 
 
+def _extract_system_message(
+    messages: list[dict[str, str]],
+    kwargs: dict[str, Any],
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    """Promote a ``system=`` kwarg to a system message in ``messages``.
+
+    The OpenAI-compatible chat completions API does NOT accept a
+    top-level ``system`` field -- only ``{"role": "system",
+    "content": ...}`` entries in the ``messages`` array.
+
+    The raw streaming layer (chat_stream.py) passes ``system=``
+    straight through ``**kwargs``. The upstream API then silently
+    ignores it, causing the model to drop the Niki persona and answer
+    as its own identity (e.g. "我是 MiniMax-M3"). Pop it here and
+    prepend it to ``messages`` to guarantee the system prompt reaches
+    the model regardless of provider quirks.
+
+    Idempotent: if the caller already passed a system-role message at
+    index 0, we keep the existing one and drop the kwarg.
+    """
+    system = kwargs.pop("system", None)
+    if not system:
+        return messages, kwargs
+    if not isinstance(system, str) or not system.strip():
+        return messages, kwargs
+    if messages and messages[0].get("role") == "system":
+        return messages, kwargs
+    return [{"role": "system", "content": system}, *messages], kwargs
+
+
 class MinimaxClient(BaseLLMClient):
     """Client for Minimax via the OpenAI-compatible chat completions API.
 
@@ -65,13 +95,16 @@ class MinimaxClient(BaseLLMClient):
             temperature: 0.0–2.0, higher = more creative.
             max_tokens: Response token limit.
             **kwargs: Forwarded verbatim to the upstream API
-                (e.g. `top_p`, `stop`, `presence_penalty`).
+                (e.g. `top_p`, `stop`, `presence_penalty`). A `system`
+                kwarg is promoted into a system-role entry (see
+                ``_extract_system_message``).
 
         Returns:
             Parsed response dict with `content`, `model`, `usage`,
             `finish_reason` keys. Shape matched to the DeepSeek /
             doubao clients so the agent layer is provider-agnostic.
         """
+        messages, kwargs = _extract_system_message(messages, kwargs)
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -102,7 +135,7 @@ class MinimaxClient(BaseLLMClient):
         }
         # Pass through tool_calls when present (OpenAI standard; MiniMax-M3
         # supports native tool_use). The request-side `tools=[...]` and
-        # `tool_choice=...` are already forwarded via **kwargs.
+        # `tool_choice=...` are already forwarded via `**kwargs`.
         if choice["message"].get("tool_calls"):
             result["tool_calls"] = choice["message"]["tool_calls"]
 
@@ -127,7 +160,11 @@ class MinimaxClient(BaseLLMClient):
         POSTs `/chat/completions` with `"stream": true` and returns
         the raw httpx streaming response. The caller iterates the
         SSE chunks; format is OpenAI-standard (data: {...}\n\n).
+
+        A `system` kwarg is promoted into a system-role entry (see
+        ``_extract_system_message``) before being sent.
         """
+        messages, kwargs = _extract_system_message(messages, kwargs)
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
