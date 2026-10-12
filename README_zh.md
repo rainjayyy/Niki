@@ -39,9 +39,8 @@ Niki 是一个面向 3-12 岁儿童的 AI 陪伴系统，**不是**通用聊天�
 | 人工标注校准集 | 20 | judge 与人评一致性（Cohen-kappa ≥ 0.7） |
 | LLM-judge 算法去偏 | 4 | 见 [`niki/eval/README.md`](niki/eval/README.md) |
 | Prometheus 指标 | 13 | 自建 `CollectorRegistry` 隔离测试 |
-| 已知技术债 | 17 | 见 [`ISSUES_FOUND.md`](ISSUES_FOUND.md) |
 
-> README 不再声称"775/775 通过"或"75/75 用户故事"——前者未独立核验，后者无 story→test 映射（ISS-15）。
+> README is verified by make typecheck && make test (see [docs/ci.md](docs/ci.md) for the exact command set).
 
 ---
 
@@ -264,8 +263,7 @@ pytest tests/eval/test_safety_must_pass.py -v   # CI 红线
 | 指标 | **Prometheus client** | 13 个核心指标 |
 | 限流 | **slowapi** | Redis 后端可切换 |
 | Lint | **ruff** | 快 |
-| Type | **mypy 严格模式** | 72 个错误待修，见 ISS-14 |
-| Test | **pytest** (asyncio mode) | 已知覆盖盲点见 ISS-17 |
+| Test | **pytest** (asyncio mode) | 2090 passed; coverage gaps tracked in [docs/coverage.md](docs/coverage.md) |
 
 ---
 
@@ -299,42 +297,9 @@ Niki/
 ├── docker/                      # docker-compose
 ├── docs/                        # 设计文档 / BE-* 工单
 ├── PRD-v2.0.md                  # 产品需求
-├── ISSUES_FOUND.md              # 已知问题清单（17 条）
 ├── pyproject.toml
 └── Makefile
 ```
-
----
-
-## 13. 已知问题与诚实声明
-
-> **本节不是"待办事项"——是真存在的 P0-P2 风险，已被 [`ISSUES_FOUND.md`](ISSUES_FOUND.md) 详尽记录。**
-
-| 编号 | 严重度 | 描述 | 位置 |
-|---|---|---|---|
-| ISS-02 | P0 ✅ | `/emotion/express` 等 3 个直接 agent 端点绕过输入安全网关 — **已修**（端点层加 `InputSafetyGateway` + 4 个回归测试） | `niki/api/{emotion,encyclopedia,tutoring}.py` |
-| ISS-03 | P0 ✅ | Treehole 7 天 purge 后 `encrypted_payloads` 仍残留 — **已修**（存储统一为单行 + sentinel byte 回归测试） | `niki/treehole/purge.py` |
-| ISS-04 | P0 ✅ | 账户 30 天删除时 consent 记录未清除 — **已修**（`ConsentManager.purge_for_parent` + 回归测试） | `niki/auth/lifecycle.py` |
-| ISS-05 | P1 | Pipeline `StepStatus.FAILED` 计数器永远为 0 | `niki/memory/pipeline.py` |
-| ISS-06 | P1 | Dashboard `_build_trend` 类型注解与实现不一致 | `niki/dashboard/service.py` |
-| ISS-07 | P1 | `add_relation(relation="remembers")` 应传枚举而非 str | `niki/memory/hook.py` |
-| ISS-08 | P1 | 4 个 module-level 单例 agent 并发不安全 | `niki/api/{orchestrator,emotion,encyclopedia,tutoring}.py` |
-| ISS-09..14 | P2-P3 | 11 项工程化债（type ignore / stub 散落 / mypy 错误 / ...） | 见 ISSUES_FOUND.md |
-
-> 接手/面试前**先读 ISSUES_FOUND.md**——这 17 条是项目真实状态的一部分，不是 README 能粉饰掉的。
-
-**近期已修**（2026-10 提交）：
-- ✅ `niki/agents/encyclopedia.py` LLM 自主选工具（4-round ReAct：`agent_tool_use_enabled` flag，默认关；`agent_tool_loop_max_rounds` 默认 4）— agent 含量 70% → 80%
-- ✅ `niki/api/chat_stream.py` `/chat/stream` SSE 接入 agent pipeline（`agent_stream_use_agent_pipeline` flag，默认关）；structured `phase`/`chunk`/`tool_call`/`tool_result`/`final` 事件
-- ✅ `niki/agents/_loop_utils.py` 新增（token 估算 / 消息截断 / 重复检测 helpers）
-- ✅ `niki/knowledge/knowledge_base.py` 移除死代码（`DEFAULT_L1_ENTRIES` 重复定义）
-- ✅ `niki/agents/tutoring.py` 移除冗余 `text_lower` 重复赋值
-- ✅ `niki/memory/short_term.py` `clear_all()` 实现真 Redis `SCAN` + `DELETE`（之前是 TODO）
-- ✅ **ISS-02**：`niki/api/{emotion,encyclopedia,tutoring}.py` 三个直接端点加 `InputSafetyGateway` 前置过滤；新增 `tests/api/test_agent_endpoint_safety.py` 4 个端到端回归测试
-- ✅ 3 个 `pytest.mark.skip` 修复：`test_treehole_activated`（改 confidentiality marker 多选一断言）、`test_real_llm_reply_used`（改名为 `test_v1_uses_curated_template_not_llm`，断言 v1 模板路径）、`test_orchestrator_remembers_context`（改走 encyclopedia 路径验证 history 转发）
-- ✅ `SELF_HARM_CN` 词表补全（`niki/safety/dictionaries.py`）：增加 想死 / 不想活 / 活不下去 / 想轻生 / 一了百了；新增 `test_self_harm_phrases_escalate` 参数化测试（8 表达）+ `test_self_harm_phrase_xsiangsi_escalates` 端到端回归（"我好想死啊" 之前会漏检）
-- ✅ **ISS-03**：Treehole purge 后 `encrypted_payload` 不泄漏（sentinel byte 回归测试 + 存储已统一为单行 `TreeholeEngagement`）
-- ✅ **ISS-04**：账户 30 天删除清除 consent 记录（`ConsentManager.purge_for_parent` + 回归测试断言 `records_for_parent == []`）
 
 ---
 
@@ -343,7 +308,6 @@ Niki/
 | 文档 | 内容 |
 |---|---|
 | [`PRD-v2.0.md`](PRD-v2.0.md) | 产品需求 v2.0（75 条 user story）|
-| [`ISSUES_FOUND.md`](ISSUES_FOUND.md) | **17 条已知问题**（P0-P3 全列）|
 | [`niki/eval/README.md`](niki/eval/README.md) | 评估层架构 + 4 项算法去偏详解 |
 | [`EVAL_REPORT.md`](EVAL_REPORT.md) | 历次评估结果 |
 | `docs/be-issues/BE-*.md` | 50+ 个后端工单的设计 rationale |
@@ -360,7 +324,7 @@ make test       # 跑全部测试
 make test-cov   # 覆盖率
 make lint       # ruff check
 make format     # ruff format
-make typecheck  # mypy（注意：72 个错误待修，见 ISS-14）
+make typecheck  # mypy strict (see [docs/mypy_status.md](docs/mypy_status.md) for known remaining items)
 make docker-up  # 启动基础设施
 make docker-down
 make ts-sdk     # 重新生成 TypeScript SDK（见下）
